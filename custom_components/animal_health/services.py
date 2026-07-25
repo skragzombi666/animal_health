@@ -6,7 +6,12 @@ from typing import Any, cast
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
+from homeassistant.core import (
+    HomeAssistant,
+    ServiceCall,
+    ServiceResponse,
+    SupportsResponse,
+)
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
@@ -100,10 +105,10 @@ def _get_runtime_data(hass: HomeAssistant) -> AnimalHealthRuntimeData:
     raise ServiceValidationError("Animal Health is not loaded")
 
 
-async def _refresh_and_respond(
+async def _refresh_and_get_response(
     runtime_data: AnimalHealthRuntimeData,
     animal_id: str,
-) -> dict[str, Any]:
+) -> ServiceResponse:
     await runtime_data.coordinator.async_request_refresh()
     animal = runtime_data.coordinator.data.get(animal_id)
     if animal is None:
@@ -111,8 +116,17 @@ async def _refresh_and_respond(
     return animal.as_dict()
 
 
+async def _optional_response(
+    call: ServiceCall,
+    runtime_data: AnimalHealthRuntimeData,
+    animal_id: str,
+) -> ServiceResponse:
+    response = await _refresh_and_get_response(runtime_data, animal_id)
+    return response if call.return_response else None
+
+
 def async_setup_services(hass: HomeAssistant) -> None:
-    async def handle_create_animal(call: ServiceCall) -> dict[str, Any]:
+    async def handle_create_animal(call: ServiceCall) -> ServiceResponse:
         runtime_data = _get_runtime_data(hass)
         animal = await runtime_data.database.create_animal(
             name=call.data[ATTR_NAME],
@@ -122,9 +136,9 @@ def async_setup_services(hass: HomeAssistant) -> None:
             birth_date=call.data.get(ATTR_BIRTH_DATE),
             arrival_date=call.data.get(ATTR_ARRIVAL_DATE),
         )
-        return await _refresh_and_respond(runtime_data, animal.id)
+        return await _optional_response(call, runtime_data, animal.id)
 
-    async def handle_update_animal(call: ServiceCall) -> dict[str, Any]:
+    async def handle_update_animal(call: ServiceCall) -> ServiceResponse:
         runtime_data = _get_runtime_data(hass)
         animal_id = call.data[ATTR_ANIMAL_ID]
         changes = {
@@ -140,9 +154,9 @@ def async_setup_services(hass: HomeAssistant) -> None:
             raise ServiceValidationError(
                 f"Unknown animal ID: {animal_id}"
             ) from err
-        return await _refresh_and_respond(runtime_data, animal_id)
+        return await _optional_response(call, runtime_data, animal_id)
 
-    async def handle_archive_animal(call: ServiceCall) -> dict[str, Any]:
+    async def handle_archive_animal(call: ServiceCall) -> ServiceResponse:
         runtime_data = _get_runtime_data(hass)
         animal_id = call.data[ATTR_ANIMAL_ID]
         try:
@@ -153,9 +167,9 @@ def async_setup_services(hass: HomeAssistant) -> None:
             raise ServiceValidationError(
                 f"Unknown animal ID: {animal_id}"
             ) from err
-        return await _refresh_and_respond(runtime_data, animal_id)
+        return await _optional_response(call, runtime_data, animal_id)
 
-    async def handle_restore_animal(call: ServiceCall) -> dict[str, Any]:
+    async def handle_restore_animal(call: ServiceCall) -> ServiceResponse:
         runtime_data = _get_runtime_data(hass)
         animal_id = call.data[ATTR_ANIMAL_ID]
         try:
@@ -166,7 +180,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
             raise ServiceValidationError(
                 f"Unknown animal ID: {animal_id}"
             ) from err
-        return await _refresh_and_respond(runtime_data, animal_id)
+        return await _optional_response(call, runtime_data, animal_id)
 
     hass.services.async_register(
         DOMAIN,
