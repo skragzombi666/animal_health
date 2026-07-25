@@ -14,6 +14,34 @@ The integration lives in `custom_components/animal_health` and is prepared for l
 - Animals, events, tasks and task occurrences
 - Foreign-key enforcement and indexes
 
+## Development deployment on Home Assistant OS
+
+For development, clone this repository to `/config/animal_health`. The scripts in `scripts/` deploy only the integration directory to `/config/custom_components/animal_health`.
+
+First-time setup:
+
+```bash
+cd /config/animal_health
+chmod +x scripts/*.sh
+./scripts/deploy.sh
+```
+
+Update to the newest commit on the current branch and deploy:
+
+```bash
+cd /config/animal_health
+./scripts/update.sh
+```
+
+Rollback to the commit recorded before the last update:
+
+```bash
+cd /config/animal_health
+./scripts/rollback.sh
+```
+
+The deployment script creates a backup of an existing installation under `/config/animal_health_backups`, runs `ha core check`, and restarts Home Assistant only after a successful configuration check.
+
 ## Planned development phases
 
 The roadmap is provisional. Version numbers and scope may change as the integration develops.
