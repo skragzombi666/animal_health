@@ -1,0 +1,16 @@
+{
+  "services": {
+    "create_animal": {
+      "service": "mdi:paw-plus"
+    },
+    "update_animal": {
+      "service": "mdi:paw"
+    },
+    "archive_animal": {
+      "service": "mdi:archive-arrow-down"
+    },
+    "restore_animal": {
+      "service": "mdi:archive-arrow-up"
+    }
+  }
+}
