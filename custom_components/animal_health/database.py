@@ -11,6 +11,56 @@ from .const import DATABASE_SCHEMA_VERSION
 
 _T = TypeVar("_T")
 
+LEGACY_COLUMNS: dict[str, dict[str, str]] = {
+    "animals": {
+        "id": "TEXT",
+        "name": "TEXT NOT NULL DEFAULT ''",
+        "species": "TEXT NOT NULL DEFAULT 'unknown'",
+        "breed": "TEXT",
+        "sex": "TEXT",
+        "birth_date": "TEXT",
+        "arrival_date": "TEXT",
+        "status": "TEXT NOT NULL DEFAULT 'active'",
+        "created_at": "TEXT NOT NULL DEFAULT ''",
+        "updated_at": "TEXT NOT NULL DEFAULT ''",
+    },
+    "tasks": {
+        "id": "TEXT",
+        "animal_id": "TEXT",
+        "title": "TEXT NOT NULL DEFAULT ''",
+        "description": "TEXT",
+        "recurrence_type": "TEXT NOT NULL DEFAULT 'once'",
+        "recurrence_interval": "INTEGER NOT NULL DEFAULT 1",
+        "start_date": "TEXT NOT NULL DEFAULT ''",
+        "end_date": "TEXT",
+        "due_time": "TEXT",
+        "is_active": "INTEGER NOT NULL DEFAULT 1",
+        "created_at": "TEXT NOT NULL DEFAULT ''",
+        "updated_at": "TEXT NOT NULL DEFAULT ''",
+    },
+    "task_occurrences": {
+        "id": "TEXT",
+        "task_id": "TEXT",
+        "scheduled_for": "TEXT NOT NULL DEFAULT ''",
+        "status": "TEXT NOT NULL DEFAULT 'pending'",
+        "completed_at": "TEXT",
+        "notes": "TEXT",
+        "created_at": "TEXT NOT NULL DEFAULT ''",
+        "updated_at": "TEXT NOT NULL DEFAULT ''",
+    },
+    "events": {
+        "id": "TEXT",
+        "animal_id": "TEXT",
+        "event_type": "TEXT NOT NULL DEFAULT 'legacy'",
+        "occurred_at": "TEXT NOT NULL DEFAULT ''",
+        "title": "TEXT NOT NULL DEFAULT ''",
+        "notes": "TEXT",
+        "task_id": "TEXT",
+        "task_occurrence_id": "TEXT",
+        "created_at": "TEXT NOT NULL DEFAULT ''",
+    },
+}
+
 
 class AnimalHealthDatabase:
     def __init__(self, hass: HomeAssistant, database_path: Path) -> None:
@@ -45,8 +95,8 @@ class AnimalHealthDatabase:
                 migrations[target_version](connection)
                 connection.execute(f"PRAGMA user_version = {target_version}")
 
-    @staticmethod
-    def _migrate_to_v1(connection: sqlite3.Connection) -> None:
+    @classmethod
+    def _migrate_to_v1(cls, connection: sqlite3.Connection) -> None:
         connection.executescript(
             """
             CREATE TABLE IF NOT EXISTS animals (
@@ -106,7 +156,13 @@ class AnimalHealthDatabase:
                 task_occurrence_id TEXT REFERENCES task_occurrences(id) ON DELETE SET NULL,
                 created_at TEXT NOT NULL
             );
+            """
+        )
 
+        cls._add_missing_legacy_columns(connection)
+
+        connection.executescript(
+            """
             CREATE INDEX IF NOT EXISTS idx_animals_name
                 ON animals(name COLLATE NOCASE);
             CREATE INDEX IF NOT EXISTS idx_animals_status
@@ -123,6 +179,24 @@ class AnimalHealthDatabase:
                 ON events(event_type);
             """
         )
+
+    @classmethod
+    def _add_missing_legacy_columns(cls, connection: sqlite3.Connection) -> None:
+        """Upgrade pre-versioned tables without deleting existing records."""
+        for table_name, expected_columns in LEGACY_COLUMNS.items():
+            existing_columns = {
+                row[1]
+                for row in connection.execute(
+                    f'PRAGMA table_info("{table_name}")'
+                ).fetchall()
+            }
+            for column_name, definition in expected_columns.items():
+                if column_name in existing_columns:
+                    continue
+                connection.execute(
+                    f'ALTER TABLE "{table_name}" '
+                    f'ADD COLUMN "{column_name}" {definition}'
+                )
 
     async def get_animals(self) -> list[dict[str, Any]]:
         return await self._hass.async_add_executor_job(self._get_animals_sync)
