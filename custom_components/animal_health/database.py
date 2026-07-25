@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 import sqlite3
 from collections.abc import Callable
 from datetime import UTC, date, datetime
@@ -9,7 +10,14 @@ from uuid import uuid4
 
 from homeassistant.core import HomeAssistant
 
-from .const import ANIMAL_STATUSES, ANIMAL_STATUS_ACTIVE, DATABASE_SCHEMA_VERSION
+from .const import (
+    ANIMAL_SEX_FEMALE,
+    ANIMAL_SEX_MALE,
+    ANIMAL_SEX_OTHER,
+    ANIMAL_STATUSES,
+    ANIMAL_STATUS_ACTIVE,
+    DATABASE_SCHEMA_VERSION,
+)
 from .models import Animal
 
 ANIMAL_FIELDS = {
@@ -20,6 +28,9 @@ ANIMAL_FIELDS = {
     "birth_date",
     "arrival_date",
 }
+
+ANIMAL_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTVWXYZ"
+ANIMAL_CODE_LENGTH = 7
 
 
 class AnimalHealthDatabase:
@@ -50,6 +61,7 @@ class AnimalHealthDatabase:
 
             migrations: dict[int, Callable[[sqlite3.Connection], None]] = {
                 1: self._migrate_to_v1,
+                2: self._migrate_to_v2,
             }
             for target_version in range(current_version + 1, DATABASE_SCHEMA_VERSION + 1):
                 migrations[target_version](connection)
@@ -134,6 +146,75 @@ class AnimalHealthDatabase:
             """
         )
 
+    @classmethod
+    def _migrate_to_v2(cls, connection: sqlite3.Connection) -> None:
+        columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(animals)").fetchall()
+        }
+        if "animal_code" not in columns:
+            connection.execute("ALTER TABLE animals ADD COLUMN animal_code TEXT")
+
+        existing_codes = {
+            row[0]
+            for row in connection.execute(
+                "SELECT animal_code FROM animals WHERE animal_code IS NOT NULL"
+            ).fetchall()
+        }
+        rows_without_code = connection.execute(
+            "SELECT id FROM animals WHERE animal_code IS NULL OR animal_code = ''"
+        ).fetchall()
+        for row in rows_without_code:
+            animal_code = cls._generate_animal_code(existing_codes)
+            existing_codes.add(animal_code)
+            connection.execute(
+                "UPDATE animals SET animal_code = ? WHERE id = ?",
+                (animal_code, row[0]),
+            )
+
+        connection.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_animals_code ON animals(animal_code)"
+        )
+        connection.execute(
+            """
+            UPDATE animals
+            SET sex = CASE lower(trim(sex))
+                WHEN 'male' THEN ?
+                WHEN 'männlich' THEN ?
+                WHEN 'mannlich' THEN ?
+                WHEN 'female' THEN ?
+                WHEN 'weiblich' THEN ?
+                WHEN 'other' THEN ?
+                WHEN 'anderes' THEN ?
+                WHEN 'divers' THEN ?
+                ELSE ?
+            END
+            WHERE sex IS NOT NULL
+            """,
+            (
+                ANIMAL_SEX_MALE,
+                ANIMAL_SEX_MALE,
+                ANIMAL_SEX_MALE,
+                ANIMAL_SEX_FEMALE,
+                ANIMAL_SEX_FEMALE,
+                ANIMAL_SEX_OTHER,
+                ANIMAL_SEX_OTHER,
+                ANIMAL_SEX_OTHER,
+                ANIMAL_SEX_OTHER,
+            ),
+        )
+
+    @staticmethod
+    def _generate_animal_code(existing_codes: set[str] | None = None) -> str:
+        existing_codes = existing_codes or set()
+        while True:
+            suffix = "".join(
+                secrets.choice(ANIMAL_CODE_ALPHABET)
+                for _ in range(ANIMAL_CODE_LENGTH)
+            )
+            animal_code = f"AH-{suffix}"
+            if animal_code not in existing_codes:
+                return animal_code
+
     async def get_animals(self) -> list[Animal]:
         return await self._hass.async_add_executor_job(self._get_animals_sync)
 
@@ -141,8 +222,8 @@ class AnimalHealthDatabase:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                SELECT id, name, species, breed, sex, birth_date, arrival_date,
-                       status, created_at, updated_at
+                SELECT id, animal_code, name, species, breed, sex, birth_date,
+                       arrival_date, status, created_at, updated_at
                 FROM animals
                 ORDER BY name COLLATE NOCASE
                 """
@@ -190,15 +271,22 @@ class AnimalHealthDatabase:
         animal_id = uuid4().hex
         now = datetime.now(UTC).isoformat(timespec="seconds")
         with self._connect() as connection:
+            existing_codes = {
+                row[0]
+                for row in connection.execute("SELECT animal_code FROM animals").fetchall()
+                if row[0]
+            }
+            animal_code = self._generate_animal_code(existing_codes)
             connection.execute(
                 """
                 INSERT INTO animals (
-                    id, name, species, breed, sex, birth_date, arrival_date,
-                    status, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    id, animal_code, name, species, breed, sex, birth_date,
+                    arrival_date, status, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     animal_id,
+                    animal_code,
                     name,
                     species,
                     breed,
@@ -290,8 +378,8 @@ class AnimalHealthDatabase:
     ) -> Animal | None:
         row = connection.execute(
             """
-            SELECT id, name, species, breed, sex, birth_date, arrival_date,
-                   status, created_at, updated_at
+            SELECT id, animal_code, name, species, breed, sex, birth_date,
+                   arrival_date, status, created_at, updated_at
             FROM animals
             WHERE id = ?
             """,
