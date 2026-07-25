@@ -1,0 +1,14 @@
+{
+  "title": "Tiergesundheit",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Tiergesundheit einrichten",
+        "description": "Richtet die lokale Tiergesundheitsverwaltung ein."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Die Tiergesundheitsverwaltung ist bereits eingerichtet."
+    }
+  }
+}

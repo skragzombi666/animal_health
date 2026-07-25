@@ -1,0 +1,14 @@
+{
+  "title": "Animal Health",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Animal Health einrichten",
+        "description": "Richtet die lokale Tiergesundheitsverwaltung ein."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Animal Health ist bereits eingerichtet."
+    }
+  }
+}
