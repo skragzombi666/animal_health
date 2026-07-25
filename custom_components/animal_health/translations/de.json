@@ -10,5 +10,103 @@
     "abort": {
       "already_configured": "Die Tiergesundheitsverwaltung ist bereits eingerichtet."
     }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "active": "Aktiv",
+          "inactive": "Archiviert",
+          "deceased": "Verstorben"
+        }
+      }
+    }
+  },
+  "services": {
+    "create_animal": {
+      "name": "Tier anlegen",
+      "description": "Legt ein neues Tierprofil an.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Name des Tieres."
+        },
+        "species": {
+          "name": "Tierart",
+          "description": "Tierart des Tieres."
+        },
+        "breed": {
+          "name": "Rasse",
+          "description": "Optionale Rasse oder Typbezeichnung."
+        },
+        "sex": {
+          "name": "Geschlecht",
+          "description": "Optionale Angabe zum Geschlecht."
+        },
+        "birth_date": {
+          "name": "Geburtsdatum",
+          "description": "Optionales bekanntes oder geschätztes Geburtsdatum."
+        },
+        "arrival_date": {
+          "name": "Aufnahmedatum",
+          "description": "Optionales Datum, an dem das Tier in den Haushalt oder Bestand aufgenommen wurde."
+        }
+      }
+    },
+    "update_animal": {
+      "name": "Tier bearbeiten",
+      "description": "Aktualisiert Profildaten eines bestehenden Tieres.",
+      "fields": {
+        "animal_id": {
+          "name": "Tier-ID",
+          "description": "Stabile Animal-Health-ID des Tieres."
+        },
+        "name": {
+          "name": "Name",
+          "description": "Neuer Name des Tieres."
+        },
+        "species": {
+          "name": "Tierart",
+          "description": "Neue Tierart."
+        },
+        "breed": {
+          "name": "Rasse",
+          "description": "Neue Rasse. Ein leerer Wert entfernt die bisherige Angabe."
+        },
+        "sex": {
+          "name": "Geschlecht",
+          "description": "Neue Geschlechtsangabe. Ein leerer Wert entfernt die bisherige Angabe."
+        },
+        "birth_date": {
+          "name": "Geburtsdatum",
+          "description": "Neues Geburtsdatum."
+        },
+        "arrival_date": {
+          "name": "Aufnahmedatum",
+          "description": "Neues Aufnahmedatum."
+        }
+      }
+    },
+    "archive_animal": {
+      "name": "Tier archivieren",
+      "description": "Markiert ein Tierprofil als inaktiv, ohne dessen Verlauf zu löschen.",
+      "fields": {
+        "animal_id": {
+          "name": "Tier-ID",
+          "description": "Stabile Animal-Health-ID des Tieres."
+        }
+      }
+    },
+    "restore_animal": {
+      "name": "Tier wiederherstellen",
+      "description": "Setzt ein archiviertes Tierprofil wieder auf aktiv.",
+      "fields": {
+        "animal_id": {
+          "name": "Tier-ID",
+          "description": "Stabile Animal-Health-ID des Tieres."
+        }
+      }
+    }
   }
 }
