@@ -1,0 +1,14 @@
+{
+  "title": "Animal Health",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Animal Health",
+        "description": "Set up local animal health management."
+      }
+    },
+    "abort": {
+      "already_configured": "Animal Health is already configured."
+    }
+  }
+}

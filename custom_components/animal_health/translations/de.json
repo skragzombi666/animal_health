@@ -8,7 +8,7 @@
       }
     },
     "abort": {
-      "single_instance_allowed": "Die Tiergesundheitsverwaltung ist bereits eingerichtet."
+      "already_configured": "Die Tiergesundheitsverwaltung ist bereits eingerichtet."
     }
   }
 }
