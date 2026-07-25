@@ -61,7 +61,7 @@ data:
   arrival_date: "2026-07-01"
 ```
 
-The action returns a short readable ID such as `AH-7K3M9QX`. Home Assistant keeps a separate internal database identifier so device links and historical records remain stable.
+The action returns the animal's single canonical ID, for example `AH-7K3M9QX`. This same ID is the database primary key, the stable Animal Health device identifier and the reference used by future events and tasks. Home Assistant additionally maintains its own registry IDs internally, but those are not Animal Health identifiers and are not exposed to the user.
 
 Each animal is registered as a Home Assistant device with separate sensors for:
 
@@ -99,6 +99,8 @@ data:
 ```
 
 The action editor provides a dropdown for the animal and translated dropdown choices for sex: male, female or other.
+
+Because this identifier design replaces the temporary 0.3.0 development schema, pre-0.3.1 test databases should be deleted and recreated instead of migrated. No released production data is affected.
 
 ## Planned development phases
 
