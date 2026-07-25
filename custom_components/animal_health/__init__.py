@@ -9,30 +9,31 @@ from .const import DATABASE_NAME, DOMAIN
 from .database import AnimalHealthDatabase
 
 
+type AnimalHealthConfigEntry = ConfigEntry
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: AnimalHealthConfigEntry,
 ) -> bool:
     database_path = Path(hass.config.path(DATABASE_NAME))
     database = AnimalHealthDatabase(hass, database_path)
-
     await database.initialize()
 
     hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = {
-        "database": database,
-    }
-
+    hass.data[DOMAIN][entry.entry_id] = database
     return True
 
 
 async def async_unload_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: AnimalHealthConfigEntry,
 ) -> bool:
-    hass.data[DOMAIN].pop(entry.entry_id, None)
+    domain_data = hass.data.get(DOMAIN)
+    if domain_data is None:
+        return True
 
-    if not hass.data[DOMAIN]:
+    domain_data.pop(entry.entry_id, None)
+    if not domain_data:
         hass.data.pop(DOMAIN, None)
-
     return True
