@@ -1,0 +1,103 @@
+create_animal:
+  name: Create animal
+  description: Create a new animal profile.
+  fields:
+    name:
+      name: Name
+      description: Name of the animal.
+      required: true
+      example: Ada
+      selector:
+        text:
+    species:
+      name: Species
+      description: Species of the animal.
+      required: true
+      example: Chicken
+      selector:
+        text:
+    breed:
+      name: Breed
+      description: Optional breed or type.
+      example: Sussex
+      selector:
+        text:
+    sex:
+      name: Sex
+      description: Optional sex description.
+      example: Female
+      selector:
+        text:
+    birth_date:
+      name: Birth date
+      description: Optional known or estimated birth date.
+      selector:
+        date:
+    arrival_date:
+      name: Arrival date
+      description: Optional date the animal joined the household or flock.
+      selector:
+        date:
+
+update_animal:
+  name: Update animal
+  description: Update profile fields for an existing animal.
+  fields:
+    animal_id:
+      name: Animal ID
+      description: Stable Animal Health identifier of the animal.
+      required: true
+      selector:
+        text:
+    name:
+      name: Name
+      description: New name of the animal.
+      selector:
+        text:
+    species:
+      name: Species
+      description: New species value.
+      selector:
+        text:
+    breed:
+      name: Breed
+      description: New breed value. Submit an empty value to clear it.
+      selector:
+        text:
+    sex:
+      name: Sex
+      description: New sex value. Submit an empty value to clear it.
+      selector:
+        text:
+    birth_date:
+      name: Birth date
+      description: New birth date.
+      selector:
+        date:
+    arrival_date:
+      name: Arrival date
+      description: New arrival date.
+      selector:
+        date:
+
+archive_animal:
+  name: Archive animal
+  description: Mark an animal profile as inactive without deleting its history.
+  fields:
+    animal_id:
+      name: Animal ID
+      description: Stable Animal Health identifier of the animal.
+      required: true
+      selector:
+        text:
+
+restore_animal:
+  name: Restore animal
+  description: Restore an archived animal profile to active status.
+  fields:
+    animal_id:
+      name: Animal ID
+      description: Stable Animal Health identifier of the animal.
+      required: true
+      selector:
+        text:
