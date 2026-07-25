@@ -11,6 +11,15 @@
       "already_configured": "Animal Health is already configured."
     }
   },
+  "selector": {
+    "animal_sex": {
+      "options": {
+        "male": "Male",
+        "female": "Female",
+        "other": "Other"
+      }
+    }
+  },
   "entity": {
     "sensor": {
       "status": {
@@ -20,6 +29,29 @@
           "inactive": "Archived",
           "deceased": "Deceased"
         }
+      },
+      "animal_id": {
+        "name": "Animal ID"
+      },
+      "species": {
+        "name": "Species"
+      },
+      "breed": {
+        "name": "Breed"
+      },
+      "sex": {
+        "name": "Sex",
+        "state": {
+          "male": "Male",
+          "female": "Female",
+          "other": "Other"
+        }
+      },
+      "birth_date": {
+        "name": "Birth date"
+      },
+      "arrival_date": {
+        "name": "Arrival date"
       }
     }
   },
@@ -42,7 +74,7 @@
         },
         "sex": {
           "name": "Sex",
-          "description": "Optional sex description."
+          "description": "Optional sex of the animal."
         },
         "birth_date": {
           "name": "Birth date",
@@ -58,9 +90,9 @@
       "name": "Update animal",
       "description": "Updates profile fields for an existing animal.",
       "fields": {
-        "animal_id": {
-          "name": "Animal ID",
-          "description": "Stable Animal Health identifier of the animal."
+        "device_id": {
+          "name": "Animal",
+          "description": "Select the animal by name."
         },
         "name": {
           "name": "Name",
@@ -76,7 +108,7 @@
         },
         "sex": {
           "name": "Sex",
-          "description": "New sex value. Submit an empty value to clear it."
+          "description": "New sex value."
         },
         "birth_date": {
           "name": "Birth date",
@@ -92,9 +124,9 @@
       "name": "Archive animal",
       "description": "Marks an animal profile as inactive without deleting its history.",
       "fields": {
-        "animal_id": {
-          "name": "Animal ID",
-          "description": "Stable Animal Health identifier of the animal."
+        "device_id": {
+          "name": "Animal",
+          "description": "Select the animal by name."
         }
       }
     },
@@ -102,9 +134,9 @@
       "name": "Restore animal",
       "description": "Restores an archived animal profile to active status.",
       "fields": {
-        "animal_id": {
-          "name": "Animal ID",
-          "description": "Stable Animal Health identifier of the animal."
+        "device_id": {
+          "name": "Animal",
+          "description": "Select the animal by name."
         }
       }
     }
