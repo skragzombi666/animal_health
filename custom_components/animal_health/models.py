@@ -8,6 +8,7 @@ from typing import Any, Mapping
 @dataclass(frozen=True, slots=True)
 class Animal:
     id: str
+    animal_code: str
     name: str
     species: str
     breed: str | None
@@ -22,6 +23,7 @@ class Animal:
     def from_mapping(cls, row: Mapping[str, Any]) -> Animal:
         return cls(
             id=row["id"],
+            animal_code=row["animal_code"],
             name=row["name"],
             species=row["species"],
             breed=row["breed"],
@@ -41,7 +43,7 @@ class Animal:
 
     def as_dict(self) -> dict[str, Any]:
         return {
-            "id": self.id,
+            "id": self.animal_code,
             "name": self.name,
             "species": self.species,
             "breed": self.breed,
