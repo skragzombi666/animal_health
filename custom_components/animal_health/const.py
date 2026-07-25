@@ -3,6 +3,28 @@ NAME = "Animal Health"
 DATABASE_NAME = "animal_health.db"
 DATABASE_SCHEMA_VERSION = 1
 
+ANIMAL_STATUS_ACTIVE = "active"
+ANIMAL_STATUS_INACTIVE = "inactive"
+ANIMAL_STATUS_DECEASED = "deceased"
+ANIMAL_STATUSES = (
+    ANIMAL_STATUS_ACTIVE,
+    ANIMAL_STATUS_INACTIVE,
+    ANIMAL_STATUS_DECEASED,
+)
+
+SERVICE_CREATE_ANIMAL = "create_animal"
+SERVICE_UPDATE_ANIMAL = "update_animal"
+SERVICE_ARCHIVE_ANIMAL = "archive_animal"
+SERVICE_RESTORE_ANIMAL = "restore_animal"
+
+ATTR_ANIMAL_ID = "animal_id"
+ATTR_NAME = "name"
+ATTR_SPECIES = "species"
+ATTR_BREED = "breed"
+ATTR_SEX = "sex"
+ATTR_BIRTH_DATE = "birth_date"
+ATTR_ARRIVAL_DATE = "arrival_date"
+
 RECURRENCE_ONCE = "once"
 RECURRENCE_DAILY = "daily"
 RECURRENCE_WEEKLY = "weekly"

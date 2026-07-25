@@ -1,15 +1,29 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
-from .const import DATABASE_NAME, DOMAIN
+from .const import DATABASE_NAME
+from .coordinator import AnimalHealthCoordinator
 from .database import AnimalHealthDatabase
+from .runtime import AnimalHealthRuntimeData
+from .services import async_setup_services
+
+PLATFORMS = [Platform.SENSOR]
+
+type AnimalHealthConfigEntry = ConfigEntry[AnimalHealthRuntimeData]
 
 
-type AnimalHealthConfigEntry = ConfigEntry
+async def async_setup(
+    hass: HomeAssistant,
+    config: dict[str, Any],
+) -> bool:
+    async_setup_services(hass)
+    return True
 
 
 async def async_setup_entry(
@@ -20,8 +34,14 @@ async def async_setup_entry(
     database = AnimalHealthDatabase(hass, database_path)
     await database.initialize()
 
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = database
+    coordinator = AnimalHealthCoordinator(hass, database)
+    await coordinator.async_config_entry_first_refresh()
+
+    entry.runtime_data = AnimalHealthRuntimeData(
+        database=database,
+        coordinator=coordinator,
+    )
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
@@ -29,11 +49,4 @@ async def async_unload_entry(
     hass: HomeAssistant,
     entry: AnimalHealthConfigEntry,
 ) -> bool:
-    domain_data = hass.data.get(DOMAIN)
-    if domain_data is None:
-        return True
-
-    domain_data.pop(entry.entry_id, None)
-    if not domain_data:
-        hass.data.pop(DOMAIN, None)
-    return True
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

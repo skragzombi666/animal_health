@@ -1,0 +1,65 @@
+create_animal:
+  fields:
+    name:
+      required: true
+      example: Ada
+      selector:
+        text:
+    species:
+      required: true
+      example: Chicken
+      selector:
+        text:
+    breed:
+      example: Sussex
+      selector:
+        text:
+    sex:
+      example: Female
+      selector:
+        text:
+    birth_date:
+      selector:
+        date:
+    arrival_date:
+      selector:
+        date:
+
+update_animal:
+  fields:
+    animal_id:
+      required: true
+      selector:
+        text:
+    name:
+      selector:
+        text:
+    species:
+      selector:
+        text:
+    breed:
+      selector:
+        text:
+    sex:
+      selector:
+        text:
+    birth_date:
+      selector:
+        date:
+    arrival_date:
+      selector:
+        date:
+
+archive_animal:
+  fields:
+    animal_id:
+      required: true
+      selector:
+        text:
+
+restore_animal:
+  fields:
+    animal_id:
+      required: true
+      selector:
+        text:

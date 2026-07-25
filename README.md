@@ -13,6 +13,8 @@ The integration lives in `custom_components/animal_health` and is prepared for l
 - Versioned schema migrations
 - Animals, events, tasks and task occurrences
 - Foreign-key enforcement and indexes
+- Create, update, archive and restore actions for animal profiles
+- One Home Assistant device and status sensor for each animal
 
 ## Development deployment on Home Assistant OS
 
@@ -41,6 +43,47 @@ cd /config/animal_health
 ```
 
 The deployment script creates a backup of an existing installation under `/config/animal_health_backups`, runs `ha core check`, and restarts Home Assistant only after a successful configuration check.
+
+## Animal management in 0.3.0
+
+Animal profiles are currently managed through Home Assistant actions. A dedicated user interface is planned for a later development phase.
+
+Create an animal:
+
+```yaml
+action: animal_health.create_animal
+data:
+  name: Ada
+  species: Chicken
+  breed: Sussex
+  sex: Female
+  arrival_date: "2026-07-01"
+```
+
+The action returns the stable `animal_id`. Each animal is registered as a Home Assistant device and receives a status sensor with profile details in its attributes.
+
+Update an animal:
+
+```yaml
+action: animal_health.update_animal
+data:
+  animal_id: REPLACE_WITH_ANIMAL_ID
+  breed: Light Sussex
+```
+
+Archive or restore an animal without deleting its history:
+
+```yaml
+action: animal_health.archive_animal
+data:
+  animal_id: REPLACE_WITH_ANIMAL_ID
+```
+
+```yaml
+action: animal_health.restore_animal
+data:
+  animal_id: REPLACE_WITH_ANIMAL_ID
+```
 
 ## Planned development phases
 
