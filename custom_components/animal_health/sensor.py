@@ -38,7 +38,7 @@ SENSOR_DESCRIPTIONS = (
         key="animal_id",
         translation_key="animal_id",
         icon="mdi:identifier",
-        value_fn=lambda animal: animal.animal_code,
+        value_fn=lambda animal: animal.id,
     ),
     AnimalProfileSensorDescription(
         key="species",
@@ -157,4 +157,4 @@ class AnimalProfileSensor(
         animal = self.animal
         if animal is None:
             return {}
-        return {"animal_id": animal.animal_code}
+        return {"animal_id": animal.id}
