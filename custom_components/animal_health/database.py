@@ -2,14 +2,24 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable
+from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any
+from uuid import uuid4
 
 from homeassistant.core import HomeAssistant
 
-from .const import DATABASE_SCHEMA_VERSION
+from .const import ANIMAL_STATUSES, ANIMAL_STATUS_ACTIVE, DATABASE_SCHEMA_VERSION
+from .models import Animal
 
-_T = TypeVar("_T")
+ANIMAL_FIELDS = {
+    "name",
+    "species",
+    "breed",
+    "sex",
+    "birth_date",
+    "arrival_date",
+}
 
 
 class AnimalHealthDatabase:
@@ -124,10 +134,10 @@ class AnimalHealthDatabase:
             """
         )
 
-    async def get_animals(self) -> list[dict[str, Any]]:
+    async def get_animals(self) -> list[Animal]:
         return await self._hass.async_add_executor_job(self._get_animals_sync)
 
-    def _get_animals_sync(self) -> list[dict[str, Any]]:
+    def _get_animals_sync(self) -> list[Animal]:
         with self._connect() as connection:
             rows = connection.execute(
                 """
@@ -137,4 +147,154 @@ class AnimalHealthDatabase:
                 ORDER BY name COLLATE NOCASE
                 """
             ).fetchall()
-        return [dict(row) for row in rows]
+        return [Animal.from_mapping(row) for row in rows]
+
+    async def get_animal(self, animal_id: str) -> Animal | None:
+        return await self._hass.async_add_executor_job(
+            self._get_animal_sync, animal_id
+        )
+
+    def _get_animal_sync(self, animal_id: str) -> Animal | None:
+        with self._connect() as connection:
+            return self._get_animal_from_connection(connection, animal_id)
+
+    async def create_animal(
+        self,
+        *,
+        name: str,
+        species: str,
+        breed: str | None = None,
+        sex: str | None = None,
+        birth_date: date | None = None,
+        arrival_date: date | None = None,
+    ) -> Animal:
+        return await self._hass.async_add_executor_job(
+            self._create_animal_sync,
+            name,
+            species,
+            breed,
+            sex,
+            birth_date,
+            arrival_date,
+        )
+
+    def _create_animal_sync(
+        self,
+        name: str,
+        species: str,
+        breed: str | None,
+        sex: str | None,
+        birth_date: date | None,
+        arrival_date: date | None,
+    ) -> Animal:
+        animal_id = uuid4().hex
+        now = datetime.now(UTC).isoformat(timespec="seconds")
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO animals (
+                    id, name, species, breed, sex, birth_date, arrival_date,
+                    status, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    animal_id,
+                    name,
+                    species,
+                    breed,
+                    sex,
+                    birth_date.isoformat() if birth_date else None,
+                    arrival_date.isoformat() if arrival_date else None,
+                    ANIMAL_STATUS_ACTIVE,
+                    now,
+                    now,
+                ),
+            )
+            animal = self._get_animal_from_connection(connection, animal_id)
+        if animal is None:
+            raise RuntimeError("Created animal could not be loaded")
+        return animal
+
+    async def update_animal(
+        self,
+        animal_id: str,
+        changes: dict[str, Any],
+    ) -> Animal:
+        return await self._hass.async_add_executor_job(
+            self._update_animal_sync, animal_id, changes
+        )
+
+    def _update_animal_sync(
+        self,
+        animal_id: str,
+        changes: dict[str, Any],
+    ) -> Animal:
+        invalid_fields = set(changes) - ANIMAL_FIELDS
+        if invalid_fields:
+            raise ValueError(f"Unsupported animal fields: {sorted(invalid_fields)}")
+
+        if not changes:
+            animal = self._get_animal_sync(animal_id)
+            if animal is None:
+                raise KeyError(animal_id)
+            return animal
+
+        serialized_changes = {
+            field: value.isoformat() if isinstance(value, date) else value
+            for field, value in changes.items()
+        }
+        serialized_changes["updated_at"] = datetime.now(UTC).isoformat(
+            timespec="seconds"
+        )
+        assignments = ", ".join(f"{field} = ?" for field in serialized_changes)
+        values = [*serialized_changes.values(), animal_id]
+
+        with self._connect() as connection:
+            cursor = connection.execute(
+                f"UPDATE animals SET {assignments} WHERE id = ?",
+                values,
+            )
+            if cursor.rowcount == 0:
+                raise KeyError(animal_id)
+            animal = self._get_animal_from_connection(connection, animal_id)
+        if animal is None:
+            raise KeyError(animal_id)
+        return animal
+
+    async def set_animal_status(self, animal_id: str, status: str) -> Animal:
+        return await self._hass.async_add_executor_job(
+            self._set_animal_status_sync, animal_id, status
+        )
+
+    def _set_animal_status_sync(self, animal_id: str, status: str) -> Animal:
+        if status not in ANIMAL_STATUSES:
+            raise ValueError(f"Unsupported animal status: {status}")
+
+        now = datetime.now(UTC).isoformat(timespec="seconds")
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "UPDATE animals SET status = ?, updated_at = ? WHERE id = ?",
+                (status, now, animal_id),
+            )
+            if cursor.rowcount == 0:
+                raise KeyError(animal_id)
+            animal = self._get_animal_from_connection(connection, animal_id)
+        if animal is None:
+            raise KeyError(animal_id)
+        return animal
+
+    @staticmethod
+    def _get_animal_from_connection(
+        connection: sqlite3.Connection,
+        animal_id: str,
+    ) -> Animal | None:
+        row = connection.execute(
+            """
+            SELECT id, name, species, breed, sex, birth_date, arrival_date,
+                   status, created_at, updated_at
+            FROM animals
+            WHERE id = ?
+            """,
+            (animal_id,),
+        ).fetchone()
+        return Animal.from_mapping(row) if row is not None else None
