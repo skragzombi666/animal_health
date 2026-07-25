@@ -6,14 +6,11 @@ from collections.abc import Callable
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 from homeassistant.core import HomeAssistant
 
 from .const import (
-    ANIMAL_SEX_FEMALE,
-    ANIMAL_SEX_MALE,
-    ANIMAL_SEX_OTHER,
+    ANIMAL_SEXES,
     ANIMAL_STATUSES,
     ANIMAL_STATUS_ACTIVE,
     DATABASE_SCHEMA_VERSION,
@@ -29,8 +26,8 @@ ANIMAL_FIELDS = {
     "arrival_date",
 }
 
-ANIMAL_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTVWXYZ"
-ANIMAL_CODE_LENGTH = 7
+ANIMAL_ID_ALPHABET = "23456789ABCDEFGHJKMNPQRSTVWXYZ"
+ANIMAL_ID_LENGTH = 7
 
 
 class AnimalHealthDatabase:
@@ -61,7 +58,6 @@ class AnimalHealthDatabase:
 
             migrations: dict[int, Callable[[sqlite3.Connection], None]] = {
                 1: self._migrate_to_v1,
-                2: self._migrate_to_v2,
             }
             for target_version in range(current_version + 1, DATABASE_SCHEMA_VERSION + 1):
                 migrations[target_version](connection)
@@ -76,7 +72,7 @@ class AnimalHealthDatabase:
                 name TEXT NOT NULL,
                 species TEXT NOT NULL,
                 breed TEXT,
-                sex TEXT,
+                sex TEXT CHECK (sex IS NULL OR sex IN ('male', 'female', 'other')),
                 birth_date TEXT,
                 arrival_date TEXT,
                 status TEXT NOT NULL DEFAULT 'active'
@@ -146,74 +142,16 @@ class AnimalHealthDatabase:
             """
         )
 
-    @classmethod
-    def _migrate_to_v2(cls, connection: sqlite3.Connection) -> None:
-        columns = {
-            row[1] for row in connection.execute("PRAGMA table_info(animals)").fetchall()
-        }
-        if "animal_code" not in columns:
-            connection.execute("ALTER TABLE animals ADD COLUMN animal_code TEXT")
-
-        existing_codes = {
-            row[0]
-            for row in connection.execute(
-                "SELECT animal_code FROM animals WHERE animal_code IS NOT NULL"
-            ).fetchall()
-        }
-        rows_without_code = connection.execute(
-            "SELECT id FROM animals WHERE animal_code IS NULL OR animal_code = ''"
-        ).fetchall()
-        for row in rows_without_code:
-            animal_code = cls._generate_animal_code(existing_codes)
-            existing_codes.add(animal_code)
-            connection.execute(
-                "UPDATE animals SET animal_code = ? WHERE id = ?",
-                (animal_code, row[0]),
-            )
-
-        connection.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_animals_code ON animals(animal_code)"
-        )
-        connection.execute(
-            """
-            UPDATE animals
-            SET sex = CASE lower(trim(sex))
-                WHEN 'male' THEN ?
-                WHEN 'männlich' THEN ?
-                WHEN 'mannlich' THEN ?
-                WHEN 'female' THEN ?
-                WHEN 'weiblich' THEN ?
-                WHEN 'other' THEN ?
-                WHEN 'anderes' THEN ?
-                WHEN 'divers' THEN ?
-                ELSE ?
-            END
-            WHERE sex IS NOT NULL
-            """,
-            (
-                ANIMAL_SEX_MALE,
-                ANIMAL_SEX_MALE,
-                ANIMAL_SEX_MALE,
-                ANIMAL_SEX_FEMALE,
-                ANIMAL_SEX_FEMALE,
-                ANIMAL_SEX_OTHER,
-                ANIMAL_SEX_OTHER,
-                ANIMAL_SEX_OTHER,
-                ANIMAL_SEX_OTHER,
-            ),
-        )
-
     @staticmethod
-    def _generate_animal_code(existing_codes: set[str] | None = None) -> str:
-        existing_codes = existing_codes or set()
+    def _generate_animal_id(existing_ids: set[str] | None = None) -> str:
+        existing_ids = existing_ids or set()
         while True:
             suffix = "".join(
-                secrets.choice(ANIMAL_CODE_ALPHABET)
-                for _ in range(ANIMAL_CODE_LENGTH)
+                secrets.choice(ANIMAL_ID_ALPHABET) for _ in range(ANIMAL_ID_LENGTH)
             )
-            animal_code = f"AH-{suffix}"
-            if animal_code not in existing_codes:
-                return animal_code
+            animal_id = f"AH-{suffix}"
+            if animal_id not in existing_ids:
+                return animal_id
 
     async def get_animals(self) -> list[Animal]:
         return await self._hass.async_add_executor_job(self._get_animals_sync)
@@ -222,8 +160,8 @@ class AnimalHealthDatabase:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                SELECT id, animal_code, name, species, breed, sex, birth_date,
-                       arrival_date, status, created_at, updated_at
+                SELECT id, name, species, breed, sex, birth_date, arrival_date,
+                       status, created_at, updated_at
                 FROM animals
                 ORDER BY name COLLATE NOCASE
                 """
@@ -268,25 +206,24 @@ class AnimalHealthDatabase:
         birth_date: date | None,
         arrival_date: date | None,
     ) -> Animal:
-        animal_id = uuid4().hex
+        if sex is not None and sex not in ANIMAL_SEXES:
+            raise ValueError(f"Unsupported animal sex: {sex}")
+
         now = datetime.now(UTC).isoformat(timespec="seconds")
         with self._connect() as connection:
-            existing_codes = {
-                row[0]
-                for row in connection.execute("SELECT animal_code FROM animals").fetchall()
-                if row[0]
+            existing_ids = {
+                row[0] for row in connection.execute("SELECT id FROM animals").fetchall()
             }
-            animal_code = self._generate_animal_code(existing_codes)
+            animal_id = self._generate_animal_id(existing_ids)
             connection.execute(
                 """
                 INSERT INTO animals (
-                    id, animal_code, name, species, breed, sex, birth_date,
-                    arrival_date, status, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    id, name, species, breed, sex, birth_date, arrival_date,
+                    status, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     animal_id,
-                    animal_code,
                     name,
                     species,
                     breed,
@@ -320,6 +257,10 @@ class AnimalHealthDatabase:
         invalid_fields = set(changes) - ANIMAL_FIELDS
         if invalid_fields:
             raise ValueError(f"Unsupported animal fields: {sorted(invalid_fields)}")
+
+        sex = changes.get("sex")
+        if sex is not None and sex not in ANIMAL_SEXES:
+            raise ValueError(f"Unsupported animal sex: {sex}")
 
         if not changes:
             animal = self._get_animal_sync(animal_id)
@@ -378,8 +319,8 @@ class AnimalHealthDatabase:
     ) -> Animal | None:
         row = connection.execute(
             """
-            SELECT id, animal_code, name, species, breed, sex, birth_date,
-                   arrival_date, status, created_at, updated_at
+            SELECT id, name, species, breed, sex, birth_date, arrival_date,
+                   status, created_at, updated_at
             FROM animals
             WHERE id = ?
             """,
