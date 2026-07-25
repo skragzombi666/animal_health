@@ -10,5 +10,103 @@
     "abort": {
       "already_configured": "Animal Health is already configured."
     }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "active": "Active",
+          "inactive": "Archived",
+          "deceased": "Deceased"
+        }
+      }
+    }
+  },
+  "services": {
+    "create_animal": {
+      "name": "Create animal",
+      "description": "Creates a new animal profile.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Name of the animal."
+        },
+        "species": {
+          "name": "Species",
+          "description": "Species of the animal."
+        },
+        "breed": {
+          "name": "Breed",
+          "description": "Optional breed or type."
+        },
+        "sex": {
+          "name": "Sex",
+          "description": "Optional sex description."
+        },
+        "birth_date": {
+          "name": "Birth date",
+          "description": "Optional known or estimated birth date."
+        },
+        "arrival_date": {
+          "name": "Arrival date",
+          "description": "Optional date the animal joined the household or flock."
+        }
+      }
+    },
+    "update_animal": {
+      "name": "Update animal",
+      "description": "Updates profile fields for an existing animal.",
+      "fields": {
+        "animal_id": {
+          "name": "Animal ID",
+          "description": "Stable Animal Health identifier of the animal."
+        },
+        "name": {
+          "name": "Name",
+          "description": "New name of the animal."
+        },
+        "species": {
+          "name": "Species",
+          "description": "New species value."
+        },
+        "breed": {
+          "name": "Breed",
+          "description": "New breed value. Submit an empty value to clear it."
+        },
+        "sex": {
+          "name": "Sex",
+          "description": "New sex value. Submit an empty value to clear it."
+        },
+        "birth_date": {
+          "name": "Birth date",
+          "description": "New birth date."
+        },
+        "arrival_date": {
+          "name": "Arrival date",
+          "description": "New arrival date."
+        }
+      }
+    },
+    "archive_animal": {
+      "name": "Archive animal",
+      "description": "Marks an animal profile as inactive without deleting its history.",
+      "fields": {
+        "animal_id": {
+          "name": "Animal ID",
+          "description": "Stable Animal Health identifier of the animal."
+        }
+      }
+    },
+    "restore_animal": {
+      "name": "Restore animal",
+      "description": "Restores an archived animal profile to active status.",
+      "fields": {
+        "animal_id": {
+          "name": "Animal ID",
+          "description": "Stable Animal Health identifier of the animal."
+        }
+      }
+    }
   }
 }
