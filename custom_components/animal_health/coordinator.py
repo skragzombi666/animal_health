@@ -7,6 +7,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import DOMAIN
 from .database import AnimalHealthDatabase
+from .latest_weight import LatestWeight, async_get_latest_weights
 from .models import Animal
 
 _LOGGER = logging.getLogger(__name__)
@@ -26,7 +27,9 @@ class AnimalHealthCoordinator(DataUpdateCoordinator[dict[str, Animal]]):
             always_update=False,
         )
         self.database = database
+        self.latest_weights: dict[str, LatestWeight] = {}
 
     async def _async_update_data(self) -> dict[str, Animal]:
         animals = await self.database.get_animals()
+        self.latest_weights = await async_get_latest_weights(self.hass)
         return {animal.id: animal for animal in animals}
