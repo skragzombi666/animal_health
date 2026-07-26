@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import secrets
 import sqlite3
 from collections.abc import Callable
@@ -14,8 +15,11 @@ from .const import (
     ANIMAL_STATUSES,
     ANIMAL_STATUS_ACTIVE,
     DATABASE_SCHEMA_VERSION,
+    EVENT_TYPES,
+    EVENT_TYPE_OTHER,
+    EVENT_TYPE_STATUS_CHANGE,
 )
-from .models import Animal
+from .models import Animal, HealthEvent
 
 ANIMAL_FIELDS = {
     "name",
@@ -26,8 +30,8 @@ ANIMAL_FIELDS = {
     "arrival_date",
 }
 
-ANIMAL_ID_ALPHABET = "23456789ABCDEFGHJKMNPQRSTVWXYZ"
-ANIMAL_ID_LENGTH = 7
+RECORD_ID_ALPHABET = "23456789ABCDEFGHJKMNPQRSTVWXYZ"
+RECORD_ID_LENGTH = 7
 
 
 class AnimalHealthDatabase:
@@ -59,6 +63,7 @@ class AnimalHealthDatabase:
             migrations: dict[int, Callable[[sqlite3.Connection], None]] = {
                 1: self._migrate_to_v1,
                 2: self._migrate_to_v2,
+                3: self._migrate_to_v3,
             }
             for target_version in range(current_version + 1, DATABASE_SCHEMA_VERSION + 1):
                 migrations[target_version](connection)
@@ -104,6 +109,51 @@ class AnimalHealthDatabase:
             """
         )
 
+    @staticmethod
+    def _create_events_table(
+        connection: sqlite3.Connection,
+        table_name: str = "events",
+    ) -> None:
+        connection.execute(
+            f"""
+            CREATE TABLE {table_name} (
+                id TEXT PRIMARY KEY,
+                animal_id TEXT NOT NULL REFERENCES animals(id) ON DELETE RESTRICT,
+                event_type TEXT NOT NULL
+                    CHECK (
+                        event_type IN (
+                            'observation',
+                            'symptom',
+                            'weight',
+                            'diagnosis',
+                            'treatment',
+                            'medication',
+                            'vaccination',
+                            'veterinary_visit',
+                            'care',
+                            'status_change',
+                            'other'
+                        )
+                    ),
+                occurred_at TEXT NOT NULL,
+                title TEXT NOT NULL,
+                notes TEXT,
+                value REAL,
+                unit TEXT,
+                correction_of_event_id TEXT REFERENCES {table_name}(id) ON DELETE RESTRICT,
+                data_json TEXT NOT NULL DEFAULT '{{}}',
+                task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+                task_occurrence_id TEXT REFERENCES task_occurrences(id) ON DELETE SET NULL,
+                created_at TEXT NOT NULL,
+                CHECK (
+                    (value IS NULL AND unit IS NULL)
+                    OR (value IS NOT NULL AND unit IS NOT NULL)
+                ),
+                CHECK (correction_of_event_id IS NULL OR correction_of_event_id <> id)
+            )
+            """
+        )
+
     @classmethod
     def _migrate_to_v1(cls, connection: sqlite3.Connection) -> None:
         cls._create_animals_table(connection)
@@ -140,19 +190,11 @@ class AnimalHealthDatabase:
                 updated_at TEXT NOT NULL,
                 UNIQUE (task_id, scheduled_for)
             );
-
-            CREATE TABLE IF NOT EXISTS events (
-                id TEXT PRIMARY KEY,
-                animal_id TEXT NOT NULL REFERENCES animals(id) ON DELETE RESTRICT,
-                event_type TEXT NOT NULL,
-                occurred_at TEXT NOT NULL,
-                title TEXT NOT NULL,
-                notes TEXT,
-                task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL,
-                task_occurrence_id TEXT REFERENCES task_occurrences(id) ON DELETE SET NULL,
-                created_at TEXT NOT NULL
-            );
-
+            """
+        )
+        cls._create_events_table(connection)
+        connection.executescript(
+            """
             CREATE INDEX IF NOT EXISTS idx_animals_name
                 ON animals(name COLLATE NOCASE);
             CREATE INDEX IF NOT EXISTS idx_animals_status
@@ -169,6 +211,8 @@ class AnimalHealthDatabase:
                 ON events(animal_id, occurred_at DESC);
             CREATE INDEX IF NOT EXISTS idx_events_type
                 ON events(event_type);
+            CREATE INDEX IF NOT EXISTS idx_events_correction
+                ON events(correction_of_event_id);
             """
         )
 
@@ -244,16 +288,109 @@ class AnimalHealthDatabase:
         finally:
             connection.execute("PRAGMA foreign_keys = ON")
 
+    @classmethod
+    def _migrate_to_v3(cls, connection: sqlite3.Connection) -> None:
+        columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(events)").fetchall()
+        }
+        required = {
+            "value",
+            "unit",
+            "correction_of_event_id",
+            "data_json",
+        }
+        if required <= columns:
+            return
+
+        connection.commit()
+        connection.execute("PRAGMA foreign_keys = OFF")
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            cls._create_events_table(connection, "events_new")
+            connection.execute(
+                """
+                INSERT INTO events_new (
+                    id,
+                    animal_id,
+                    event_type,
+                    occurred_at,
+                    title,
+                    notes,
+                    value,
+                    unit,
+                    correction_of_event_id,
+                    data_json,
+                    task_id,
+                    task_occurrence_id,
+                    created_at
+                )
+                SELECT
+                    id,
+                    animal_id,
+                    CASE
+                        WHEN event_type IN (
+                            'observation',
+                            'symptom',
+                            'weight',
+                            'diagnosis',
+                            'treatment',
+                            'medication',
+                            'vaccination',
+                            'veterinary_visit',
+                            'care',
+                            'status_change',
+                            'other'
+                        ) THEN event_type
+                        ELSE 'other'
+                    END,
+                    occurred_at,
+                    title,
+                    notes,
+                    NULL,
+                    NULL,
+                    NULL,
+                    '{}',
+                    task_id,
+                    task_occurrence_id,
+                    created_at
+                FROM events
+                """
+            )
+            connection.execute("DROP TABLE events")
+            connection.execute("ALTER TABLE events_new RENAME TO events")
+            connection.execute(
+                "CREATE INDEX idx_events_animal_occurred ON events(animal_id, occurred_at DESC)"
+            )
+            connection.execute("CREATE INDEX idx_events_type ON events(event_type)")
+            connection.execute(
+                "CREATE INDEX idx_events_correction ON events(correction_of_event_id)"
+            )
+
+            violations = connection.execute("PRAGMA foreign_key_check").fetchall()
+            if violations:
+                raise RuntimeError(
+                    f"Animal Health migration created foreign-key violations: {violations}"
+                )
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.execute("PRAGMA foreign_keys = ON")
+
     @staticmethod
-    def _generate_animal_id(existing_ids: set[str] | None = None) -> str:
+    def _generate_record_id(
+        prefix: str,
+        existing_ids: set[str] | None = None,
+    ) -> str:
         existing_ids = existing_ids or set()
         while True:
             suffix = "".join(
-                secrets.choice(ANIMAL_ID_ALPHABET) for _ in range(ANIMAL_ID_LENGTH)
+                secrets.choice(RECORD_ID_ALPHABET) for _ in range(RECORD_ID_LENGTH)
             )
-            animal_id = f"AH-{suffix}"
-            if animal_id not in existing_ids:
-                return animal_id
+            record_id = f"{prefix}-{suffix}"
+            if record_id not in existing_ids:
+                return record_id
 
     async def get_animals(self) -> list[Animal]:
         return await self._hass.async_add_executor_job(self._get_animals_sync)
@@ -328,7 +465,7 @@ class AnimalHealthDatabase:
             existing_ids = {
                 row[0] for row in connection.execute("SELECT id FROM animals").fetchall()
             }
-            animal_id = self._generate_animal_id(existing_ids)
+            animal_id = self._generate_record_id("AH", existing_ids)
             connection.execute(
                 """
                 INSERT INTO animals (
@@ -427,7 +564,8 @@ class AnimalHealthDatabase:
         if status not in ANIMAL_STATUSES:
             raise ValueError(f"Unsupported animal status: {status}")
 
-        now = datetime.now(UTC).isoformat(timespec="seconds")
+        now_dt = datetime.now(UTC).replace(microsecond=0)
+        now = now_dt.isoformat()
         with self._connect() as connection:
             current = self._get_animal_from_connection(connection, animal_id)
             if current is None:
@@ -441,6 +579,17 @@ class AnimalHealthDatabase:
                 WHERE id = ?
                 """,
                 (status, now, now, animal_id),
+            )
+            self._create_event_in_connection(
+                connection,
+                animal_id=animal_id,
+                event_type=EVENT_TYPE_STATUS_CHANGE,
+                occurred_at=now_dt,
+                title="status_change",
+                data={
+                    "previous_status": current.status,
+                    "new_status": status,
+                },
             )
             animal = self._get_animal_from_connection(connection, animal_id)
         if animal is None:
@@ -480,6 +629,205 @@ class AnimalHealthDatabase:
         if animal is None:
             raise KeyError(animal_id)
         return animal
+
+    async def create_event(
+        self,
+        *,
+        animal_id: str,
+        event_type: str,
+        occurred_at: datetime,
+        title: str,
+        notes: str | None = None,
+        value: float | None = None,
+        unit: str | None = None,
+        correction_of_event_id: str | None = None,
+        data: dict[str, Any] | None = None,
+    ) -> HealthEvent:
+        return await self._hass.async_add_executor_job(
+            self._create_event_sync,
+            animal_id,
+            event_type,
+            occurred_at,
+            title,
+            notes,
+            value,
+            unit,
+            correction_of_event_id,
+            data,
+        )
+
+    def _create_event_sync(
+        self,
+        animal_id: str,
+        event_type: str,
+        occurred_at: datetime,
+        title: str,
+        notes: str | None,
+        value: float | None,
+        unit: str | None,
+        correction_of_event_id: str | None,
+        data: dict[str, Any] | None,
+    ) -> HealthEvent:
+        with self._connect() as connection:
+            if self._get_animal_from_connection(connection, animal_id) is None:
+                raise KeyError(animal_id)
+            return self._create_event_in_connection(
+                connection,
+                animal_id=animal_id,
+                event_type=event_type,
+                occurred_at=occurred_at,
+                title=title,
+                notes=notes,
+                value=value,
+                unit=unit,
+                correction_of_event_id=correction_of_event_id,
+                data=data,
+            )
+
+    def _create_event_in_connection(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        animal_id: str,
+        event_type: str,
+        occurred_at: datetime,
+        title: str,
+        notes: str | None = None,
+        value: float | None = None,
+        unit: str | None = None,
+        correction_of_event_id: str | None = None,
+        data: dict[str, Any] | None = None,
+    ) -> HealthEvent:
+        if event_type not in EVENT_TYPES:
+            raise ValueError(f"Unsupported event type: {event_type}")
+        if not title.strip():
+            raise ValueError("Event title must not be empty")
+        if (value is None) != (unit is None):
+            raise ValueError("Event value and unit must be supplied together")
+
+        if occurred_at.tzinfo is None:
+            occurred_at = occurred_at.replace(tzinfo=UTC)
+        occurred_at = occurred_at.astimezone(UTC).replace(microsecond=0)
+
+        if correction_of_event_id is not None:
+            corrected = connection.execute(
+                "SELECT animal_id FROM events WHERE id = ?",
+                (correction_of_event_id,),
+            ).fetchone()
+            if corrected is None:
+                raise KeyError(correction_of_event_id)
+            if corrected["animal_id"] != animal_id:
+                raise ValueError("A correction must reference an event for the same animal")
+
+        existing_ids = {
+            row[0] for row in connection.execute("SELECT id FROM events").fetchall()
+        }
+        event_id = self._generate_record_id("EV", existing_ids)
+        created_at = datetime.now(UTC).isoformat(timespec="seconds")
+        connection.execute(
+            """
+            INSERT INTO events (
+                id,
+                animal_id,
+                event_type,
+                occurred_at,
+                title,
+                notes,
+                value,
+                unit,
+                correction_of_event_id,
+                data_json,
+                task_id,
+                task_occurrence_id,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)
+            """,
+            (
+                event_id,
+                animal_id,
+                event_type,
+                occurred_at.isoformat(),
+                title.strip(),
+                notes,
+                value,
+                unit,
+                correction_of_event_id,
+                json.dumps(data or {}, ensure_ascii=False, sort_keys=True),
+                created_at,
+            ),
+        )
+        event = self._get_event_from_connection(connection, event_id)
+        if event is None:
+            raise RuntimeError("Created event could not be loaded")
+        return event
+
+    async def get_events(
+        self,
+        animal_id: str,
+        limit: int = 50,
+    ) -> list[HealthEvent]:
+        return await self._hass.async_add_executor_job(
+            self._get_events_sync, animal_id, limit
+        )
+
+    def _get_events_sync(
+        self,
+        animal_id: str,
+        limit: int,
+    ) -> list[HealthEvent]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    id,
+                    animal_id,
+                    event_type,
+                    occurred_at,
+                    title,
+                    notes,
+                    value,
+                    unit,
+                    correction_of_event_id,
+                    data_json,
+                    task_id,
+                    task_occurrence_id,
+                    created_at
+                FROM events
+                WHERE animal_id = ?
+                ORDER BY occurred_at DESC, created_at DESC
+                LIMIT ?
+                """,
+                (animal_id, limit),
+            ).fetchall()
+        return [HealthEvent.from_mapping(row) for row in rows]
+
+    @staticmethod
+    def _get_event_from_connection(
+        connection: sqlite3.Connection,
+        event_id: str,
+    ) -> HealthEvent | None:
+        row = connection.execute(
+            """
+            SELECT
+                id,
+                animal_id,
+                event_type,
+                occurred_at,
+                title,
+                notes,
+                value,
+                unit,
+                correction_of_event_id,
+                data_json,
+                task_id,
+                task_occurrence_id,
+                created_at
+            FROM events
+            WHERE id = ?
+            """,
+            (event_id,),
+        ).fetchone()
+        return HealthEvent.from_mapping(row) if row is not None else None
 
     @staticmethod
     def _get_animal_from_connection(
