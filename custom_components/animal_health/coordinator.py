@@ -24,7 +24,7 @@ class AnimalHealthCoordinator(DataUpdateCoordinator[dict[str, Animal]]):
             _LOGGER,
             name=DOMAIN,
             update_interval=None,
-            always_update=False,
+            always_update=True,
         )
         self.database = database
         self.latest_weights: dict[str, LatestWeight] = {}
