@@ -38,6 +38,14 @@ EVENT_TYPE_VETERINARY_VISIT = "veterinary_visit"
 EVENT_TYPE_CARE = "care"
 EVENT_TYPE_STATUS_CHANGE = "status_change"
 EVENT_TYPE_OTHER = "other"
+GENERAL_EVENT_TYPES = (
+    EVENT_TYPE_OBSERVATION,
+    EVENT_TYPE_DIAGNOSIS,
+    EVENT_TYPE_TREATMENT,
+    EVENT_TYPE_VETERINARY_VISIT,
+    EVENT_TYPE_CARE,
+    EVENT_TYPE_OTHER,
+)
 MANUAL_EVENT_TYPES = (
     EVENT_TYPE_OBSERVATION,
     EVENT_TYPE_SYMPTOM,
@@ -52,12 +60,31 @@ MANUAL_EVENT_TYPES = (
 )
 EVENT_TYPES = (*MANUAL_EVENT_TYPES, EVENT_TYPE_STATUS_CHANGE)
 
+WEIGHT_UNITS = ("mg", "g", "kg")
+DOSE_UNITS = ("mcg", "mg", "g", "ul", "ml", "drop", "tablet", "dose")
+ADMINISTRATION_ROUTES = (
+    "oral",
+    "topical",
+    "subcutaneous",
+    "intramuscular",
+    "intravenous",
+    "eye",
+    "ear",
+    "spray",
+    "other",
+)
+SYMPTOM_SEVERITIES = ("mild", "moderate", "severe", "critical")
+
 SERVICE_CREATE_ANIMAL = "create_animal"
 SERVICE_UPDATE_ANIMAL = "update_animal"
 SERVICE_SET_ANIMAL_STATUS = "set_animal_status"
 SERVICE_ARCHIVE_ANIMAL = "archive_animal"
 SERVICE_RESTORE_ANIMAL = "restore_animal"
 SERVICE_CREATE_EVENT = "create_event"
+SERVICE_RECORD_WEIGHT = "record_weight"
+SERVICE_RECORD_SYMPTOM = "record_symptom"
+SERVICE_RECORD_MEDICATION = "record_medication"
+SERVICE_RECORD_VACCINATION = "record_vaccination"
 SERVICE_LIST_EVENTS = "list_events"
 
 ATTR_DEVICE_ID = "device_id"
@@ -78,6 +105,16 @@ ATTR_VALUE = "value"
 ATTR_UNIT = "unit"
 ATTR_CORRECTION_OF_EVENT_ID = "correction_of_event_id"
 ATTR_LIMIT = "limit"
+ATTR_WEIGHT = "weight"
+ATTR_WEIGHT_UNIT = "weight_unit"
+ATTR_SYMPTOM = "symptom"
+ATTR_SEVERITY = "severity"
+ATTR_MEDICATION_NAME = "medication_name"
+ATTR_DOSE = "dose"
+ATTR_DOSE_UNIT = "dose_unit"
+ATTR_ROUTE = "route"
+ATTR_VACCINE_NAME = "vaccine_name"
+ATTR_BATCH_NUMBER = "batch_number"
 
 RECURRENCE_ONCE = "once"
 RECURRENCE_DAILY = "daily"
