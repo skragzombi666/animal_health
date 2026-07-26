@@ -73,6 +73,24 @@ ADMINISTRATION_ROUTES = (
     "spray",
     "other",
 )
+SYMPTOM_REDUCED_APPETITE = "reduced_appetite"
+SYMPTOM_LETHARGY = "lethargy"
+SYMPTOM_DIARRHEA = "diarrhea"
+SYMPTOM_COUGHING = "coughing"
+SYMPTOM_SNEEZING = "sneezing"
+SYMPTOM_LAMENESS = "lameness"
+SYMPTOM_WEIGHT_LOSS = "weight_loss"
+SYMPTOM_OTHER = "other"
+SYMPTOMS = (
+    SYMPTOM_REDUCED_APPETITE,
+    SYMPTOM_LETHARGY,
+    SYMPTOM_DIARRHEA,
+    SYMPTOM_COUGHING,
+    SYMPTOM_SNEEZING,
+    SYMPTOM_LAMENESS,
+    SYMPTOM_WEIGHT_LOSS,
+    SYMPTOM_OTHER,
+)
 SYMPTOM_SEVERITIES = ("mild", "moderate", "severe", "critical")
 
 SERVICE_CREATE_ANIMAL = "create_animal"
@@ -91,6 +109,7 @@ ATTR_DEVICE_ID = "device_id"
 ATTR_ANIMAL_ID = "animal_id"
 ATTR_NAME = "name"
 ATTR_SPECIES = "species"
+ATTR_CUSTOM_SPECIES = "custom_species"
 ATTR_BREED = "breed"
 ATTR_COLOR = "color"
 ATTR_SEX = "sex"
@@ -108,6 +127,7 @@ ATTR_LIMIT = "limit"
 ATTR_WEIGHT = "weight"
 ATTR_WEIGHT_UNIT = "weight_unit"
 ATTR_SYMPTOM = "symptom"
+ATTR_CUSTOM_SYMPTOM = "custom_symptom"
 ATTR_SEVERITY = "severity"
 ATTR_MEDICATION_NAME = "medication_name"
 ATTR_DOSE = "dose"

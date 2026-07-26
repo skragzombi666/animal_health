@@ -10,10 +10,12 @@ create_animal:
       selector:
         select:
           options: [dog, cat, chicken, duck, goose, turkey, quail, pigeon, guinea_fowl, rabbit, guinea_pig, hamster, rat, mouse, gerbil, chinchilla, ferret, horse, donkey, cattle, sheep, goat, pig, alpaca, llama, bee, fish, bird, reptile, tortoise_turtle, snake, lizard, amphibian, other]
-          custom_value: true
           translation_key: animal_species
           mode: dropdown
           sort: true
+    custom_species:
+      selector:
+        text: {}
     breed:
       selector:
         select:
@@ -131,10 +133,12 @@ update_animal:
       selector:
         select:
           options: [dog, cat, chicken, duck, goose, turkey, quail, pigeon, guinea_fowl, rabbit, guinea_pig, hamster, rat, mouse, gerbil, chinchilla, ferret, horse, donkey, cattle, sheep, goat, pig, alpaca, llama, bee, fish, bird, reptile, tortoise_turtle, snake, lizard, amphibian, other]
-          custom_value: true
           translation_key: animal_species
           mode: dropdown
           sort: true
+    custom_species:
+      selector:
+        text: {}
     breed:
       selector:
         select:
@@ -345,11 +349,13 @@ record_symptom:
       required: true
       selector:
         select:
-          options: [reduced_appetite, lethargy, diarrhea, coughing, sneezing, lameness, weight_loss]
-          custom_value: true
+          options: [reduced_appetite, lethargy, diarrhea, coughing, sneezing, lameness, weight_loss, other]
           translation_key: symptom
           mode: dropdown
           sort: true
+    custom_symptom:
+      selector:
+        text: {}
     severity:
       required: true
       default: moderate
