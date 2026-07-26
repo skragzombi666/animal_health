@@ -17,6 +17,12 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util
 
+from .catalog import (
+    canonical_breed_name,
+    canonical_species_name,
+    product_event_metadata,
+    resolve_breed,
+)
 from .const import (
     ADMINISTRATION_ROUTES,
     ANIMAL_SEXES,
@@ -275,6 +281,18 @@ def _update_device_metadata(
     )
 
 
+def _canonical_animal_values(
+    species_value: str,
+    breed_value: str | None,
+) -> tuple[str, str | None, str | None]:
+    species, species_id = canonical_species_name(species_value)
+    try:
+        breed, _breed_id = canonical_breed_name(breed_value, species_id)
+    except ValueError as err:
+        raise ServiceValidationError(str(err)) from err
+    return species, breed, species_id
+
+
 async def _refresh_and_get_response(
     runtime_data: AnimalHealthRuntimeData,
     animal_id: str,
@@ -334,10 +352,14 @@ async def _create_event_response(
 def async_setup_services(hass: HomeAssistant) -> None:
     async def handle_create_animal(call: ServiceCall) -> ServiceResponse:
         runtime_data = _get_runtime_data(hass)
+        species, breed, _species_id = _canonical_animal_values(
+            call.data[ATTR_SPECIES],
+            call.data.get(ATTR_BREED),
+        )
         animal = await runtime_data.database.create_animal(
             name=call.data[ATTR_NAME],
-            species=call.data[ATTR_SPECIES],
-            breed=call.data.get(ATTR_BREED),
+            species=species,
+            breed=breed,
             color=call.data.get(ATTR_COLOR),
             sex=call.data.get(ATTR_SEX),
             birth_date=call.data.get(ATTR_BIRTH_DATE),
@@ -350,6 +372,10 @@ def async_setup_services(hass: HomeAssistant) -> None:
         runtime_data = _get_runtime_data(hass)
         device_id = call.data[ATTR_DEVICE_ID]
         animal_id = _get_animal_id_from_device(hass, device_id)
+        current = runtime_data.coordinator.data.get(animal_id)
+        if current is None:
+            raise ServiceValidationError("The selected animal no longer exists")
+
         changes = {
             field: call.data[field]
             for field in EDITABLE_FIELDS
@@ -357,6 +383,30 @@ def async_setup_services(hass: HomeAssistant) -> None:
         }
         if not changes:
             raise ServiceValidationError("No animal fields were supplied")
+
+        if ATTR_SPECIES in call.data or ATTR_BREED in call.data:
+            species_input = call.data.get(ATTR_SPECIES, current.species)
+            species_name, species_id = canonical_species_name(species_input)
+            changes[ATTR_SPECIES] = species_name
+
+            if ATTR_BREED in call.data:
+                try:
+                    breed_name, _breed_id = canonical_breed_name(
+                        call.data.get(ATTR_BREED),
+                        species_id,
+                    )
+                except ValueError as err:
+                    raise ServiceValidationError(str(err)) from err
+                changes[ATTR_BREED] = breed_name
+            elif ATTR_SPECIES in call.data and current.breed:
+                existing_breed = resolve_breed(current.breed)
+                if (
+                    existing_breed is not None
+                    and species_id is not None
+                    and existing_breed.item.get("species_id") != species_id
+                ):
+                    changes[ATTR_BREED] = None
+
         try:
             await runtime_data.database.update_animal(animal_id, changes)
         except KeyError as err:
@@ -418,34 +468,60 @@ def async_setup_services(hass: HomeAssistant) -> None:
         )
 
     async def handle_record_symptom(call: ServiceCall) -> ServiceResponse:
+        known_symptoms = {
+            "reduced_appetite",
+            "lethargy",
+            "diarrhea",
+            "coughing",
+            "sneezing",
+            "lameness",
+            "weight_loss",
+        }
+        symptom = call.data[ATTR_SYMPTOM]
         return await _create_event_response(
             hass,
             call,
             event_type=EVENT_TYPE_SYMPTOM,
-            title=call.data[ATTR_SYMPTOM],
+            title=symptom,
             data={
-                "symptom": call.data[ATTR_SYMPTOM],
+                "symptom": symptom,
                 "severity": call.data[ATTR_SEVERITY],
+                "catalog_source": (
+                    "builtin" if symptom in known_symptoms else "custom"
+                ),
             },
         )
 
     async def handle_record_medication(call: ServiceCall) -> ServiceResponse:
+        medication_name, catalog_data = product_event_metadata(
+            call.data[ATTR_MEDICATION_NAME]
+        )
         route = call.data.get(ATTR_ROUTE)
-        data = {"medication_name": call.data[ATTR_MEDICATION_NAME]}
+        data = {
+            "medication_name": medication_name,
+            **catalog_data,
+        }
         if route is not None:
             data["route"] = route
         return await _create_event_response(
             hass,
             call,
             event_type=EVENT_TYPE_MEDICATION,
-            title=call.data[ATTR_MEDICATION_NAME],
+            title=medication_name,
             value=call.data[ATTR_DOSE],
             unit=call.data[ATTR_DOSE_UNIT],
             data=data,
         )
 
     async def handle_record_vaccination(call: ServiceCall) -> ServiceResponse:
-        data = {"vaccine_name": call.data[ATTR_VACCINE_NAME]}
+        vaccine_name, catalog_data = product_event_metadata(
+            call.data[ATTR_VACCINE_NAME],
+            vaccine=True,
+        )
+        data = {
+            "vaccine_name": vaccine_name,
+            **catalog_data,
+        }
         if route := call.data.get(ATTR_ROUTE):
             data["route"] = route
         if batch_number := call.data.get(ATTR_BATCH_NUMBER):
@@ -454,7 +530,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
             hass,
             call,
             event_type=EVENT_TYPE_VACCINATION,
-            title=call.data[ATTR_VACCINE_NAME],
+            title=vaccine_name,
             value=call.data[ATTR_DOSE],
             unit=call.data[ATTR_DOSE_UNIT],
             data=data,
