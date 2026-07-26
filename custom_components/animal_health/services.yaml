@@ -14,6 +14,10 @@ create_animal:
       example: Sussex
       selector:
         text:
+    color:
+      example: Brown and white
+      selector:
+        text:
     sex:
       selector:
         select:
@@ -45,6 +49,9 @@ update_animal:
       selector:
         text:
     breed:
+      selector:
+        text:
+    color:
       selector:
         text:
     sex:
@@ -102,3 +109,67 @@ restore_animal:
         device:
           filter:
             - integration: animal_health
+
+create_event:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          filter:
+            - integration: animal_health
+    event_type:
+      required: true
+      selector:
+        select:
+          options:
+            - observation
+            - symptom
+            - weight
+            - diagnosis
+            - treatment
+            - medication
+            - vaccination
+            - veterinary_visit
+            - care
+            - other
+          translation_key: event_type
+          mode: dropdown
+    occurred_at:
+      selector:
+        datetime:
+    title:
+      required: true
+      selector:
+        text:
+    notes:
+      selector:
+        text:
+          multiline: true
+    value:
+      selector:
+        number:
+          mode: box
+    unit:
+      selector:
+        text:
+    correction_of_event_id:
+      selector:
+        text:
+
+list_events:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          filter:
+            - integration: animal_health
+    limit:
+      default: 50
+      selector:
+        number:
+          min: 1
+          max: 200
+          step: 1
+          mode: box

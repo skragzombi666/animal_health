@@ -1,7 +1,7 @@
 DOMAIN = "animal_health"
 NAME = "Animal Health"
 DATABASE_NAME = "animal_health.db"
-DATABASE_SCHEMA_VERSION = 2
+DATABASE_SCHEMA_VERSION = 3
 
 ANIMAL_STATUS_ACTIVE = "active"
 ANIMAL_STATUS_MISSING = "missing"
@@ -27,21 +27,57 @@ ANIMAL_SEXES = (
     ANIMAL_SEX_OTHER,
 )
 
+EVENT_TYPE_OBSERVATION = "observation"
+EVENT_TYPE_SYMPTOM = "symptom"
+EVENT_TYPE_WEIGHT = "weight"
+EVENT_TYPE_DIAGNOSIS = "diagnosis"
+EVENT_TYPE_TREATMENT = "treatment"
+EVENT_TYPE_MEDICATION = "medication"
+EVENT_TYPE_VACCINATION = "vaccination"
+EVENT_TYPE_VETERINARY_VISIT = "veterinary_visit"
+EVENT_TYPE_CARE = "care"
+EVENT_TYPE_STATUS_CHANGE = "status_change"
+EVENT_TYPE_OTHER = "other"
+MANUAL_EVENT_TYPES = (
+    EVENT_TYPE_OBSERVATION,
+    EVENT_TYPE_SYMPTOM,
+    EVENT_TYPE_WEIGHT,
+    EVENT_TYPE_DIAGNOSIS,
+    EVENT_TYPE_TREATMENT,
+    EVENT_TYPE_MEDICATION,
+    EVENT_TYPE_VACCINATION,
+    EVENT_TYPE_VETERINARY_VISIT,
+    EVENT_TYPE_CARE,
+    EVENT_TYPE_OTHER,
+)
+EVENT_TYPES = (*MANUAL_EVENT_TYPES, EVENT_TYPE_STATUS_CHANGE)
+
 SERVICE_CREATE_ANIMAL = "create_animal"
 SERVICE_UPDATE_ANIMAL = "update_animal"
 SERVICE_SET_ANIMAL_STATUS = "set_animal_status"
 SERVICE_ARCHIVE_ANIMAL = "archive_animal"
 SERVICE_RESTORE_ANIMAL = "restore_animal"
+SERVICE_CREATE_EVENT = "create_event"
+SERVICE_LIST_EVENTS = "list_events"
 
 ATTR_DEVICE_ID = "device_id"
 ATTR_ANIMAL_ID = "animal_id"
 ATTR_NAME = "name"
 ATTR_SPECIES = "species"
 ATTR_BREED = "breed"
+ATTR_COLOR = "color"
 ATTR_SEX = "sex"
 ATTR_BIRTH_DATE = "birth_date"
 ATTR_ARRIVAL_DATE = "arrival_date"
 ATTR_STATUS = "status"
+ATTR_EVENT_TYPE = "event_type"
+ATTR_OCCURRED_AT = "occurred_at"
+ATTR_TITLE = "title"
+ATTR_NOTES = "notes"
+ATTR_VALUE = "value"
+ATTR_UNIT = "unit"
+ATTR_CORRECTION_OF_EVENT_ID = "correction_of_event_id"
+ATTR_LIMIT = "limit"
 
 RECURRENCE_ONCE = "once"
 RECURRENCE_DAILY = "daily"

@@ -14,6 +14,12 @@
     },
     "restore_animal": {
       "service": "mdi:archive-arrow-up"
+    },
+    "create_event": {
+      "service": "mdi:notebook-plus-outline"
+    },
+    "list_events": {
+      "service": "mdi:notebook-outline"
     }
   },
   "entity": {

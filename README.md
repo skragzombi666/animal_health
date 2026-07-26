@@ -14,8 +14,11 @@ The integration lives in `custom_components/animal_health` and is prepared for l
 - Animals, events, tasks and task occurrences
 - Foreign-key enforcement and indexes
 - Create, update, archive and restore actions for animal profiles
+- Separate factual animal status and administrative archival
 - One Home Assistant device for each animal
-- Separate profile sensors for status, animal ID, species, breed, sex, birth date and arrival date
+- Separate profile sensors for status, animal ID, species, breed, color/markings, sex, birth date and arrival date
+- Immutable health and care logbook with linked correction entries
+- Automatic logbook entries for factual status changes
 
 ## Development deployment on Home Assistant OS
 
@@ -45,7 +48,7 @@ cd /config/animal_health
 
 The deployment script creates a backup of an existing installation under `/config/animal_health_backups`, runs `ha core check`, and restarts Home Assistant only after a successful configuration check.
 
-## Animal management in 0.3.1
+## Animal management
 
 Animal profiles are currently managed through Home Assistant actions. A dedicated user interface is planned for a later development phase.
 
@@ -57,11 +60,12 @@ data:
   name: Ada
   species: Chicken
   breed: Sussex
+  color: Brown and white
   sex: female
   arrival_date: "2026-07-01"
 ```
 
-The action returns the animal's single canonical ID, for example `AH-7K3M9QX`. This same ID is the database primary key, the stable Animal Health device identifier and the reference used by future events and tasks. Home Assistant additionally maintains its own registry IDs internally, but those are not Animal Health identifiers and are not exposed to the user.
+The action returns the animal's single canonical ID, for example `AH-7K3M9QX`. This same ID is the database primary key, the stable Animal Health device identifier and the reference used by events and tasks. Home Assistant additionally maintains its own registry IDs internally, but those are not Animal Health identifiers and are not exposed to the user.
 
 Each animal is registered as a Home Assistant device with separate sensors for:
 
@@ -69,11 +73,12 @@ Each animal is registered as a Home Assistant device with separate sensors for:
 - animal ID
 - species
 - breed
+- color or markings
 - sex
 - birth date
 - arrival date
 
-The update, archive and restore actions use a filtered Home Assistant device selector. In the user interface, the animal is selected by its device name instead of entering an ID manually.
+The update, status, archive and restore actions use a filtered Home Assistant device selector. In the user interface, the animal is selected by its device name instead of entering an ID manually.
 
 Example YAML for updating an animal:
 
@@ -81,26 +86,64 @@ Example YAML for updating an animal:
 action: animal_health.update_animal
 data:
   device_id: REPLACE_WITH_HOME_ASSISTANT_DEVICE_ID
-  breed: Light Sussex
+  color: Black with white markings
 ```
 
-Archive or restore an animal without deleting its history:
+Factual status and administrative archival are separate. A sold, missing or deceased animal can remain visible until the user decides to archive it. Archiving never changes the factual status or event history.
+
+## Health and care logbook in 0.4.0
+
+Create a logbook event:
 
 ```yaml
-action: animal_health.archive_animal
+action: animal_health.create_event
 data:
   device_id: REPLACE_WITH_HOME_ASSISTANT_DEVICE_ID
+  event_type: weight
+  occurred_at: "2026-07-26 12:30:00"
+  title: Routine weighing
+  value: 2.15
+  unit: kg
+  notes: Eating and behaving normally
 ```
+
+Supported user-created event categories are:
+
+- observation
+- symptom
+- weight
+- diagnosis
+- treatment
+- medication
+- vaccination
+- veterinary visit
+- care
+- other
+
+Events are append-only. Existing entries are not edited or deleted. A correction is entered as a new event referencing the original event ID:
 
 ```yaml
-action: animal_health.restore_animal
+action: animal_health.create_event
 data:
   device_id: REPLACE_WITH_HOME_ASSISTANT_DEVICE_ID
+  event_type: weight
+  title: Corrected weighing
+  value: 2.05
+  unit: kg
+  correction_of_event_id: EV-REPLACE
 ```
 
-The action editor provides a dropdown for the animal and translated dropdown choices for sex: male, female or other.
+Retrieve the newest events for an animal:
 
-Because this identifier design replaces the temporary 0.3.0 development schema, pre-0.3.1 test databases should be deleted and recreated instead of migrated. No released production data is affected.
+```yaml
+action: animal_health.list_events
+data:
+  device_id: REPLACE_WITH_HOME_ASSISTANT_DEVICE_ID
+  limit: 50
+response_variable: animal_events
+```
+
+Changing an animal's factual status automatically creates a `status_change` event. Administrative archive and restore actions do not create health-history events.
 
 ## Planned development phases
 
@@ -116,9 +159,9 @@ The roadmap is provisional. Version numbers and scope may change as the integrat
 ### 0.3.x — Animal management
 
 - Create, edit, archive and restore animals
-- Extended animal profile data such as species, breed, sex, birth date and arrival date
+- Extended animal profile data such as species, breed, color/markings, sex, birth date and arrival date
 - Stable identifiers and Home Assistant device registration for each animal
-- Import of existing animal records where practical
+- Separate factual status and administrative archival
 
 ### 0.4.x — Health and care logbook
 
@@ -126,6 +169,7 @@ The roadmap is provisional. Version numbers and scope may change as the integrat
 - Structured event categories with optional notes and measurements
 - Corrections through new linked events instead of overwriting historical records
 - Filtering and retrieval of an animal's history
+- Automatic status-change events
 
 ### 0.5.x — Tasks and recurrences
 
