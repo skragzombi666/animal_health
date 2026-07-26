@@ -12,6 +12,7 @@ class Animal:
     name: str
     species: str
     breed: str | None
+    color: str | None
     sex: str | None
     birth_date: date | None
     arrival_date: date | None
@@ -29,6 +30,7 @@ class Animal:
             name=row["name"],
             species=row["species"],
             breed=row["breed"],
+            color=row["color"],
             sex=row["sex"],
             birth_date=date.fromisoformat(row["birth_date"]) if row["birth_date"] else None,
             arrival_date=date.fromisoformat(row["arrival_date"]) if row["arrival_date"] else None,
@@ -46,6 +48,7 @@ class Animal:
             "name": self.name,
             "species": self.species,
             "breed": self.breed,
+            "color": self.color,
             "sex": self.sex,
             "birth_date": self.birth_date.isoformat() if self.birth_date else None,
             "arrival_date": self.arrival_date.isoformat() if self.arrival_date else None,
