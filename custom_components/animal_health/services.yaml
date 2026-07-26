@@ -455,8 +455,19 @@ record_vaccination:
     occurred_at:
       selector:
         datetime: {}
-    vaccine_name:
+    vaccination_targets:
       required: true
+      selector:
+        select:
+          options: [rabies, distemper, canine_adenovirus, canine_parvovirus, leptospirosis, parainfluenza, kennel_cough, feline_panleukopenia, feline_herpesvirus, feline_calicivirus, feline_leukemia, marek, newcastle, infectious_bronchitis, gumboro, avian_pox, paramyxovirus, myxomatosis, rabbit_hemorrhagic_disease, tetanus, equine_influenza, strangles, bluetongue, other]
+          translation_key: vaccination_target
+          multiple: true
+          mode: dropdown
+          sort: true
+    custom_vaccination_target:
+      selector:
+        text: {}
+    vaccine_name:
       selector:
         select:
           options:
@@ -477,6 +488,9 @@ record_vaccination:
           custom_value: true
           mode: dropdown
           sort: true
+    antigen:
+      selector:
+        text: {}
     dose:
       required: true
       selector:
