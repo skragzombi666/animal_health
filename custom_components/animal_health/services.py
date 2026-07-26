@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any, cast
 
 import voluptuous as vol
@@ -15,6 +15,7 @@ from homeassistant.core import (
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
+from homeassistant.util import dt as dt_util
 
 from .const import (
     ANIMAL_SEXES,
@@ -22,14 +23,26 @@ from .const import (
     ATTR_ARRIVAL_DATE,
     ATTR_BIRTH_DATE,
     ATTR_BREED,
+    ATTR_COLOR,
+    ATTR_CORRECTION_OF_EVENT_ID,
     ATTR_DEVICE_ID,
+    ATTR_EVENT_TYPE,
+    ATTR_LIMIT,
     ATTR_NAME,
+    ATTR_NOTES,
+    ATTR_OCCURRED_AT,
     ATTR_SEX,
     ATTR_SPECIES,
     ATTR_STATUS,
+    ATTR_TITLE,
+    ATTR_UNIT,
+    ATTR_VALUE,
     DOMAIN,
+    EVENT_TYPES,
     SERVICE_ARCHIVE_ANIMAL,
     SERVICE_CREATE_ANIMAL,
+    SERVICE_CREATE_EVENT,
+    SERVICE_LIST_EVENTS,
     SERVICE_RESTORE_ANIMAL,
     SERVICE_SET_ANIMAL_STATUS,
     SERVICE_UPDATE_ANIMAL,
@@ -63,11 +76,34 @@ def _optional_date(value: Any) -> date | None:
         raise vol.Invalid("date must use YYYY-MM-DD") from err
 
 
+def _optional_datetime(value: Any) -> datetime | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(cv.string(value))
+    except ValueError as err:
+        raise vol.Invalid("date and time must use ISO format") from err
+
+
+def _event_datetime_utc(hass: HomeAssistant, value: datetime | None) -> datetime:
+    if value is None:
+        return datetime.now(UTC).replace(microsecond=0)
+    if value.tzinfo is None:
+        timezone = dt_util.get_time_zone(hass.config.time_zone)
+        if timezone is None:
+            timezone = UTC
+        value = value.replace(tzinfo=timezone)
+    return value.astimezone(UTC).replace(microsecond=0)
+
+
 CREATE_ANIMAL_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_NAME): _required_text,
         vol.Required(ATTR_SPECIES): _required_text,
         vol.Optional(ATTR_BREED): _optional_text,
+        vol.Optional(ATTR_COLOR): _optional_text,
         vol.Optional(ATTR_SEX): vol.In(ANIMAL_SEXES),
         vol.Optional(ATTR_BIRTH_DATE): _optional_date,
         vol.Optional(ATTR_ARRIVAL_DATE): _optional_date,
@@ -80,6 +116,7 @@ UPDATE_ANIMAL_SCHEMA = vol.Schema(
         vol.Optional(ATTR_NAME): _required_text,
         vol.Optional(ATTR_SPECIES): _required_text,
         vol.Optional(ATTR_BREED): _optional_text,
+        vol.Optional(ATTR_COLOR): _optional_text,
         vol.Optional(ATTR_SEX): vol.In(ANIMAL_SEXES),
         vol.Optional(ATTR_BIRTH_DATE): _optional_date,
         vol.Optional(ATTR_ARRIVAL_DATE): _optional_date,
@@ -99,10 +136,34 @@ ANIMAL_DEVICE_SCHEMA = vol.Schema(
     }
 )
 
+CREATE_EVENT_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_DEVICE_ID): _required_text,
+        vol.Required(ATTR_EVENT_TYPE): vol.In(EVENT_TYPES),
+        vol.Optional(ATTR_OCCURRED_AT): _optional_datetime,
+        vol.Required(ATTR_TITLE): _required_text,
+        vol.Optional(ATTR_NOTES): _optional_text,
+        vol.Optional(ATTR_VALUE): vol.Coerce(float),
+        vol.Optional(ATTR_UNIT): _optional_text,
+        vol.Optional(ATTR_CORRECTION_OF_EVENT_ID): _optional_text,
+    }
+)
+
+LIST_EVENTS_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_DEVICE_ID): _required_text,
+        vol.Optional(ATTR_LIMIT, default=50): vol.All(
+            vol.Coerce(int),
+            vol.Range(min=1, max=200),
+        ),
+    }
+)
+
 EDITABLE_FIELDS = {
     ATTR_NAME,
     ATTR_SPECIES,
     ATTR_BREED,
+    ATTR_COLOR,
     ATTR_SEX,
     ATTR_BIRTH_DATE,
     ATTR_ARRIVAL_DATE,
@@ -165,6 +226,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
             name=call.data[ATTR_NAME],
             species=call.data[ATTR_SPECIES],
             breed=call.data.get(ATTR_BREED),
+            color=call.data.get(ATTR_COLOR),
             sex=call.data.get(ATTR_SEX),
             birth_date=call.data.get(ATTR_BIRTH_DATE),
             arrival_date=call.data.get(ATTR_ARRIVAL_DATE),
@@ -224,6 +286,48 @@ def async_setup_services(hass: HomeAssistant) -> None:
         _, response = await _optional_response(call, runtime_data, animal_id)
         return response
 
+    async def handle_create_event(call: ServiceCall) -> ServiceResponse:
+        runtime_data = _get_runtime_data(hass)
+        animal_id = _get_animal_id_from_device(hass, call.data[ATTR_DEVICE_ID])
+        value = call.data.get(ATTR_VALUE)
+        unit = call.data.get(ATTR_UNIT)
+        if (value is None) != (unit is None):
+            raise ServiceValidationError(
+                "Measurement value and unit must be supplied together"
+            )
+        try:
+            event = await runtime_data.database.create_event(
+                animal_id=animal_id,
+                event_type=call.data[ATTR_EVENT_TYPE],
+                occurred_at=_event_datetime_utc(
+                    hass,
+                    call.data.get(ATTR_OCCURRED_AT),
+                ),
+                title=call.data[ATTR_TITLE],
+                notes=call.data.get(ATTR_NOTES),
+                value=value,
+                unit=unit,
+                correction_of_event_id=call.data.get(
+                    ATTR_CORRECTION_OF_EVENT_ID
+                ),
+            )
+        except KeyError as err:
+            raise ServiceValidationError(
+                "The animal or referenced event no longer exists"
+            ) from err
+        except ValueError as err:
+            raise ServiceValidationError(str(err)) from err
+        return event.as_dict() if call.return_response else None
+
+    async def handle_list_events(call: ServiceCall) -> ServiceResponse:
+        runtime_data = _get_runtime_data(hass)
+        animal_id = _get_animal_id_from_device(hass, call.data[ATTR_DEVICE_ID])
+        events = await runtime_data.database.get_events(
+            animal_id,
+            call.data[ATTR_LIMIT],
+        )
+        return {"events": [event.as_dict() for event in events]}
+
     hass.services.async_register(
         DOMAIN,
         SERVICE_CREATE_ANIMAL,
@@ -258,4 +362,18 @@ def async_setup_services(hass: HomeAssistant) -> None:
         handle_restore_animal,
         schema=ANIMAL_DEVICE_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_CREATE_EVENT,
+        handle_create_event,
+        schema=CREATE_EVENT_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_LIST_EVENTS,
+        handle_list_events,
+        schema=LIST_EVENTS_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
     )
