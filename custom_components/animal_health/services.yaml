@@ -420,7 +420,6 @@ record_medication:
           mode: box
     dose_unit:
       required: true
-      default: mg
       selector:
         select:
           options: [mcg, mg, g, ul, ml, drop, tablet, dose]
