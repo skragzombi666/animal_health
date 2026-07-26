@@ -1,0 +1,970 @@
+from __future__ import annotations
+
+import calendar
+import secrets
+import sqlite3
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, time, timedelta
+from pathlib import Path
+from typing import Any, Iterable
+from zoneinfo import ZoneInfo
+
+from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
+
+from .const import DATABASE_NAME
+
+RECURRENCE_ONCE = "once"
+RECURRENCE_DAILY = "daily"
+RECURRENCE_WEEKLY = "weekly"
+RECURRENCE_MONTHLY = "monthly"
+RECURRENCE_TYPES = (
+    RECURRENCE_ONCE,
+    RECURRENCE_DAILY,
+    RECURRENCE_WEEKLY,
+    RECURRENCE_MONTHLY,
+)
+
+OCCURRENCE_PENDING = "pending"
+OCCURRENCE_COMPLETED = "completed"
+OCCURRENCE_SKIPPED = "skipped"
+OCCURRENCE_CANCELLED = "cancelled"
+OCCURRENCE_STATUSES = (
+    OCCURRENCE_PENDING,
+    OCCURRENCE_COMPLETED,
+    OCCURRENCE_SKIPPED,
+    OCCURRENCE_CANCELLED,
+)
+
+TASK_SCOPE_ALL = "all"
+TASK_SCOPE_GENERAL = "general"
+TASK_SCOPE_ANIMAL = "animal"
+TASK_SCOPES = (TASK_SCOPE_ALL, TASK_SCOPE_GENERAL, TASK_SCOPE_ANIMAL)
+
+TASK_ACTIVE_ALL = "all"
+TASK_ACTIVE_ACTIVE = "active"
+TASK_ACTIVE_INACTIVE = "inactive"
+TASK_ACTIVE_STATES = (
+    TASK_ACTIVE_ALL,
+    TASK_ACTIVE_ACTIVE,
+    TASK_ACTIVE_INACTIVE,
+)
+
+RECORD_ID_ALPHABET = "23456789ABCDEFGHJKMNPQRSTVWXYZ"
+RECORD_ID_LENGTH = 7
+INITIAL_OCCURRENCE_HORIZON_DAYS = 90
+MAX_GENERATED_OCCURRENCES = 10000
+
+_UNSET = object()
+
+
+@dataclass(frozen=True, slots=True)
+class TaskRecord:
+    id: str
+    animal_id: str | None
+    animal_name: str | None
+    title: str
+    description: str | None
+    recurrence_type: str
+    recurrence_interval: int
+    start_date: date
+    end_date: date | None
+    due_time: time | None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    next_pending_at: datetime | None = None
+    pending_count: int = 0
+    overdue_count: int = 0
+
+    def as_dict(self, timezone: ZoneInfo) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "scope": TASK_SCOPE_ANIMAL if self.animal_id else TASK_SCOPE_GENERAL,
+            "animal_id": self.animal_id,
+            "animal_name": self.animal_name,
+            "title": self.title,
+            "description": self.description,
+            "recurrence_type": self.recurrence_type,
+            "recurrence_interval": self.recurrence_interval,
+            "start_date": self.start_date.isoformat(),
+            "end_date": self.end_date.isoformat() if self.end_date else None,
+            "due_time": self.due_time.isoformat(timespec="minutes") if self.due_time else None,
+            "is_active": self.is_active,
+            "next_pending_at": self.next_pending_at.isoformat() if self.next_pending_at else None,
+            "next_pending_local": (
+                self.next_pending_at.astimezone(timezone).isoformat()
+                if self.next_pending_at
+                else None
+            ),
+            "pending_count": self.pending_count,
+            "overdue_count": self.overdue_count,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class TaskOccurrenceRecord:
+    id: str
+    task_id: str
+    animal_id: str | None
+    animal_name: str | None
+    task_title: str
+    scheduled_for: datetime
+    status: str
+    completed_at: datetime | None
+    notes: str | None
+    task_is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    def as_dict(self, timezone: ZoneInfo) -> dict[str, Any]:
+        local = self.scheduled_for.astimezone(timezone)
+        return {
+            "id": self.id,
+            "task_id": self.task_id,
+            "scope": TASK_SCOPE_ANIMAL if self.animal_id else TASK_SCOPE_GENERAL,
+            "animal_id": self.animal_id,
+            "animal_name": self.animal_name,
+            "task_title": self.task_title,
+            "scheduled_for": self.scheduled_for.isoformat(),
+            "scheduled_local": local.isoformat(),
+            "scheduled_date": local.date().isoformat(),
+            "status": self.status,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "notes": self.notes,
+            "task_is_active": self.task_is_active,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+
+
+class TaskStore:
+    def __init__(self, hass: HomeAssistant) -> None:
+        self._hass = hass
+        self._database_path = Path(hass.config.path(DATABASE_NAME))
+        timezone = dt_util.get_time_zone(hass.config.time_zone)
+        self._timezone = timezone if timezone is not None else ZoneInfo("UTC")
+
+    @property
+    def timezone(self) -> ZoneInfo:
+        return self._timezone
+
+    def local_today(self) -> date:
+        return datetime.now(UTC).astimezone(self._timezone).date()
+
+    def _connect(self) -> sqlite3.Connection:
+        connection = sqlite3.connect(self._database_path)
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute("PRAGMA busy_timeout = 5000")
+        return connection
+
+    @staticmethod
+    def _generate_record_id(prefix: str, existing_ids: set[str]) -> str:
+        while True:
+            suffix = "".join(
+                secrets.choice(RECORD_ID_ALPHABET) for _ in range(RECORD_ID_LENGTH)
+            )
+            record_id = f"{prefix}-{suffix}"
+            if record_id not in existing_ids:
+                return record_id
+
+    @staticmethod
+    def _add_months(anchor: date, months: int) -> date:
+        month_index = anchor.year * 12 + anchor.month - 1 + months
+        year, zero_based_month = divmod(month_index, 12)
+        month = zero_based_month + 1
+        day = min(anchor.day, calendar.monthrange(year, month)[1])
+        return date(year, month, day)
+
+    @classmethod
+    def _iter_occurrence_dates(
+        cls,
+        *,
+        start_date: date,
+        end_date: date | None,
+        recurrence_type: str,
+        recurrence_interval: int,
+        through_date: date,
+    ) -> Iterable[date]:
+        last_date = min(through_date, end_date) if end_date else through_date
+        if start_date > last_date:
+            return
+
+        if recurrence_type == RECURRENCE_ONCE:
+            yield start_date
+            return
+
+        generated = 0
+        index = 0
+        while True:
+            if recurrence_type == RECURRENCE_DAILY:
+                occurrence_date = start_date + timedelta(days=index * recurrence_interval)
+            elif recurrence_type == RECURRENCE_WEEKLY:
+                occurrence_date = start_date + timedelta(
+                    weeks=index * recurrence_interval
+                )
+            elif recurrence_type == RECURRENCE_MONTHLY:
+                occurrence_date = cls._add_months(
+                    start_date,
+                    index * recurrence_interval,
+                )
+            else:
+                raise ValueError(f"Unsupported recurrence type: {recurrence_type}")
+
+            if occurrence_date > last_date:
+                break
+            yield occurrence_date
+            generated += 1
+            if generated > MAX_GENERATED_OCCURRENCES:
+                raise ValueError(
+                    "Task schedule would generate too many occurrences; "
+                    "use a later start date or a larger recurrence interval"
+                )
+            index += 1
+
+    def _scheduled_for_utc(self, occurrence_date: date, due_time: time | None) -> datetime:
+        local_time = due_time or time.min
+        local_datetime = datetime.combine(
+            occurrence_date,
+            local_time,
+            tzinfo=self._timezone,
+        )
+        return local_datetime.astimezone(UTC).replace(microsecond=0)
+
+    def _local_day_end_utc(self, day: date) -> datetime:
+        next_day = datetime.combine(
+            day + timedelta(days=1),
+            time.min,
+            tzinfo=self._timezone,
+        )
+        return next_day.astimezone(UTC).replace(microsecond=0)
+
+    def _local_day_start_utc(self, day: date) -> datetime:
+        start = datetime.combine(day, time.min, tzinfo=self._timezone)
+        return start.astimezone(UTC).replace(microsecond=0)
+
+    @staticmethod
+    def _validate_schedule(
+        recurrence_type: str,
+        recurrence_interval: int,
+        start_date: date,
+        end_date: date | None,
+    ) -> None:
+        if recurrence_type not in RECURRENCE_TYPES:
+            raise ValueError(f"Unsupported recurrence type: {recurrence_type}")
+        if recurrence_interval < 1:
+            raise ValueError("Recurrence interval must be at least 1")
+        if end_date is not None and end_date < start_date:
+            raise ValueError("End date must not be before start date")
+
+    @staticmethod
+    def _task_from_row(row: sqlite3.Row) -> TaskRecord:
+        return TaskRecord(
+            id=str(row["id"]),
+            animal_id=str(row["animal_id"]) if row["animal_id"] is not None else None,
+            animal_name=(
+                str(row["animal_name"]) if row["animal_name"] is not None else None
+            ),
+            title=str(row["title"]),
+            description=(
+                str(row["description"]) if row["description"] is not None else None
+            ),
+            recurrence_type=str(row["recurrence_type"]),
+            recurrence_interval=int(row["recurrence_interval"]),
+            start_date=date.fromisoformat(str(row["start_date"])),
+            end_date=(
+                date.fromisoformat(str(row["end_date"]))
+                if row["end_date"] is not None
+                else None
+            ),
+            due_time=(
+                time.fromisoformat(str(row["due_time"]))
+                if row["due_time"] is not None
+                else None
+            ),
+            is_active=bool(row["is_active"]),
+            created_at=datetime.fromisoformat(str(row["created_at"])),
+            updated_at=datetime.fromisoformat(str(row["updated_at"])),
+            next_pending_at=(
+                datetime.fromisoformat(str(row["next_pending_at"]))
+                if row["next_pending_at"] is not None
+                else None
+            ),
+            pending_count=int(row["pending_count"] or 0),
+            overdue_count=int(row["overdue_count"] or 0),
+        )
+
+    @staticmethod
+    def _occurrence_from_row(row: sqlite3.Row) -> TaskOccurrenceRecord:
+        return TaskOccurrenceRecord(
+            id=str(row["id"]),
+            task_id=str(row["task_id"]),
+            animal_id=str(row["animal_id"]) if row["animal_id"] is not None else None,
+            animal_name=(
+                str(row["animal_name"]) if row["animal_name"] is not None else None
+            ),
+            task_title=str(row["task_title"]),
+            scheduled_for=datetime.fromisoformat(str(row["scheduled_for"])),
+            status=str(row["status"]),
+            completed_at=(
+                datetime.fromisoformat(str(row["completed_at"]))
+                if row["completed_at"] is not None
+                else None
+            ),
+            notes=str(row["notes"]) if row["notes"] is not None else None,
+            task_is_active=bool(row["task_is_active"]),
+            created_at=datetime.fromisoformat(str(row["created_at"])),
+            updated_at=datetime.fromisoformat(str(row["updated_at"])),
+        )
+
+    @staticmethod
+    def _animal_exists(connection: sqlite3.Connection, animal_id: str) -> bool:
+        return (
+            connection.execute(
+                "SELECT 1 FROM animals WHERE id = ?",
+                (animal_id,),
+            ).fetchone()
+            is not None
+        )
+
+    def _ensure_occurrences_for_task(
+        self,
+        connection: sqlite3.Connection,
+        task: TaskRecord,
+        through_date: date,
+    ) -> None:
+        if not task.is_active:
+            return
+
+        existing_ids = {
+            str(row[0])
+            for row in connection.execute(
+                "SELECT id FROM task_occurrences"
+            ).fetchall()
+        }
+        now = datetime.now(UTC).replace(microsecond=0).isoformat()
+        for occurrence_date in self._iter_occurrence_dates(
+            start_date=task.start_date,
+            end_date=task.end_date,
+            recurrence_type=task.recurrence_type,
+            recurrence_interval=task.recurrence_interval,
+            through_date=through_date,
+        ):
+            scheduled_for = self._scheduled_for_utc(
+                occurrence_date,
+                task.due_time,
+            ).isoformat()
+            existing = connection.execute(
+                """
+                SELECT 1
+                FROM task_occurrences
+                WHERE task_id = ? AND scheduled_for = ?
+                """,
+                (task.id, scheduled_for),
+            ).fetchone()
+            if existing is not None:
+                continue
+            occurrence_id = self._generate_record_id("OC", existing_ids)
+            existing_ids.add(occurrence_id)
+            connection.execute(
+                """
+                INSERT INTO task_occurrences (
+                    id,
+                    task_id,
+                    scheduled_for,
+                    status,
+                    completed_at,
+                    notes,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, 'pending', NULL, NULL, ?, ?)
+                """,
+                (occurrence_id, task.id, scheduled_for, now, now),
+            )
+
+    def _ensure_occurrences_for_active_tasks(
+        self,
+        connection: sqlite3.Connection,
+        through_date: date,
+    ) -> None:
+        now = datetime.now(UTC).replace(microsecond=0).isoformat()
+        rows = connection.execute(
+            self._task_select_sql() + " WHERE task.is_active = 1",
+            (now,),
+        ).fetchall()
+        for row in rows:
+            self._ensure_occurrences_for_task(
+                connection,
+                self._task_from_row(row),
+                through_date,
+            )
+
+    @staticmethod
+    def _task_select_sql() -> str:
+        return """
+            SELECT
+                task.id,
+                task.animal_id,
+                animal.name AS animal_name,
+                task.title,
+                task.description,
+                task.recurrence_type,
+                task.recurrence_interval,
+                task.start_date,
+                task.end_date,
+                task.due_time,
+                task.is_active,
+                task.created_at,
+                task.updated_at,
+                (
+                    SELECT MIN(occurrence.scheduled_for)
+                    FROM task_occurrences AS occurrence
+                    WHERE occurrence.task_id = task.id
+                      AND occurrence.status = 'pending'
+                ) AS next_pending_at,
+                (
+                    SELECT COUNT(*)
+                    FROM task_occurrences AS occurrence
+                    WHERE occurrence.task_id = task.id
+                      AND occurrence.status = 'pending'
+                ) AS pending_count,
+                (
+                    SELECT COUNT(*)
+                    FROM task_occurrences AS occurrence
+                    WHERE occurrence.task_id = task.id
+                      AND occurrence.status = 'pending'
+                      AND occurrence.scheduled_for < ?
+                ) AS overdue_count
+            FROM tasks AS task
+            LEFT JOIN animals AS animal ON animal.id = task.animal_id
+        """
+
+    def _get_task_from_connection(
+        self,
+        connection: sqlite3.Connection,
+        task_id: str,
+    ) -> TaskRecord | None:
+        now = datetime.now(UTC).replace(microsecond=0).isoformat()
+        row = connection.execute(
+            self._task_select_sql() + " WHERE task.id = ?",
+            (now, task_id),
+        ).fetchone()
+        return self._task_from_row(row) if row is not None else None
+
+    async def create_task(
+        self,
+        *,
+        animal_id: str | None,
+        title: str,
+        description: str | None,
+        recurrence_type: str,
+        recurrence_interval: int,
+        start_date: date,
+        end_date: date | None,
+        due_time: time | None,
+    ) -> TaskRecord:
+        return await self._hass.async_add_executor_job(
+            self._create_task_sync,
+            animal_id,
+            title,
+            description,
+            recurrence_type,
+            recurrence_interval,
+            start_date,
+            end_date,
+            due_time,
+        )
+
+    def _create_task_sync(
+        self,
+        animal_id: str | None,
+        title: str,
+        description: str | None,
+        recurrence_type: str,
+        recurrence_interval: int,
+        start_date: date,
+        end_date: date | None,
+        due_time: time | None,
+    ) -> TaskRecord:
+        self._validate_schedule(
+            recurrence_type,
+            recurrence_interval,
+            start_date,
+            end_date,
+        )
+        if recurrence_type == RECURRENCE_ONCE:
+            recurrence_interval = 1
+
+        now = datetime.now(UTC).replace(microsecond=0).isoformat()
+        with self._connect() as connection:
+            if animal_id is not None and not self._animal_exists(connection, animal_id):
+                raise KeyError(animal_id)
+            existing_ids = {
+                str(row[0]) for row in connection.execute("SELECT id FROM tasks").fetchall()
+            }
+            task_id = self._generate_record_id("TK", existing_ids)
+            connection.execute(
+                """
+                INSERT INTO tasks (
+                    id,
+                    animal_id,
+                    title,
+                    description,
+                    recurrence_type,
+                    recurrence_interval,
+                    start_date,
+                    end_date,
+                    due_time,
+                    is_active,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                """,
+                (
+                    task_id,
+                    animal_id,
+                    title.strip(),
+                    description,
+                    recurrence_type,
+                    recurrence_interval,
+                    start_date.isoformat(),
+                    end_date.isoformat() if end_date else None,
+                    due_time.isoformat(timespec="minutes") if due_time else None,
+                    now,
+                    now,
+                ),
+            )
+            task = self._get_task_from_connection(connection, task_id)
+            if task is None:
+                raise RuntimeError("Created task could not be loaded")
+            initial_through = max(
+                start_date,
+                self.local_today() + timedelta(days=INITIAL_OCCURRENCE_HORIZON_DAYS),
+            )
+            self._ensure_occurrences_for_task(connection, task, initial_through)
+            task = self._get_task_from_connection(connection, task_id)
+        if task is None:
+            raise RuntimeError("Created task could not be loaded")
+        return task
+
+    async def get_task(self, task_id: str) -> TaskRecord | None:
+        return await self._hass.async_add_executor_job(self._get_task_sync, task_id)
+
+    def _get_task_sync(self, task_id: str) -> TaskRecord | None:
+        with self._connect() as connection:
+            return self._get_task_from_connection(connection, task_id)
+
+    async def list_tasks(
+        self,
+        *,
+        scope: str,
+        animal_id: str | None,
+        active_state: str,
+        limit: int,
+    ) -> list[TaskRecord]:
+        return await self._hass.async_add_executor_job(
+            self._list_tasks_sync,
+            scope,
+            animal_id,
+            active_state,
+            limit,
+        )
+
+    def _list_tasks_sync(
+        self,
+        scope: str,
+        animal_id: str | None,
+        active_state: str,
+        limit: int,
+    ) -> list[TaskRecord]:
+        if scope not in TASK_SCOPES:
+            raise ValueError(f"Unsupported task scope: {scope}")
+        if active_state not in TASK_ACTIVE_STATES:
+            raise ValueError(f"Unsupported active state: {active_state}")
+
+        horizon = self.local_today() + timedelta(days=INITIAL_OCCURRENCE_HORIZON_DAYS)
+        now = datetime.now(UTC).replace(microsecond=0).isoformat()
+        with self._connect() as connection:
+            self._ensure_occurrences_for_active_tasks(connection, horizon)
+            clauses: list[str] = []
+            values: list[Any] = [now]
+            if scope == TASK_SCOPE_GENERAL:
+                clauses.append("task.animal_id IS NULL")
+            elif scope == TASK_SCOPE_ANIMAL:
+                clauses.append("task.animal_id IS NOT NULL")
+            if animal_id is not None:
+                clauses.append("task.animal_id = ?")
+                values.append(animal_id)
+            if active_state == TASK_ACTIVE_ACTIVE:
+                clauses.append("task.is_active = 1")
+            elif active_state == TASK_ACTIVE_INACTIVE:
+                clauses.append("task.is_active = 0")
+
+            sql = self._task_select_sql()
+            if clauses:
+                sql += " WHERE " + " AND ".join(clauses)
+            sql += " ORDER BY task.title COLLATE NOCASE, task.id LIMIT ?"
+            values.append(limit)
+            rows = connection.execute(sql, values).fetchall()
+        return [self._task_from_row(row) for row in rows]
+
+    async def update_task(
+        self,
+        task_id: str,
+        *,
+        animal_id: str | None | object = _UNSET,
+        title: str | object = _UNSET,
+        description: str | None | object = _UNSET,
+        recurrence_type: str | object = _UNSET,
+        recurrence_interval: int | object = _UNSET,
+        start_date: date | object = _UNSET,
+        end_date: date | None | object = _UNSET,
+        due_time: time | None | object = _UNSET,
+    ) -> TaskRecord:
+        return await self._hass.async_add_executor_job(
+            self._update_task_sync,
+            task_id,
+            animal_id,
+            title,
+            description,
+            recurrence_type,
+            recurrence_interval,
+            start_date,
+            end_date,
+            due_time,
+        )
+
+    def _update_task_sync(
+        self,
+        task_id: str,
+        animal_id: str | None | object,
+        title: str | object,
+        description: str | None | object,
+        recurrence_type: str | object,
+        recurrence_interval: int | object,
+        start_date: date | object,
+        end_date: date | None | object,
+        due_time: time | None | object,
+    ) -> TaskRecord:
+        with self._connect() as connection:
+            current = self._get_task_from_connection(connection, task_id)
+            if current is None:
+                raise KeyError(task_id)
+
+            new_animal_id = current.animal_id if animal_id is _UNSET else animal_id
+            if new_animal_id is not None and not self._animal_exists(connection, str(new_animal_id)):
+                raise KeyError(str(new_animal_id))
+            new_title = current.title if title is _UNSET else str(title).strip()
+            new_description = current.description if description is _UNSET else description
+            new_recurrence_type = (
+                current.recurrence_type
+                if recurrence_type is _UNSET
+                else str(recurrence_type)
+            )
+            new_recurrence_interval = (
+                current.recurrence_interval
+                if recurrence_interval is _UNSET
+                else int(recurrence_interval)
+            )
+            if new_recurrence_type == RECURRENCE_ONCE:
+                new_recurrence_interval = 1
+            new_start_date = current.start_date if start_date is _UNSET else start_date
+            new_end_date = current.end_date if end_date is _UNSET else end_date
+            new_due_time = current.due_time if due_time is _UNSET else due_time
+
+            if not new_title:
+                raise ValueError("Task title must not be empty")
+            if not isinstance(new_start_date, date):
+                raise ValueError("Task start date is invalid")
+            self._validate_schedule(
+                new_recurrence_type,
+                new_recurrence_interval,
+                new_start_date,
+                new_end_date if isinstance(new_end_date, date) else None,
+            )
+
+            schedule_changed = any(
+                (
+                    new_recurrence_type != current.recurrence_type,
+                    new_recurrence_interval != current.recurrence_interval,
+                    new_start_date != current.start_date,
+                    new_end_date != current.end_date,
+                    new_due_time != current.due_time,
+                )
+            )
+            now = datetime.now(UTC).replace(microsecond=0).isoformat()
+            connection.execute(
+                """
+                UPDATE tasks
+                SET animal_id = ?,
+                    title = ?,
+                    description = ?,
+                    recurrence_type = ?,
+                    recurrence_interval = ?,
+                    start_date = ?,
+                    end_date = ?,
+                    due_time = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    new_animal_id,
+                    new_title,
+                    new_description,
+                    new_recurrence_type,
+                    new_recurrence_interval,
+                    new_start_date.isoformat(),
+                    new_end_date.isoformat() if isinstance(new_end_date, date) else None,
+                    new_due_time.isoformat(timespec="minutes") if isinstance(new_due_time, time) else None,
+                    now,
+                    task_id,
+                ),
+            )
+            if schedule_changed:
+                connection.execute(
+                    "DELETE FROM task_occurrences WHERE task_id = ? AND status = 'pending'",
+                    (task_id,),
+                )
+
+            updated = self._get_task_from_connection(connection, task_id)
+            if updated is None:
+                raise KeyError(task_id)
+            if updated.is_active:
+                initial_through = max(
+                    updated.start_date,
+                    self.local_today() + timedelta(days=INITIAL_OCCURRENCE_HORIZON_DAYS),
+                )
+                self._ensure_occurrences_for_task(connection, updated, initial_through)
+            updated = self._get_task_from_connection(connection, task_id)
+        if updated is None:
+            raise KeyError(task_id)
+        return updated
+
+    async def set_task_active(self, task_id: str, is_active: bool) -> TaskRecord:
+        return await self._hass.async_add_executor_job(
+            self._set_task_active_sync,
+            task_id,
+            is_active,
+        )
+
+    def _set_task_active_sync(self, task_id: str, is_active: bool) -> TaskRecord:
+        now = datetime.now(UTC).replace(microsecond=0).isoformat()
+        with self._connect() as connection:
+            current = self._get_task_from_connection(connection, task_id)
+            if current is None:
+                raise KeyError(task_id)
+            connection.execute(
+                "UPDATE tasks SET is_active = ?, updated_at = ? WHERE id = ?",
+                (1 if is_active else 0, now, task_id),
+            )
+            updated = self._get_task_from_connection(connection, task_id)
+            if updated is None:
+                raise KeyError(task_id)
+            if updated.is_active:
+                initial_through = max(
+                    updated.start_date,
+                    self.local_today() + timedelta(days=INITIAL_OCCURRENCE_HORIZON_DAYS),
+                )
+                self._ensure_occurrences_for_task(connection, updated, initial_through)
+                updated = self._get_task_from_connection(connection, task_id)
+        if updated is None:
+            raise KeyError(task_id)
+        return updated
+
+    async def list_due_occurrences(
+        self,
+        *,
+        through_date: date,
+        animal_id: str | None,
+        include_general: bool,
+        limit: int,
+    ) -> list[TaskOccurrenceRecord]:
+        return await self._hass.async_add_executor_job(
+            self._list_due_occurrences_sync,
+            through_date,
+            animal_id,
+            include_general,
+            limit,
+        )
+
+    def _list_due_occurrences_sync(
+        self,
+        through_date: date,
+        animal_id: str | None,
+        include_general: bool,
+        limit: int,
+    ) -> list[TaskOccurrenceRecord]:
+        through_utc = self._local_day_end_utc(through_date).isoformat()
+        with self._connect() as connection:
+            self._ensure_occurrences_for_active_tasks(connection, through_date)
+            clauses = [
+                "task.is_active = 1",
+                "occurrence.status = 'pending'",
+                "occurrence.scheduled_for < ?",
+            ]
+            values: list[Any] = [through_utc]
+            if animal_id is not None:
+                if include_general:
+                    clauses.append("(task.animal_id = ? OR task.animal_id IS NULL)")
+                else:
+                    clauses.append("task.animal_id = ?")
+                values.append(animal_id)
+            sql = self._occurrence_select_sql() + " WHERE " + " AND ".join(clauses)
+            sql += " ORDER BY occurrence.scheduled_for, task.title COLLATE NOCASE LIMIT ?"
+            values.append(limit)
+            rows = connection.execute(sql, values).fetchall()
+        return [self._occurrence_from_row(row) for row in rows]
+
+    @staticmethod
+    def _occurrence_select_sql() -> str:
+        return """
+            SELECT
+                occurrence.id,
+                occurrence.task_id,
+                task.animal_id,
+                animal.name AS animal_name,
+                task.title AS task_title,
+                occurrence.scheduled_for,
+                occurrence.status,
+                occurrence.completed_at,
+                occurrence.notes,
+                task.is_active AS task_is_active,
+                occurrence.created_at,
+                occurrence.updated_at
+            FROM task_occurrences AS occurrence
+            JOIN tasks AS task ON task.id = occurrence.task_id
+            LEFT JOIN animals AS animal ON animal.id = task.animal_id
+        """
+
+    async def list_occurrences(
+        self,
+        *,
+        task_id: str | None,
+        scope: str,
+        animal_id: str | None,
+        status: str,
+        start_date: date,
+        end_date: date,
+        include_general: bool,
+        limit: int,
+    ) -> list[TaskOccurrenceRecord]:
+        return await self._hass.async_add_executor_job(
+            self._list_occurrences_sync,
+            task_id,
+            scope,
+            animal_id,
+            status,
+            start_date,
+            end_date,
+            include_general,
+            limit,
+        )
+
+    def _list_occurrences_sync(
+        self,
+        task_id: str | None,
+        scope: str,
+        animal_id: str | None,
+        status: str,
+        start_date: date,
+        end_date: date,
+        include_general: bool,
+        limit: int,
+    ) -> list[TaskOccurrenceRecord]:
+        if end_date < start_date:
+            raise ValueError("End date must not be before start date")
+        if scope not in TASK_SCOPES:
+            raise ValueError(f"Unsupported task scope: {scope}")
+        if status != TASK_ACTIVE_ALL and status not in OCCURRENCE_STATUSES:
+            raise ValueError(f"Unsupported occurrence status: {status}")
+
+        start_utc = self._local_day_start_utc(start_date).isoformat()
+        end_utc = self._local_day_end_utc(end_date).isoformat()
+        with self._connect() as connection:
+            self._ensure_occurrences_for_active_tasks(connection, end_date)
+            clauses = [
+                "occurrence.scheduled_for >= ?",
+                "occurrence.scheduled_for < ?",
+            ]
+            values: list[Any] = [start_utc, end_utc]
+            if task_id is not None:
+                clauses.append("task.id = ?")
+                values.append(task_id)
+            if scope == TASK_SCOPE_GENERAL:
+                clauses.append("task.animal_id IS NULL")
+            elif scope == TASK_SCOPE_ANIMAL:
+                clauses.append("task.animal_id IS NOT NULL")
+            if animal_id is not None:
+                if include_general:
+                    clauses.append("(task.animal_id = ? OR task.animal_id IS NULL)")
+                else:
+                    clauses.append("task.animal_id = ?")
+                values.append(animal_id)
+            if status != TASK_ACTIVE_ALL:
+                clauses.append("occurrence.status = ?")
+                values.append(status)
+
+            sql = self._occurrence_select_sql() + " WHERE " + " AND ".join(clauses)
+            sql += " ORDER BY occurrence.scheduled_for, task.title COLLATE NOCASE LIMIT ?"
+            values.append(limit)
+            rows = connection.execute(sql, values).fetchall()
+        return [self._occurrence_from_row(row) for row in rows]
+
+    async def set_occurrence_status(
+        self,
+        occurrence_id: str,
+        status: str,
+        notes: str | None,
+    ) -> TaskOccurrenceRecord:
+        return await self._hass.async_add_executor_job(
+            self._set_occurrence_status_sync,
+            occurrence_id,
+            status,
+            notes,
+        )
+
+    def _set_occurrence_status_sync(
+        self,
+        occurrence_id: str,
+        status: str,
+        notes: str | None,
+    ) -> TaskOccurrenceRecord:
+        if status not in (
+            OCCURRENCE_COMPLETED,
+            OCCURRENCE_SKIPPED,
+            OCCURRENCE_CANCELLED,
+        ):
+            raise ValueError(f"Unsupported final occurrence status: {status}")
+        now = datetime.now(UTC).replace(microsecond=0).isoformat()
+        with self._connect() as connection:
+            current_row = connection.execute(
+                self._occurrence_select_sql() + " WHERE occurrence.id = ?",
+                (occurrence_id,),
+            ).fetchone()
+            if current_row is None:
+                raise KeyError(occurrence_id)
+            current = self._occurrence_from_row(current_row)
+            if current.status != OCCURRENCE_PENDING:
+                raise ValueError(
+                    f"Occurrence is already {current.status}; only pending occurrences can be changed"
+                )
+            completed_at = now if status == OCCURRENCE_COMPLETED else None
+            connection.execute(
+                """
+                UPDATE task_occurrences
+                SET status = ?, completed_at = ?, notes = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (status, completed_at, notes, now, occurrence_id),
+            )
+            updated_row = connection.execute(
+                self._occurrence_select_sql() + " WHERE occurrence.id = ?",
+                (occurrence_id,),
+            ).fetchone()
+        if updated_row is None:
+            raise KeyError(occurrence_id)
+        return self._occurrence_from_row(updated_row)
