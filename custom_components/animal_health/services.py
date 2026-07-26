@@ -26,6 +26,7 @@ from .const import (
     ADMINISTRATION_ROUTES,
     ANIMAL_SEXES,
     ANIMAL_STATUSES,
+    ATTR_ANTIGEN,
     ATTR_ARRIVAL_DATE,
     ATTR_BATCH_NUMBER,
     ATTR_BIRTH_DATE,
@@ -34,6 +35,7 @@ from .const import (
     ATTR_CORRECTION_OF_EVENT_ID,
     ATTR_CUSTOM_SPECIES,
     ATTR_CUSTOM_SYMPTOM,
+    ATTR_CUSTOM_VACCINATION_TARGET,
     ATTR_DEVICE_ID,
     ATTR_DOSE,
     ATTR_DOSE_UNIT,
@@ -50,6 +52,7 @@ from .const import (
     ATTR_STATUS,
     ATTR_SYMPTOM,
     ATTR_TITLE,
+    ATTR_VACCINATION_TARGETS,
     ATTR_VACCINE_NAME,
     ATTR_WEIGHT,
     ATTR_WEIGHT_UNIT,
@@ -74,6 +77,8 @@ from .const import (
     SYMPTOM_OTHER,
     SYMPTOM_SEVERITIES,
     SYMPTOMS,
+    VACCINATION_TARGET_OTHER,
+    VACCINATION_TARGETS,
     WEIGHT_UNITS,
 )
 from .models import Animal
@@ -152,6 +157,26 @@ def _catalog_or_custom_value(
             f"A custom {field_name} may only be supplied when 'other' is selected"
         )
     return selected
+
+
+def _validated_vaccination_targets(
+    selected: list[str],
+    custom: str | None,
+) -> list[str]:
+    targets = list(dict.fromkeys(selected))
+    if not targets:
+        raise ServiceValidationError("At least one vaccination target is required")
+
+    has_other = VACCINATION_TARGET_OTHER in targets
+    if has_other and custom is None:
+        raise ServiceValidationError(
+            "A custom vaccination target is required when 'other' is selected"
+        )
+    if not has_other and custom is not None:
+        raise ServiceValidationError(
+            "A custom vaccination target may only be supplied when 'other' is selected"
+        )
+    return targets
 
 
 CREATE_ANIMAL_SCHEMA = vol.Schema(
@@ -247,7 +272,14 @@ RECORD_VACCINATION_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_DEVICE_ID): _required_text,
         vol.Optional(ATTR_OCCURRED_AT): _optional_datetime,
-        vol.Required(ATTR_VACCINE_NAME): _required_text,
+        vol.Required(ATTR_VACCINATION_TARGETS): vol.All(
+            cv.ensure_list,
+            [vol.In(VACCINATION_TARGETS)],
+            vol.Length(min=1),
+        ),
+        vol.Optional(ATTR_CUSTOM_VACCINATION_TARGET): _optional_text,
+        vol.Optional(ATTR_VACCINE_NAME): _optional_text,
+        vol.Optional(ATTR_ANTIGEN): _optional_text,
         vol.Required(ATTR_DOSE): _positive_number,
         vol.Optional(ATTR_DOSE_UNIT, default="ml"): vol.In(DOSE_UNITS),
         vol.Optional(ATTR_ROUTE): vol.In(ADMINISTRATION_ROUTES),
@@ -372,6 +404,8 @@ async def _create_event_response(
         ) from err
     except ValueError as err:
         raise ServiceValidationError(str(err)) from err
+
+    await runtime_data.coordinator.async_request_refresh()
     return event.as_dict() if call.return_response else None
 
 
@@ -557,23 +591,44 @@ def async_setup_services(hass: HomeAssistant) -> None:
         )
 
     async def handle_record_vaccination(call: ServiceCall) -> ServiceResponse:
-        vaccine_name, catalog_data = product_event_metadata(
-            call.data[ATTR_VACCINE_NAME],
-            vaccine=True,
+        targets = _validated_vaccination_targets(
+            call.data[ATTR_VACCINATION_TARGETS],
+            call.data.get(ATTR_CUSTOM_VACCINATION_TARGET),
         )
-        data = {
-            "vaccine_name": vaccine_name,
+        vaccine_input = call.data.get(ATTR_VACCINE_NAME)
+        if vaccine_input is not None:
+            vaccine_name, catalog_data = product_event_metadata(
+                vaccine_input,
+                vaccine=True,
+            )
+        else:
+            vaccine_name = None
+            catalog_data = {
+                "catalog_source": "not_specified",
+                "catalog_scope": "not_specified",
+                "catalog_id": None,
+            }
+
+        data: dict[str, Any] = {
+            "vaccination_targets": targets,
             **catalog_data,
         }
+        if custom_target := call.data.get(ATTR_CUSTOM_VACCINATION_TARGET):
+            data["custom_vaccination_target"] = custom_target
+        if vaccine_name is not None:
+            data["vaccine_name"] = vaccine_name
+        if antigen := call.data.get(ATTR_ANTIGEN):
+            data["antigen"] = antigen
         if route := call.data.get(ATTR_ROUTE):
             data["route"] = route
         if batch_number := call.data.get(ATTR_BATCH_NUMBER):
             data["batch_number"] = batch_number
+
         return await _create_event_response(
             hass,
             call,
             event_type=EVENT_TYPE_VACCINATION,
-            title=vaccine_name,
+            title=vaccine_name or "vaccination",
             value=call.data[ATTR_DOSE],
             unit=call.data[ATTR_DOSE_UNIT],
             data=data,

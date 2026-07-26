@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
+    SensorStateClass,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
@@ -18,6 +19,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import AnimalHealthConfigEntry
 from .const import ANIMAL_SEXES, ANIMAL_STATUSES, DOMAIN, NAME
 from .coordinator import AnimalHealthCoordinator
+from .latest_weight import LatestWeight
 from .models import Animal
 
 
@@ -96,11 +98,15 @@ async def async_setup_entry(
         if not new_animal_ids:
             return
         known_animal_ids.update(new_animal_ids)
-        async_add_entities(
-            AnimalProfileSensor(coordinator, animal_id, description)
-            for animal_id in sorted(new_animal_ids)
-            for description in SENSOR_DESCRIPTIONS
-        )
+
+        entities: list[SensorEntity] = []
+        for animal_id in sorted(new_animal_ids):
+            entities.extend(
+                AnimalProfileSensor(coordinator, animal_id, description)
+                for description in SENSOR_DESCRIPTIONS
+            )
+            entities.append(AnimalWeightSensor(coordinator, animal_id))
+        async_add_entities(entities)
 
     add_new_animal_entities()
     entry.async_on_unload(
@@ -108,22 +114,16 @@ async def async_setup_entry(
     )
 
 
-class AnimalProfileSensor(
-    CoordinatorEntity[AnimalHealthCoordinator],
-    SensorEntity,
-):
+class AnimalSensorBase(CoordinatorEntity[AnimalHealthCoordinator], SensorEntity):
     _attr_has_entity_name = True
 
     def __init__(
         self,
         coordinator: AnimalHealthCoordinator,
         animal_id: str,
-        description: AnimalProfileSensorDescription,
     ) -> None:
         super().__init__(coordinator)
-        self.entity_description = description
         self._animal_id = animal_id
-        self._attr_unique_id = f"{animal_id}_{description.key}"
 
     @property
     def animal(self) -> Animal | None:
@@ -132,6 +132,30 @@ class AnimalProfileSensor(
     @property
     def available(self) -> bool:
         return super().available and self.animal is not None
+
+    @property
+    def device_info(self) -> DeviceInfo | None:
+        animal = self.animal
+        if animal is None:
+            return None
+        return DeviceInfo(
+            identifiers={(DOMAIN, animal.id)},
+            name=animal.name,
+            manufacturer=NAME,
+            model=animal.species,
+        )
+
+
+class AnimalProfileSensor(AnimalSensorBase):
+    def __init__(
+        self,
+        coordinator: AnimalHealthCoordinator,
+        animal_id: str,
+        description: AnimalProfileSensorDescription,
+    ) -> None:
+        super().__init__(coordinator, animal_id)
+        self.entity_description = description
+        self._attr_unique_id = f"{animal_id}_{description.key}"
 
     @property
     def native_value(self) -> str | date | None:
@@ -147,20 +171,46 @@ class AnimalProfileSensor(
         return None
 
     @property
-    def device_info(self) -> DeviceInfo | None:
-        animal = self.animal
-        if animal is None:
-            return None
-        return DeviceInfo(
-            identifiers={(DOMAIN, animal.id)},
-            name=animal.name,
-            manufacturer=NAME,
-            model=animal.species,
-        )
-
-    @property
     def extra_state_attributes(self) -> dict[str, Any]:
         animal = self.animal
         if animal is None:
             return {}
         return {"animal_id": animal.id}
+
+
+class AnimalWeightSensor(AnimalSensorBase):
+    _attr_translation_key = "weight"
+    _attr_icon = "mdi:scale"
+    _attr_device_class = SensorDeviceClass.WEIGHT
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "kg"
+
+    def __init__(
+        self,
+        coordinator: AnimalHealthCoordinator,
+        animal_id: str,
+    ) -> None:
+        super().__init__(coordinator, animal_id)
+        self._attr_unique_id = f"{animal_id}_weight"
+
+    @property
+    def latest_weight(self) -> LatestWeight | None:
+        return self.coordinator.latest_weights.get(self._animal_id)
+
+    @property
+    def native_value(self) -> float | None:
+        latest_weight = self.latest_weight
+        return latest_weight.value_kg if latest_weight else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        latest_weight = self.latest_weight
+        if latest_weight is None:
+            return {"animal_id": self._animal_id}
+        return {
+            "animal_id": self._animal_id,
+            "event_id": latest_weight.event_id,
+            "measured_at": latest_weight.occurred_at.isoformat(),
+            "original_value": latest_weight.original_value,
+            "original_unit": latest_weight.original_unit,
+        }
