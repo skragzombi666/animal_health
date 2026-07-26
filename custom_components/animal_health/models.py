@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Mapping
@@ -65,6 +66,45 @@ class HealthEvent:
     occurred_at: datetime
     title: str
     notes: str | None
+    value: float | None
+    unit: str | None
+    correction_of_event_id: str | None
+    data: dict[str, Any]
     task_id: str | None
     task_occurrence_id: str | None
     created_at: datetime
+
+    @classmethod
+    def from_mapping(cls, row: Mapping[str, Any]) -> HealthEvent:
+        return cls(
+            id=row["id"],
+            animal_id=row["animal_id"],
+            event_type=row["event_type"],
+            occurred_at=datetime.fromisoformat(row["occurred_at"]),
+            title=row["title"],
+            notes=row["notes"],
+            value=row["value"],
+            unit=row["unit"],
+            correction_of_event_id=row["correction_of_event_id"],
+            data=json.loads(row["data_json"] or "{}"),
+            task_id=row["task_id"],
+            task_occurrence_id=row["task_occurrence_id"],
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "animal_id": self.animal_id,
+            "event_type": self.event_type,
+            "occurred_at": self.occurred_at.isoformat(),
+            "title": self.title,
+            "notes": self.notes,
+            "value": self.value,
+            "unit": self.unit,
+            "correction_of_event_id": self.correction_of_event_id,
+            "data": self.data,
+            "task_id": self.task_id,
+            "task_occurrence_id": self.task_occurrence_id,
+            "created_at": self.created_at.isoformat(),
+        }
