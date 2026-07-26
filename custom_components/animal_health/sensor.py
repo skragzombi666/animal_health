@@ -53,6 +53,12 @@ SENSOR_DESCRIPTIONS = (
         value_fn=lambda animal: animal.breed,
     ),
     AnimalProfileSensorDescription(
+        key="color",
+        translation_key="color",
+        icon="mdi:palette",
+        value_fn=lambda animal: animal.color,
+    ),
+    AnimalProfileSensorDescription(
         key="sex",
         translation_key="sex",
         icon="mdi:gender-male-female",
