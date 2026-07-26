@@ -209,7 +209,7 @@ RECORD_MEDICATION_SCHEMA = vol.Schema(
         vol.Optional(ATTR_OCCURRED_AT): _optional_datetime,
         vol.Required(ATTR_MEDICATION_NAME): _required_text,
         vol.Required(ATTR_DOSE): _positive_number,
-        vol.Optional(ATTR_DOSE_UNIT, default="mg"): vol.In(DOSE_UNITS),
+        vol.Required(ATTR_DOSE_UNIT): vol.In(DOSE_UNITS),
         vol.Optional(ATTR_ROUTE): vol.In(ADMINISTRATION_ROUTES),
         vol.Optional(ATTR_NOTES): _optional_text,
         vol.Optional(ATTR_CORRECTION_OF_EVENT_ID): _optional_text,
