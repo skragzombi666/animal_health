@@ -18,6 +18,7 @@ The integration lives in `custom_components/animal_health` and is prepared for l
 - One Home Assistant device for each animal
 - Separate profile sensors for status, animal ID, species, breed, color/markings, sex, birth date and arrival date
 - Immutable health and care logbook with linked correction entries
+- Category-specific forms for weight, symptoms, medication and vaccination
 - Automatic logbook entries for factual status changes
 
 ## Development deployment on Home Assistant OS
@@ -91,47 +92,87 @@ data:
 
 Factual status and administrative archival are separate. A sold, missing or deceased animal can remain visible until the user decides to archive it. Archiving never changes the factual status or event history.
 
-## Health and care logbook in 0.4.0
+## Health and care logbook
 
-Create a logbook event:
+### General events
 
-```yaml
-action: animal_health.create_event
-data:
-  device_id: REPLACE_WITH_HOME_ASSISTANT_DEVICE_ID
-  event_type: weight
-  occurred_at: "2026-07-26 12:30:00"
-  title: Routine weighing
-  value: 2.15
-  unit: kg
-  notes: Eating and behaving normally
-```
-
-Supported user-created event categories are:
+The general action is intended for entries where free text is appropriate:
 
 - observation
-- symptom
-- weight
 - diagnosis
 - treatment
-- medication
-- vaccination
 - veterinary visit
 - care
 - other
 
-Events are append-only. Existing entries are not edited or deleted. A correction is entered as a new event referencing the original event ID:
-
 ```yaml
 action: animal_health.create_event
 data:
   device_id: REPLACE_WITH_HOME_ASSISTANT_DEVICE_ID
-  event_type: weight
-  title: Corrected weighing
-  value: 2.05
-  unit: kg
-  correction_of_event_id: EV-REPLACE
+  event_type: observation
+  title: General condition normal
+  notes: Eating and behaving normally
 ```
+
+### Structured weight entry
+
+Weight requires a value greater than zero. The unit is selected from milligram, gram or kilogram and defaults to kilogram.
+
+```yaml
+action: animal_health.record_weight
+data:
+  device_id: REPLACE_WITH_HOME_ASSISTANT_DEVICE_ID
+  weight: 2.15
+  weight_unit: kg
+  notes: Before morning feeding
+```
+
+### Structured symptom entry
+
+Symptoms use a typeable suggestion list and a required severity level. A custom symptom can be entered when it is not in the suggestion list.
+
+```yaml
+action: animal_health.record_symptom
+data:
+  device_id: REPLACE_WITH_HOME_ASSISTANT_DEVICE_ID
+  symptom: reduced_appetite
+  severity: moderate
+  notes: Eating less since this morning
+```
+
+### Structured medication entry
+
+Medication name, dose and dose unit are required. The medication field is a typeable dropdown with starter suggestions and also accepts a custom product name.
+
+```yaml
+action: animal_health.record_medication
+data:
+  device_id: REPLACE_WITH_HOME_ASSISTANT_DEVICE_ID
+  medication_name: Flubenol
+  dose: 20
+  dose_unit: mg
+  route: oral
+  notes: Administered with feed
+```
+
+### Structured vaccination entry
+
+Vaccinations record the product, dose, unit and optional route and batch number.
+
+```yaml
+action: animal_health.record_vaccination
+data:
+  device_id: REPLACE_WITH_HOME_ASSISTANT_DEVICE_ID
+  vaccine_name: Newcastle disease
+  dose: 0.5
+  dose_unit: ml
+  route: subcutaneous
+  batch_number: LOT-1234
+```
+
+### Corrections and retrieval
+
+Events are append-only. Existing entries are not edited or deleted. Every event action accepts an optional `correction_of_event_id` referencing the entry corrected by the new event.
 
 Retrieve the newest events for an animal:
 
@@ -144,6 +185,8 @@ response_variable: animal_events
 ```
 
 Changing an animal's factual status automatically creates a `status_change` event. Administrative archive and restore actions do not create health-history events.
+
+The current Home Assistant action description is static. Typeable selectors can offer fixed suggestions and accept custom values, but they cannot yet learn medication names from the local event history or dynamically change breed suggestions based on the selected species. These features are planned for the dedicated Animal Health user interface.
 
 ## Planned development phases
 
@@ -166,7 +209,7 @@ The roadmap is provisional. Version numbers and scope may change as the integrat
 ### 0.4.x — Health and care logbook
 
 - Immutable event history for observations, treatments, medication, weight and other health-related records
-- Structured event categories with optional notes and measurements
+- Category-specific forms with validated values, units and option lists
 - Corrections through new linked events instead of overwriting historical records
 - Filtering and retrieval of an animal's history
 - Automatic status-change events
@@ -189,6 +232,8 @@ The roadmap is provisional. Version numbers and scope may change as the integrat
 ### 0.7.x — User interface
 
 - Home Assistant frontend panels or dashboard cards for animal profiles
+- Dynamic data-entry forms and known-value suggestions from local history
+- Species and breed catalogues with dependent breed suggestions
 - Task overview and completion workflow
 - Timeline and health-history views
 - Mobile-friendly data entry
