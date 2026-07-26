@@ -13,23 +13,17 @@ from .database import AnimalHealthDatabase
 from .runtime import AnimalHealthRuntimeData
 from .services import async_setup_services
 
-PLATFORMS = [Platform.SENSOR]
+PLATFORMS = [Platform.SENSOR, Platform.SELECT, Platform.BUTTON]
 
 type AnimalHealthConfigEntry = ConfigEntry[AnimalHealthRuntimeData]
 
 
-async def async_setup(
-    hass: HomeAssistant,
-    config: dict[str, Any],
-) -> bool:
+async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_services(hass)
     return True
 
 
-async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: AnimalHealthConfigEntry,
-) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry) -> bool:
     database_path = Path(hass.config.path(DATABASE_NAME))
     database = AnimalHealthDatabase(hass, database_path)
     await database.initialize()
