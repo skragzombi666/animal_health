@@ -16,7 +16,6 @@ from .const import (
     ANIMAL_STATUS_ACTIVE,
     DATABASE_SCHEMA_VERSION,
     EVENT_TYPES,
-    EVENT_TYPE_OTHER,
     EVENT_TYPE_STATUS_CHANGE,
 )
 from .models import Animal, HealthEvent
@@ -25,6 +24,7 @@ ANIMAL_FIELDS = {
     "name",
     "species",
     "breed",
+    "color",
     "sex",
     "birth_date",
     "arrival_date",
@@ -81,6 +81,7 @@ class AnimalHealthDatabase:
                 name TEXT NOT NULL,
                 species TEXT NOT NULL,
                 breed TEXT,
+                color TEXT,
                 sex TEXT CHECK (sex IS NULL OR sex IN ('male', 'female', 'other')),
                 birth_date TEXT,
                 arrival_date TEXT,
@@ -236,6 +237,7 @@ class AnimalHealthDatabase:
                     name,
                     species,
                     breed,
+                    color,
                     sex,
                     birth_date,
                     arrival_date,
@@ -251,6 +253,7 @@ class AnimalHealthDatabase:
                     name,
                     species,
                     breed,
+                    NULL,
                     sex,
                     birth_date,
                     arrival_date,
@@ -290,7 +293,13 @@ class AnimalHealthDatabase:
 
     @classmethod
     def _migrate_to_v3(cls, connection: sqlite3.Connection) -> None:
-        columns = {
+        animal_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(animals)").fetchall()
+        }
+        if "color" not in animal_columns:
+            connection.execute("ALTER TABLE animals ADD COLUMN color TEXT")
+
+        event_columns = {
             row[1] for row in connection.execute("PRAGMA table_info(events)").fetchall()
         }
         required = {
@@ -299,7 +308,7 @@ class AnimalHealthDatabase:
             "correction_of_event_id",
             "data_json",
         }
-        if required <= columns:
+        if required <= event_columns:
             return
 
         connection.commit()
@@ -404,6 +413,7 @@ class AnimalHealthDatabase:
                     name,
                     species,
                     breed,
+                    color,
                     sex,
                     birth_date,
                     arrival_date,
@@ -434,6 +444,7 @@ class AnimalHealthDatabase:
         name: str,
         species: str,
         breed: str | None = None,
+        color: str | None = None,
         sex: str | None = None,
         birth_date: date | None = None,
         arrival_date: date | None = None,
@@ -443,6 +454,7 @@ class AnimalHealthDatabase:
             name,
             species,
             breed,
+            color,
             sex,
             birth_date,
             arrival_date,
@@ -453,6 +465,7 @@ class AnimalHealthDatabase:
         name: str,
         species: str,
         breed: str | None,
+        color: str | None,
         sex: str | None,
         birth_date: date | None,
         arrival_date: date | None,
@@ -473,6 +486,7 @@ class AnimalHealthDatabase:
                     name,
                     species,
                     breed,
+                    color,
                     sex,
                     birth_date,
                     arrival_date,
@@ -482,13 +496,14 @@ class AnimalHealthDatabase:
                     archived_at,
                     created_at,
                     updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     animal_id,
                     name,
                     species,
                     breed,
+                    color,
                     sex,
                     birth_date.isoformat() if birth_date else None,
                     arrival_date.isoformat() if arrival_date else None,
@@ -841,6 +856,7 @@ class AnimalHealthDatabase:
                 name,
                 species,
                 breed,
+                color,
                 sex,
                 birth_date,
                 arrival_date,
