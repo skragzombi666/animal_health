@@ -12,11 +12,21 @@ ANIMAL_STATUSES = (
     ANIMAL_STATUS_DECEASED,
 )
 
+ANIMAL_SEX_MALE = "male"
+ANIMAL_SEX_FEMALE = "female"
+ANIMAL_SEX_OTHER = "other"
+ANIMAL_SEXES = (
+    ANIMAL_SEX_MALE,
+    ANIMAL_SEX_FEMALE,
+    ANIMAL_SEX_OTHER,
+)
+
 SERVICE_CREATE_ANIMAL = "create_animal"
 SERVICE_UPDATE_ANIMAL = "update_animal"
 SERVICE_ARCHIVE_ANIMAL = "archive_animal"
 SERVICE_RESTORE_ANIMAL = "restore_animal"
 
+ATTR_DEVICE_ID = "device_id"
 ATTR_ANIMAL_ID = "animal_id"
 ATTR_NAME = "name"
 ATTR_SPECIES = "species"

@@ -1,15 +1,20 @@
 from __future__ import annotations
 
+import secrets
 import sqlite3
 from collections.abc import Callable
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 from homeassistant.core import HomeAssistant
 
-from .const import ANIMAL_STATUSES, ANIMAL_STATUS_ACTIVE, DATABASE_SCHEMA_VERSION
+from .const import (
+    ANIMAL_SEXES,
+    ANIMAL_STATUSES,
+    ANIMAL_STATUS_ACTIVE,
+    DATABASE_SCHEMA_VERSION,
+)
 from .models import Animal
 
 ANIMAL_FIELDS = {
@@ -20,6 +25,9 @@ ANIMAL_FIELDS = {
     "birth_date",
     "arrival_date",
 }
+
+ANIMAL_ID_ALPHABET = "23456789ABCDEFGHJKMNPQRSTVWXYZ"
+ANIMAL_ID_LENGTH = 7
 
 
 class AnimalHealthDatabase:
@@ -64,7 +72,7 @@ class AnimalHealthDatabase:
                 name TEXT NOT NULL,
                 species TEXT NOT NULL,
                 breed TEXT,
-                sex TEXT,
+                sex TEXT CHECK (sex IS NULL OR sex IN ('male', 'female', 'other')),
                 birth_date TEXT,
                 arrival_date TEXT,
                 status TEXT NOT NULL DEFAULT 'active'
@@ -134,6 +142,17 @@ class AnimalHealthDatabase:
             """
         )
 
+    @staticmethod
+    def _generate_animal_id(existing_ids: set[str] | None = None) -> str:
+        existing_ids = existing_ids or set()
+        while True:
+            suffix = "".join(
+                secrets.choice(ANIMAL_ID_ALPHABET) for _ in range(ANIMAL_ID_LENGTH)
+            )
+            animal_id = f"AH-{suffix}"
+            if animal_id not in existing_ids:
+                return animal_id
+
     async def get_animals(self) -> list[Animal]:
         return await self._hass.async_add_executor_job(self._get_animals_sync)
 
@@ -187,9 +206,15 @@ class AnimalHealthDatabase:
         birth_date: date | None,
         arrival_date: date | None,
     ) -> Animal:
-        animal_id = uuid4().hex
+        if sex is not None and sex not in ANIMAL_SEXES:
+            raise ValueError(f"Unsupported animal sex: {sex}")
+
         now = datetime.now(UTC).isoformat(timespec="seconds")
         with self._connect() as connection:
+            existing_ids = {
+                row[0] for row in connection.execute("SELECT id FROM animals").fetchall()
+            }
+            animal_id = self._generate_animal_id(existing_ids)
             connection.execute(
                 """
                 INSERT INTO animals (
@@ -232,6 +257,10 @@ class AnimalHealthDatabase:
         invalid_fields = set(changes) - ANIMAL_FIELDS
         if invalid_fields:
             raise ValueError(f"Unsupported animal fields: {sorted(invalid_fields)}")
+
+        sex = changes.get("sex")
+        if sex is not None and sex not in ANIMAL_SEXES:
+            raise ValueError(f"Unsupported animal sex: {sex}")
 
         if not changes:
             animal = self._get_animal_sync(animal_id)

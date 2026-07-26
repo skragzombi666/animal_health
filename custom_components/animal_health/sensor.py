@@ -1,17 +1,79 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorEntityDescription,
+)
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import AnimalHealthConfigEntry
-from .const import ANIMAL_STATUSES, DOMAIN, NAME
+from .const import ANIMAL_SEXES, ANIMAL_STATUSES, DOMAIN, NAME
 from .coordinator import AnimalHealthCoordinator
 from .models import Animal
+
+
+@dataclass(frozen=True, kw_only=True)
+class AnimalProfileSensorDescription(SensorEntityDescription):
+    value_fn: Callable[[Animal], str | date | None]
+
+
+SENSOR_DESCRIPTIONS = (
+    AnimalProfileSensorDescription(
+        key="status",
+        translation_key="status",
+        icon="mdi:paw",
+        device_class=SensorDeviceClass.ENUM,
+        value_fn=lambda animal: animal.status,
+    ),
+    AnimalProfileSensorDescription(
+        key="animal_id",
+        translation_key="animal_id",
+        icon="mdi:identifier",
+        value_fn=lambda animal: animal.id,
+    ),
+    AnimalProfileSensorDescription(
+        key="species",
+        translation_key="species",
+        icon="mdi:shape",
+        value_fn=lambda animal: animal.species,
+    ),
+    AnimalProfileSensorDescription(
+        key="breed",
+        translation_key="breed",
+        icon="mdi:format-list-text",
+        value_fn=lambda animal: animal.breed,
+    ),
+    AnimalProfileSensorDescription(
+        key="sex",
+        translation_key="sex",
+        icon="mdi:gender-male-female",
+        device_class=SensorDeviceClass.ENUM,
+        value_fn=lambda animal: animal.sex,
+    ),
+    AnimalProfileSensorDescription(
+        key="birth_date",
+        translation_key="birth_date",
+        icon="mdi:cake-variant",
+        device_class=SensorDeviceClass.DATE,
+        value_fn=lambda animal: animal.birth_date,
+    ),
+    AnimalProfileSensorDescription(
+        key="arrival_date",
+        translation_key="arrival_date",
+        icon="mdi:home-import-outline",
+        device_class=SensorDeviceClass.DATE,
+        value_fn=lambda animal: animal.arrival_date,
+    ),
+)
 
 
 async def async_setup_entry(
@@ -29,8 +91,9 @@ async def async_setup_entry(
             return
         known_animal_ids.update(new_animal_ids)
         async_add_entities(
-            AnimalStatusSensor(coordinator, animal_id)
+            AnimalProfileSensor(coordinator, animal_id, description)
             for animal_id in sorted(new_animal_ids)
+            for description in SENSOR_DESCRIPTIONS
         )
 
     add_new_animal_entities()
@@ -39,24 +102,22 @@ async def async_setup_entry(
     )
 
 
-class AnimalStatusSensor(
+class AnimalProfileSensor(
     CoordinatorEntity[AnimalHealthCoordinator],
     SensorEntity,
 ):
-    _attr_device_class = SensorDeviceClass.ENUM
     _attr_has_entity_name = True
-    _attr_icon = "mdi:paw"
-    _attr_options = list(ANIMAL_STATUSES)
-    _attr_translation_key = "status"
 
     def __init__(
         self,
         coordinator: AnimalHealthCoordinator,
         animal_id: str,
+        description: AnimalProfileSensorDescription,
     ) -> None:
         super().__init__(coordinator)
+        self.entity_description = description
         self._animal_id = animal_id
-        self._attr_unique_id = f"{animal_id}_status"
+        self._attr_unique_id = f"{animal_id}_{description.key}"
 
     @property
     def animal(self) -> Animal | None:
@@ -67,9 +128,17 @@ class AnimalStatusSensor(
         return super().available and self.animal is not None
 
     @property
-    def native_value(self) -> str | None:
+    def native_value(self) -> str | date | None:
         animal = self.animal
-        return animal.status if animal else None
+        return self.entity_description.value_fn(animal) if animal else None
+
+    @property
+    def options(self) -> list[str] | None:
+        if self.entity_description.key == "status":
+            return list(ANIMAL_STATUSES)
+        if self.entity_description.key == "sex":
+            return list(ANIMAL_SEXES)
+        return None
 
     @property
     def device_info(self) -> DeviceInfo | None:
@@ -88,17 +157,4 @@ class AnimalStatusSensor(
         animal = self.animal
         if animal is None:
             return {}
-        return {
-            "animal_id": animal.id,
-            "species": animal.species,
-            "breed": animal.breed,
-            "sex": animal.sex,
-            "birth_date": (
-                animal.birth_date.isoformat() if animal.birth_date else None
-            ),
-            "arrival_date": (
-                animal.arrival_date.isoformat() if animal.arrival_date else None
-            ),
-            "created_at": animal.created_at.isoformat(),
-            "updated_at": animal.updated_at.isoformat(),
-        }
+        return {"animal_id": animal.id}

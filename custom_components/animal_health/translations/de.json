@@ -11,6 +11,15 @@
       "already_configured": "Die Tiergesundheitsverwaltung ist bereits eingerichtet."
     }
   },
+  "selector": {
+    "animal_sex": {
+      "options": {
+        "male": "Männlich",
+        "female": "Weiblich",
+        "other": "Anderes"
+      }
+    }
+  },
   "entity": {
     "sensor": {
       "status": {
@@ -20,6 +29,29 @@
           "inactive": "Archiviert",
           "deceased": "Verstorben"
         }
+      },
+      "animal_id": {
+        "name": "Tier-ID"
+      },
+      "species": {
+        "name": "Tierart"
+      },
+      "breed": {
+        "name": "Rasse"
+      },
+      "sex": {
+        "name": "Geschlecht",
+        "state": {
+          "male": "Männlich",
+          "female": "Weiblich",
+          "other": "Anderes"
+        }
+      },
+      "birth_date": {
+        "name": "Geburtsdatum"
+      },
+      "arrival_date": {
+        "name": "Aufnahmedatum"
       }
     }
   },
@@ -42,7 +74,7 @@
         },
         "sex": {
           "name": "Geschlecht",
-          "description": "Optionale Angabe zum Geschlecht."
+          "description": "Optionales Geschlecht des Tieres."
         },
         "birth_date": {
           "name": "Geburtsdatum",
@@ -58,9 +90,9 @@
       "name": "Tier bearbeiten",
       "description": "Aktualisiert Profildaten eines bestehenden Tieres.",
       "fields": {
-        "animal_id": {
-          "name": "Tier-ID",
-          "description": "Stabile Animal-Health-ID des Tieres."
+        "device_id": {
+          "name": "Tier",
+          "description": "Tier anhand des Namens auswählen."
         },
         "name": {
           "name": "Name",
@@ -76,7 +108,7 @@
         },
         "sex": {
           "name": "Geschlecht",
-          "description": "Neue Geschlechtsangabe. Ein leerer Wert entfernt die bisherige Angabe."
+          "description": "Neues Geschlecht."
         },
         "birth_date": {
           "name": "Geburtsdatum",
@@ -92,9 +124,9 @@
       "name": "Tier archivieren",
       "description": "Markiert ein Tierprofil als inaktiv, ohne dessen Verlauf zu löschen.",
       "fields": {
-        "animal_id": {
-          "name": "Tier-ID",
-          "description": "Stabile Animal-Health-ID des Tieres."
+        "device_id": {
+          "name": "Tier",
+          "description": "Tier anhand des Namens auswählen."
         }
       }
     },
@@ -102,9 +134,9 @@
       "name": "Tier wiederherstellen",
       "description": "Setzt ein archiviertes Tierprofil wieder auf aktiv.",
       "fields": {
-        "animal_id": {
-          "name": "Tier-ID",
-          "description": "Stabile Animal-Health-ID des Tieres."
+        "device_id": {
+          "name": "Tier",
+          "description": "Tier anhand des Namens auswählen."
         }
       }
     }
