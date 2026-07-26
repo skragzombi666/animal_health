@@ -21,7 +21,6 @@ from .catalog import (
     canonical_breed_name,
     canonical_species_name,
     product_event_metadata,
-    resolve_breed,
 )
 from .const import (
     ADMINISTRATION_ROUTES,
@@ -398,14 +397,12 @@ def async_setup_services(hass: HomeAssistant) -> None:
                 except ValueError as err:
                     raise ServiceValidationError(str(err)) from err
                 changes[ATTR_BREED] = breed_name
-            elif ATTR_SPECIES in call.data and current.breed:
-                existing_breed = resolve_breed(current.breed)
-                if (
-                    existing_breed is not None
-                    and species_id is not None
-                    and existing_breed.item.get("species_id") != species_id
-                ):
-                    changes[ATTR_BREED] = None
+            elif (
+                ATTR_SPECIES in call.data
+                and current.breed
+                and species_name != current.species
+            ):
+                changes[ATTR_BREED] = None
 
         try:
             await runtime_data.database.update_animal(animal_id, changes)
