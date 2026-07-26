@@ -15,6 +15,9 @@ class Animal:
     birth_date: date | None
     arrival_date: date | None
     status: str
+    status_changed_at: datetime
+    is_archived: bool
+    archived_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -26,15 +29,12 @@ class Animal:
             species=row["species"],
             breed=row["breed"],
             sex=row["sex"],
-            birth_date=(
-                date.fromisoformat(row["birth_date"]) if row["birth_date"] else None
-            ),
-            arrival_date=(
-                date.fromisoformat(row["arrival_date"])
-                if row["arrival_date"]
-                else None
-            ),
+            birth_date=date.fromisoformat(row["birth_date"]) if row["birth_date"] else None,
+            arrival_date=date.fromisoformat(row["arrival_date"]) if row["arrival_date"] else None,
             status=row["status"],
+            status_changed_at=datetime.fromisoformat(row["status_changed_at"]),
+            is_archived=bool(row["is_archived"]),
+            archived_at=datetime.fromisoformat(row["archived_at"]) if row["archived_at"] else None,
             created_at=datetime.fromisoformat(row["created_at"]),
             updated_at=datetime.fromisoformat(row["updated_at"]),
         )
@@ -49,6 +49,9 @@ class Animal:
             "birth_date": self.birth_date.isoformat() if self.birth_date else None,
             "arrival_date": self.arrival_date.isoformat() if self.arrival_date else None,
             "status": self.status,
+            "status_changed_at": self.status_changed_at.isoformat(),
+            "is_archived": self.is_archived,
+            "archived_at": self.archived_at.isoformat() if self.archived_at else None,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }

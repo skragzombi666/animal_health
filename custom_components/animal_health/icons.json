@@ -6,11 +6,37 @@
     "update_animal": {
       "service": "mdi:paw"
     },
+    "set_animal_status": {
+      "service": "mdi:heart-pulse"
+    },
     "archive_animal": {
       "service": "mdi:archive-arrow-down"
     },
     "restore_animal": {
       "service": "mdi:archive-arrow-up"
+    }
+  },
+  "entity": {
+    "select": {
+      "status_control": {
+        "default": "mdi:heart-pulse",
+        "state": {
+          "active": "mdi:home-heart",
+          "missing": "mdi:map-marker-question",
+          "sold": "mdi:cash-check",
+          "rehomed": "mdi:home-switch",
+          "deceased": "mdi:grave-stone",
+          "other_departure": "mdi:exit-run"
+        }
+      }
+    },
+    "button": {
+      "archive": {
+        "default": "mdi:archive-arrow-down"
+      },
+      "restore": {
+        "default": "mdi:archive-arrow-up"
+      }
     }
   }
 }

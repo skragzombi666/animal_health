@@ -63,6 +63,28 @@ update_animal:
       selector:
         date:
 
+set_animal_status:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          filter:
+            - integration: animal_health
+    status:
+      required: true
+      selector:
+        select:
+          options:
+            - active
+            - missing
+            - sold
+            - rehomed
+            - deceased
+            - other_departure
+          translation_key: animal_status
+          mode: dropdown
+
 archive_animal:
   fields:
     device_id:

@@ -18,8 +18,7 @@ from homeassistant.helpers import device_registry as dr
 
 from .const import (
     ANIMAL_SEXES,
-    ANIMAL_STATUS_ACTIVE,
-    ANIMAL_STATUS_INACTIVE,
+    ANIMAL_STATUSES,
     ATTR_ARRIVAL_DATE,
     ATTR_BIRTH_DATE,
     ATTR_BREED,
@@ -27,10 +26,12 @@ from .const import (
     ATTR_NAME,
     ATTR_SEX,
     ATTR_SPECIES,
+    ATTR_STATUS,
     DOMAIN,
     SERVICE_ARCHIVE_ANIMAL,
     SERVICE_CREATE_ANIMAL,
     SERVICE_RESTORE_ANIMAL,
+    SERVICE_SET_ANIMAL_STATUS,
     SERVICE_UPDATE_ANIMAL,
 )
 from .models import Animal
@@ -82,6 +83,13 @@ UPDATE_ANIMAL_SCHEMA = vol.Schema(
         vol.Optional(ATTR_SEX): vol.In(ANIMAL_SEXES),
         vol.Optional(ATTR_BIRTH_DATE): _optional_date,
         vol.Optional(ATTR_ARRIVAL_DATE): _optional_date,
+    }
+)
+
+SET_ANIMAL_STATUS_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_DEVICE_ID): _required_text,
+        vol.Required(ATTR_STATUS): vol.In(ANIMAL_STATUSES),
     }
 )
 
@@ -183,13 +191,24 @@ def async_setup_services(hass: HomeAssistant) -> None:
         _update_device_metadata(hass, device_id, animal)
         return response
 
-    async def handle_archive_animal(call: ServiceCall) -> ServiceResponse:
+    async def handle_set_animal_status(call: ServiceCall) -> ServiceResponse:
         runtime_data = _get_runtime_data(hass)
         animal_id = _get_animal_id_from_device(hass, call.data[ATTR_DEVICE_ID])
         try:
             await runtime_data.database.set_animal_status(
-                animal_id, ANIMAL_STATUS_INACTIVE
+                animal_id,
+                call.data[ATTR_STATUS],
             )
+        except KeyError as err:
+            raise ServiceValidationError("The selected animal no longer exists") from err
+        _, response = await _optional_response(call, runtime_data, animal_id)
+        return response
+
+    async def handle_archive_animal(call: ServiceCall) -> ServiceResponse:
+        runtime_data = _get_runtime_data(hass)
+        animal_id = _get_animal_id_from_device(hass, call.data[ATTR_DEVICE_ID])
+        try:
+            await runtime_data.database.set_animal_archived(animal_id, True)
         except KeyError as err:
             raise ServiceValidationError("The selected animal no longer exists") from err
         _, response = await _optional_response(call, runtime_data, animal_id)
@@ -199,9 +218,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
         runtime_data = _get_runtime_data(hass)
         animal_id = _get_animal_id_from_device(hass, call.data[ATTR_DEVICE_ID])
         try:
-            await runtime_data.database.set_animal_status(
-                animal_id, ANIMAL_STATUS_ACTIVE
-            )
+            await runtime_data.database.set_animal_archived(animal_id, False)
         except KeyError as err:
             raise ServiceValidationError("The selected animal no longer exists") from err
         _, response = await _optional_response(call, runtime_data, animal_id)
@@ -219,6 +236,13 @@ def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_UPDATE_ANIMAL,
         handle_update_animal,
         schema=UPDATE_ANIMAL_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_ANIMAL_STATUS,
+        handle_set_animal_status,
+        schema=SET_ANIMAL_STATUS_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
     hass.services.async_register(

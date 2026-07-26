@@ -58,16 +58,20 @@ class AnimalHealthDatabase:
 
             migrations: dict[int, Callable[[sqlite3.Connection], None]] = {
                 1: self._migrate_to_v1,
+                2: self._migrate_to_v2,
             }
             for target_version in range(current_version + 1, DATABASE_SCHEMA_VERSION + 1):
                 migrations[target_version](connection)
                 connection.execute(f"PRAGMA user_version = {target_version}")
 
     @staticmethod
-    def _migrate_to_v1(connection: sqlite3.Connection) -> None:
-        connection.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS animals (
+    def _create_animals_table(
+        connection: sqlite3.Connection,
+        table_name: str = "animals",
+    ) -> None:
+        connection.execute(
+            f"""
+            CREATE TABLE {table_name} (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 species TEXT NOT NULL,
@@ -76,11 +80,35 @@ class AnimalHealthDatabase:
                 birth_date TEXT,
                 arrival_date TEXT,
                 status TEXT NOT NULL DEFAULT 'active'
-                    CHECK (status IN ('active', 'inactive', 'deceased')),
+                    CHECK (
+                        status IN (
+                            'active',
+                            'missing',
+                            'sold',
+                            'rehomed',
+                            'deceased',
+                            'other_departure'
+                        )
+                    ),
+                status_changed_at TEXT NOT NULL,
+                is_archived INTEGER NOT NULL DEFAULT 0
+                    CHECK (is_archived IN (0, 1)),
+                archived_at TEXT,
                 created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            );
+                updated_at TEXT NOT NULL,
+                CHECK (
+                    (is_archived = 0 AND archived_at IS NULL)
+                    OR (is_archived = 1 AND archived_at IS NOT NULL)
+                )
+            )
+            """
+        )
 
+    @classmethod
+    def _migrate_to_v1(cls, connection: sqlite3.Connection) -> None:
+        cls._create_animals_table(connection)
+        connection.executescript(
+            """
             CREATE TABLE IF NOT EXISTS tasks (
                 id TEXT PRIMARY KEY,
                 animal_id TEXT REFERENCES animals(id) ON DELETE CASCADE,
@@ -129,6 +157,8 @@ class AnimalHealthDatabase:
                 ON animals(name COLLATE NOCASE);
             CREATE INDEX IF NOT EXISTS idx_animals_status
                 ON animals(status);
+            CREATE INDEX IF NOT EXISTS idx_animals_archived
+                ON animals(is_archived);
             CREATE INDEX IF NOT EXISTS idx_tasks_animal_active
                 ON tasks(animal_id, is_active);
             CREATE INDEX IF NOT EXISTS idx_tasks_start_end
@@ -141,6 +171,78 @@ class AnimalHealthDatabase:
                 ON events(event_type);
             """
         )
+
+    @classmethod
+    def _migrate_to_v2(cls, connection: sqlite3.Connection) -> None:
+        columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(animals)").fetchall()
+        }
+        if {"status_changed_at", "is_archived", "archived_at"} <= columns:
+            return
+
+        connection.commit()
+        connection.execute("PRAGMA foreign_keys = OFF")
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            cls._create_animals_table(connection, "animals_new")
+            connection.execute(
+                """
+                INSERT INTO animals_new (
+                    id,
+                    name,
+                    species,
+                    breed,
+                    sex,
+                    birth_date,
+                    arrival_date,
+                    status,
+                    status_changed_at,
+                    is_archived,
+                    archived_at,
+                    created_at,
+                    updated_at
+                )
+                SELECT
+                    id,
+                    name,
+                    species,
+                    breed,
+                    sex,
+                    birth_date,
+                    arrival_date,
+                    CASE
+                        WHEN status = 'deceased' THEN 'deceased'
+                        ELSE 'active'
+                    END,
+                    updated_at,
+                    CASE WHEN status = 'inactive' THEN 1 ELSE 0 END,
+                    CASE WHEN status = 'inactive' THEN updated_at ELSE NULL END,
+                    created_at,
+                    updated_at
+                FROM animals
+                """
+            )
+            connection.execute("DROP TABLE animals")
+            connection.execute("ALTER TABLE animals_new RENAME TO animals")
+            connection.execute(
+                "CREATE INDEX idx_animals_name ON animals(name COLLATE NOCASE)"
+            )
+            connection.execute("CREATE INDEX idx_animals_status ON animals(status)")
+            connection.execute(
+                "CREATE INDEX idx_animals_archived ON animals(is_archived)"
+            )
+
+            violations = connection.execute("PRAGMA foreign_key_check").fetchall()
+            if violations:
+                raise RuntimeError(
+                    f"Animal Health migration created foreign-key violations: {violations}"
+                )
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.execute("PRAGMA foreign_keys = ON")
 
     @staticmethod
     def _generate_animal_id(existing_ids: set[str] | None = None) -> str:
@@ -160,8 +262,20 @@ class AnimalHealthDatabase:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                SELECT id, name, species, breed, sex, birth_date, arrival_date,
-                       status, created_at, updated_at
+                SELECT
+                    id,
+                    name,
+                    species,
+                    breed,
+                    sex,
+                    birth_date,
+                    arrival_date,
+                    status,
+                    status_changed_at,
+                    is_archived,
+                    archived_at,
+                    created_at,
+                    updated_at
                 FROM animals
                 ORDER BY name COLLATE NOCASE
                 """
@@ -218,9 +332,20 @@ class AnimalHealthDatabase:
             connection.execute(
                 """
                 INSERT INTO animals (
-                    id, name, species, breed, sex, birth_date, arrival_date,
-                    status, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    id,
+                    name,
+                    species,
+                    breed,
+                    sex,
+                    birth_date,
+                    arrival_date,
+                    status,
+                    status_changed_at,
+                    is_archived,
+                    archived_at,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     animal_id,
@@ -231,6 +356,9 @@ class AnimalHealthDatabase:
                     birth_date.isoformat() if birth_date else None,
                     arrival_date.isoformat() if arrival_date else None,
                     ANIMAL_STATUS_ACTIVE,
+                    now,
+                    0,
+                    None,
                     now,
                     now,
                 ),
@@ -301,12 +429,53 @@ class AnimalHealthDatabase:
 
         now = datetime.now(UTC).isoformat(timespec="seconds")
         with self._connect() as connection:
-            cursor = connection.execute(
-                "UPDATE animals SET status = ?, updated_at = ? WHERE id = ?",
-                (status, now, animal_id),
-            )
-            if cursor.rowcount == 0:
+            current = self._get_animal_from_connection(connection, animal_id)
+            if current is None:
                 raise KeyError(animal_id)
+            if current.status == status:
+                return current
+            connection.execute(
+                """
+                UPDATE animals
+                SET status = ?, status_changed_at = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (status, now, now, animal_id),
+            )
+            animal = self._get_animal_from_connection(connection, animal_id)
+        if animal is None:
+            raise KeyError(animal_id)
+        return animal
+
+    async def set_animal_archived(
+        self,
+        animal_id: str,
+        archived: bool,
+    ) -> Animal:
+        return await self._hass.async_add_executor_job(
+            self._set_animal_archived_sync, animal_id, archived
+        )
+
+    def _set_animal_archived_sync(
+        self,
+        animal_id: str,
+        archived: bool,
+    ) -> Animal:
+        now = datetime.now(UTC).isoformat(timespec="seconds")
+        with self._connect() as connection:
+            current = self._get_animal_from_connection(connection, animal_id)
+            if current is None:
+                raise KeyError(animal_id)
+            if current.is_archived == archived:
+                return current
+            connection.execute(
+                """
+                UPDATE animals
+                SET is_archived = ?, archived_at = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (1 if archived else 0, now if archived else None, now, animal_id),
+            )
             animal = self._get_animal_from_connection(connection, animal_id)
         if animal is None:
             raise KeyError(animal_id)
@@ -319,8 +488,20 @@ class AnimalHealthDatabase:
     ) -> Animal | None:
         row = connection.execute(
             """
-            SELECT id, name, species, breed, sex, birth_date, arrival_date,
-                   status, created_at, updated_at
+            SELECT
+                id,
+                name,
+                species,
+                breed,
+                sex,
+                birth_date,
+                arrival_date,
+                status,
+                status_changed_at,
+                is_archived,
+                archived_at,
+                created_at,
+                updated_at
             FROM animals
             WHERE id = ?
             """,
