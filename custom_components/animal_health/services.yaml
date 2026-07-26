@@ -124,12 +124,8 @@ create_event:
         select:
           options:
             - observation
-            - symptom
-            - weight
             - diagnosis
             - treatment
-            - medication
-            - vaccination
             - veterinary_visit
             - care
             - other
@@ -146,13 +142,230 @@ create_event:
       selector:
         text:
           multiline: true
-    value:
-      selector:
-        number:
-          mode: box
-    unit:
+    correction_of_event_id:
       selector:
         text:
+
+record_weight:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          filter:
+            - integration: animal_health
+    occurred_at:
+      selector:
+        datetime:
+    weight:
+      required: true
+      selector:
+        number:
+          min: 0.001
+          step: any
+          mode: box
+    weight_unit:
+      required: true
+      default: kg
+      selector:
+        select:
+          options:
+            - mg
+            - g
+            - kg
+          translation_key: weight_unit
+          mode: dropdown
+    notes:
+      selector:
+        text:
+          multiline: true
+    correction_of_event_id:
+      selector:
+        text:
+
+record_symptom:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          filter:
+            - integration: animal_health
+    occurred_at:
+      selector:
+        datetime:
+    symptom:
+      required: true
+      selector:
+        select:
+          options:
+            - reduced_appetite
+            - lethargy
+            - diarrhea
+            - coughing
+            - sneezing
+            - lameness
+            - weight_loss
+          custom_value: true
+          translation_key: symptom
+          mode: dropdown
+          sort: true
+    severity:
+      required: true
+      default: moderate
+      selector:
+        select:
+          options:
+            - mild
+            - moderate
+            - severe
+            - critical
+          translation_key: symptom_severity
+          mode: dropdown
+    notes:
+      selector:
+        text:
+          multiline: true
+    correction_of_event_id:
+      selector:
+        text:
+
+record_medication:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          filter:
+            - integration: animal_health
+    occurred_at:
+      selector:
+        datetime:
+    medication_name:
+      required: true
+      selector:
+        select:
+          options:
+            - Flubenol
+            - Baycox
+            - Metacam
+            - Panacur
+          custom_value: true
+          mode: dropdown
+          sort: true
+    dose:
+      required: true
+      selector:
+        number:
+          min: 0.001
+          step: any
+          mode: box
+    dose_unit:
+      required: true
+      default: mg
+      selector:
+        select:
+          options:
+            - mcg
+            - mg
+            - g
+            - ul
+            - ml
+            - drop
+            - tablet
+            - dose
+          translation_key: dose_unit
+          mode: dropdown
+    route:
+      selector:
+        select:
+          options:
+            - oral
+            - topical
+            - subcutaneous
+            - intramuscular
+            - intravenous
+            - eye
+            - ear
+            - spray
+            - other
+          translation_key: administration_route
+          mode: dropdown
+    notes:
+      selector:
+        text:
+          multiline: true
+    correction_of_event_id:
+      selector:
+        text:
+
+record_vaccination:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          filter:
+            - integration: animal_health
+    occurred_at:
+      selector:
+        datetime:
+    vaccine_name:
+      required: true
+      selector:
+        select:
+          options:
+            - Newcastle disease
+            - Marek disease
+            - Infectious bronchitis
+          custom_value: true
+          mode: dropdown
+          sort: true
+    dose:
+      required: true
+      selector:
+        number:
+          min: 0.001
+          step: any
+          mode: box
+    dose_unit:
+      required: true
+      default: ml
+      selector:
+        select:
+          options:
+            - mcg
+            - mg
+            - g
+            - ul
+            - ml
+            - drop
+            - tablet
+            - dose
+          translation_key: dose_unit
+          mode: dropdown
+    route:
+      selector:
+        select:
+          options:
+            - oral
+            - topical
+            - subcutaneous
+            - intramuscular
+            - intravenous
+            - eye
+            - ear
+            - spray
+            - other
+          translation_key: administration_route
+          mode: dropdown
+    batch_number:
+      selector:
+        text:
+    notes:
+      selector:
+        text:
+          multiline: true
     correction_of_event_id:
       selector:
         text:

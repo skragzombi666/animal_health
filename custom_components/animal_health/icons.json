@@ -18,6 +18,18 @@
     "create_event": {
       "service": "mdi:notebook-plus-outline"
     },
+    "record_weight": {
+      "service": "mdi:scale"
+    },
+    "record_symptom": {
+      "service": "mdi:thermometer-alert"
+    },
+    "record_medication": {
+      "service": "mdi:pill"
+    },
+    "record_vaccination": {
+      "service": "mdi:needle"
+    },
     "list_events": {
       "service": "mdi:notebook-outline"
     }
