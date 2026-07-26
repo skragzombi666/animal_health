@@ -4,36 +4,118 @@ create_animal:
       required: true
       example: Ada
       selector:
-        text:
+        text: {}
     species:
       required: true
-      example: Chicken
       selector:
-        text:
+        select:
+          options: [dog, cat, chicken, duck, goose, turkey, quail, pigeon, guinea_fowl, rabbit, guinea_pig, hamster, rat, mouse, gerbil, chinchilla, ferret, horse, donkey, cattle, sheep, goat, pig, alpaca, llama, bee, fish, bird, reptile, tortoise_turtle, snake, lizard, amphibian, other]
+          custom_value: true
+          translation_key: animal_species
+          mode: dropdown
+          sort: true
     breed:
-      example: Sussex
-      selector:
-        text:
-    color:
-      example: Brown and white
-      selector:
-        text:
-    sex:
       selector:
         select:
           options:
-            - male
-            - female
-            - other
+            - Hund — Australian Shepherd
+            - Hund — Beagle
+            - Hund — Berner Sennenhund
+            - Hund — Border Collie
+            - Hund — Boxer
+            - Hund — Cavalier King Charles Spaniel
+            - Hund — Chihuahua
+            - Hund — Dackel
+            - Hund — Entlebucher Sennenhund
+            - Hund — Französische Bulldogge
+            - Hund — Deutscher Schäferhund
+            - Hund — Golden Retriever
+            - Hund — Grosser Schweizer Sennenhund
+            - Hund — Havaneser
+            - Hund — Labrador Retriever
+            - Hund — Lagotto Romagnolo
+            - Hund — Pudel
+            - Hund — Mops
+            - Hund — Rottweiler
+            - Hund — Bernhardiner
+            - Hund — Siberian Husky
+            - Hund — Whippet
+            - Hund — Yorkshire Terrier
+            - Hund — Mischling
+            - Hund — Rasse unbekannt
+            - Katze — Abessinier
+            - Katze — Bengal
+            - Katze — Britisch Kurzhaar
+            - Katze — Birma / Burmese
+            - Katze — Kartäuser / Chartreux
+            - Katze — Devon Rex
+            - Katze — Europäisch Kurzhaar
+            - Katze — Maine Coon
+            - Katze — Norwegische Waldkatze
+            - Katze — Perser
+            - Katze — Ragdoll
+            - Katze — Russisch Blau
+            - Katze — Heilige Birma
+            - Katze — Siam
+            - Katze — Sibirische Katze
+            - Katze — Sphynx
+            - Katze — Hauskatze Kurzhaar
+            - Katze — Hauskatze Langhaar
+            - Katze — Mischling
+            - Katze — Rasse unbekannt
+            - Huhn — Appenzeller Barthuhn
+            - Huhn — Appenzeller Spitzhaube
+            - Huhn — Schweizerhuhn
+            - Huhn — Amrock
+            - Huhn — Araucana
+            - Huhn — Australorp
+            - Huhn — Barnevelder
+            - Huhn — Brahma
+            - Huhn — Bresse-Gauloise
+            - Huhn — Cochin
+            - Huhn — Marans
+            - Huhn — New Hampshire
+            - Huhn — Orpington
+            - Huhn — Plymouth Rock
+            - Huhn — Seidenhuhn
+            - Huhn — Sussex
+            - Huhn — Welsumer
+            - Huhn — Wyandotte
+            - Huhn — Legehybride
+            - Huhn — Rasse unbekannt
+            - Kaninchen — Belgischer Riese
+            - Kaninchen — Deutscher Riese
+            - Kaninchen — Französischer Widder
+            - Kaninchen — Zwergwidder
+            - Kaninchen — Hermelin
+            - Kaninchen — Farbenzwerge
+            - Kaninchen — Löwenkopfkaninchen
+            - Kaninchen — Rex
+            - Kaninchen — Angora
+            - Kaninchen — Schweizer Fuchs
+            - Kaninchen — Holländer
+            - Kaninchen — Neuseeländer
+            - Kaninchen — Wiener Blau
+            - Kaninchen — Mischling
+            - Kaninchen — Rasse unbekannt
+          custom_value: true
+          mode: dropdown
+          sort: true
+    color:
+      selector:
+        text: {}
+    sex:
+      selector:
+        select:
+          options: [male, female, other]
           translation_key: animal_sex
           mode: dropdown
     birth_date:
       selector:
-        date:
+        date: {}
     arrival_date:
       selector:
-        date:
-
+        date: {}
 update_animal:
   fields:
     device_id:
@@ -44,32 +126,117 @@ update_animal:
             - integration: animal_health
     name:
       selector:
-        text:
+        text: {}
     species:
       selector:
-        text:
+        select:
+          options: [dog, cat, chicken, duck, goose, turkey, quail, pigeon, guinea_fowl, rabbit, guinea_pig, hamster, rat, mouse, gerbil, chinchilla, ferret, horse, donkey, cattle, sheep, goat, pig, alpaca, llama, bee, fish, bird, reptile, tortoise_turtle, snake, lizard, amphibian, other]
+          custom_value: true
+          translation_key: animal_species
+          mode: dropdown
+          sort: true
     breed:
-      selector:
-        text:
-    color:
-      selector:
-        text:
-    sex:
       selector:
         select:
           options:
-            - male
-            - female
-            - other
+            - Hund — Australian Shepherd
+            - Hund — Beagle
+            - Hund — Berner Sennenhund
+            - Hund — Border Collie
+            - Hund — Boxer
+            - Hund — Cavalier King Charles Spaniel
+            - Hund — Chihuahua
+            - Hund — Dackel
+            - Hund — Entlebucher Sennenhund
+            - Hund — Französische Bulldogge
+            - Hund — Deutscher Schäferhund
+            - Hund — Golden Retriever
+            - Hund — Grosser Schweizer Sennenhund
+            - Hund — Havaneser
+            - Hund — Labrador Retriever
+            - Hund — Lagotto Romagnolo
+            - Hund — Pudel
+            - Hund — Mops
+            - Hund — Rottweiler
+            - Hund — Bernhardiner
+            - Hund — Siberian Husky
+            - Hund — Whippet
+            - Hund — Yorkshire Terrier
+            - Hund — Mischling
+            - Hund — Rasse unbekannt
+            - Katze — Abessinier
+            - Katze — Bengal
+            - Katze — Britisch Kurzhaar
+            - Katze — Birma / Burmese
+            - Katze — Kartäuser / Chartreux
+            - Katze — Devon Rex
+            - Katze — Europäisch Kurzhaar
+            - Katze — Maine Coon
+            - Katze — Norwegische Waldkatze
+            - Katze — Perser
+            - Katze — Ragdoll
+            - Katze — Russisch Blau
+            - Katze — Heilige Birma
+            - Katze — Siam
+            - Katze — Sibirische Katze
+            - Katze — Sphynx
+            - Katze — Hauskatze Kurzhaar
+            - Katze — Hauskatze Langhaar
+            - Katze — Mischling
+            - Katze — Rasse unbekannt
+            - Huhn — Appenzeller Barthuhn
+            - Huhn — Appenzeller Spitzhaube
+            - Huhn — Schweizerhuhn
+            - Huhn — Amrock
+            - Huhn — Araucana
+            - Huhn — Australorp
+            - Huhn — Barnevelder
+            - Huhn — Brahma
+            - Huhn — Bresse-Gauloise
+            - Huhn — Cochin
+            - Huhn — Marans
+            - Huhn — New Hampshire
+            - Huhn — Orpington
+            - Huhn — Plymouth Rock
+            - Huhn — Seidenhuhn
+            - Huhn — Sussex
+            - Huhn — Welsumer
+            - Huhn — Wyandotte
+            - Huhn — Legehybride
+            - Huhn — Rasse unbekannt
+            - Kaninchen — Belgischer Riese
+            - Kaninchen — Deutscher Riese
+            - Kaninchen — Französischer Widder
+            - Kaninchen — Zwergwidder
+            - Kaninchen — Hermelin
+            - Kaninchen — Farbenzwerge
+            - Kaninchen — Löwenkopfkaninchen
+            - Kaninchen — Rex
+            - Kaninchen — Angora
+            - Kaninchen — Schweizer Fuchs
+            - Kaninchen — Holländer
+            - Kaninchen — Neuseeländer
+            - Kaninchen — Wiener Blau
+            - Kaninchen — Mischling
+            - Kaninchen — Rasse unbekannt
+          custom_value: true
+          mode: dropdown
+          sort: true
+    color:
+      selector:
+        text: {}
+    sex:
+      selector:
+        select:
+          options: [male, female, other]
           translation_key: animal_sex
           mode: dropdown
     birth_date:
       selector:
-        date:
+        date: {}
     arrival_date:
       selector:
-        date:
-
+        date: {}
 set_animal_status:
   fields:
     device_id:
@@ -82,16 +249,9 @@ set_animal_status:
       required: true
       selector:
         select:
-          options:
-            - active
-            - missing
-            - sold
-            - rehomed
-            - deceased
-            - other_departure
+          options: [active, missing, sold, rehomed, deceased, other_departure]
           translation_key: animal_status
           mode: dropdown
-
 archive_animal:
   fields:
     device_id:
@@ -100,7 +260,6 @@ archive_animal:
         device:
           filter:
             - integration: animal_health
-
 restore_animal:
   fields:
     device_id:
@@ -109,7 +268,6 @@ restore_animal:
         device:
           filter:
             - integration: animal_health
-
 create_event:
   fields:
     device_id:
@@ -122,30 +280,23 @@ create_event:
       required: true
       selector:
         select:
-          options:
-            - observation
-            - diagnosis
-            - treatment
-            - veterinary_visit
-            - care
-            - other
+          options: [observation, diagnosis, treatment, veterinary_visit, care, other]
           translation_key: event_type
           mode: dropdown
     occurred_at:
       selector:
-        datetime:
+        datetime: {}
     title:
       required: true
       selector:
-        text:
+        text: {}
     notes:
       selector:
         text:
           multiline: true
     correction_of_event_id:
       selector:
-        text:
-
+        text: {}
 record_weight:
   fields:
     device_id:
@@ -156,7 +307,7 @@ record_weight:
             - integration: animal_health
     occurred_at:
       selector:
-        datetime:
+        datetime: {}
     weight:
       required: true
       selector:
@@ -169,10 +320,7 @@ record_weight:
       default: kg
       selector:
         select:
-          options:
-            - mg
-            - g
-            - kg
+          options: [mg, g, kg]
           translation_key: weight_unit
           mode: dropdown
     notes:
@@ -181,8 +329,7 @@ record_weight:
           multiline: true
     correction_of_event_id:
       selector:
-        text:
-
+        text: {}
 record_symptom:
   fields:
     device_id:
@@ -193,19 +340,12 @@ record_symptom:
             - integration: animal_health
     occurred_at:
       selector:
-        datetime:
+        datetime: {}
     symptom:
       required: true
       selector:
         select:
-          options:
-            - reduced_appetite
-            - lethargy
-            - diarrhea
-            - coughing
-            - sneezing
-            - lameness
-            - weight_loss
+          options: [reduced_appetite, lethargy, diarrhea, coughing, sneezing, lameness, weight_loss]
           custom_value: true
           translation_key: symptom
           mode: dropdown
@@ -215,11 +355,7 @@ record_symptom:
       default: moderate
       selector:
         select:
-          options:
-            - mild
-            - moderate
-            - severe
-            - critical
+          options: [mild, moderate, severe, critical]
           translation_key: symptom_severity
           mode: dropdown
     notes:
@@ -228,8 +364,7 @@ record_symptom:
           multiline: true
     correction_of_event_id:
       selector:
-        text:
-
+        text: {}
 record_medication:
   fields:
     device_id:
@@ -240,16 +375,39 @@ record_medication:
             - integration: animal_health
     occurred_at:
       selector:
-        datetime:
+        datetime: {}
     medication_name:
       required: true
       selector:
         select:
           options:
-            - Flubenol
-            - Baycox
-            - Metacam
-            - Panacur
+            - Flubenol 5% ad us. vet.
+            - Flubenol KH ad us. vet.
+            - Baycox 2.5% ad us. vet.
+            - Baycox 5% ad us. vet.
+            - Metacam 1.5 mg/ml orale Suspension für Hunde
+            - Metacam 0.5 mg/ml orale Suspension für Katzen
+            - Metacam 5 mg/ml Injektionslösung für Hunde und Katzen
+            - Panacur PetPaste ad us. vet.
+            - Panacur Tabletten ad us. vet.
+            - Panacur Suspension ad us. vet.
+            - Milbemax Kautabletten für Hunde ad us. vet.
+            - Milbemax Tabletten für Katzen ad us. vet.
+            - Bravecto Plus Spot-on für Katzen ad us. vet.
+            - Apoquel ad us. vet.
+            - Easotic ad us. vet.
+            - Optimmune Augensalbe ad us. vet.
+            - Milteforan ad us. vet.
+            - Clevor 30 mg/ml Augentropfen ad us. vet.
+            - Bonqat 50 mg/ml ad us. vet.
+            - Zycortal 25 mg/ml ad us. vet.
+            - Numelvi ad us. vet.
+            - Tessie 0.3 mg/ml ad us. vet.
+            - Zenrelia ad us. vet.
+            - Inflacam 15 mg/ml orale Suspension für Pferde
+            - Eprecis 20 mg/ml ad us. vet.
+            - Butox Protect ad us. vet.
+            - Regumate Equine ad us. vet.
           custom_value: true
           mode: dropdown
           sort: true
@@ -265,30 +423,13 @@ record_medication:
       default: mg
       selector:
         select:
-          options:
-            - mcg
-            - mg
-            - g
-            - ul
-            - ml
-            - drop
-            - tablet
-            - dose
+          options: [mcg, mg, g, ul, ml, drop, tablet, dose]
           translation_key: dose_unit
           mode: dropdown
     route:
       selector:
         select:
-          options:
-            - oral
-            - topical
-            - subcutaneous
-            - intramuscular
-            - intravenous
-            - eye
-            - ear
-            - spray
-            - other
+          options: [oral, topical, subcutaneous, intramuscular, intravenous, eye, ear, spray, other]
           translation_key: administration_route
           mode: dropdown
     notes:
@@ -297,8 +438,7 @@ record_medication:
           multiline: true
     correction_of_event_id:
       selector:
-        text:
-
+        text: {}
 record_vaccination:
   fields:
     device_id:
@@ -309,15 +449,26 @@ record_vaccination:
             - integration: animal_health
     occurred_at:
       selector:
-        datetime:
+        datetime: {}
     vaccine_name:
       required: true
       selector:
         select:
           options:
-            - Newcastle disease
-            - Marek disease
-            - Infectious bronchitis
+            - Nobivac DHPPi ad us. vet.
+            - Nobivac DHP ad us. vet.
+            - Nobivac Pi ad us. vet.
+            - Nobivac LEPTO 6 ad us. vet.
+            - Nobivac RABIES ad us. vet.
+            - Nobivac KC ad us. vet.
+            - Nobivac TRICAT III ad us. vet.
+            - Purevax FeLV ad us. vet.
+            - Nobilis IB 4-91 ad us. vet.
+            - Nobilis IB Ma5 ad us. vet.
+            - Poulvac Procerta HVT-IBD ad us. vet.
+            - Bultavo 3 ad us. vet.
+            - Protivity ad us. vet.
+            - Nobilis Paramyxo P201 ad us. vet.
           custom_value: true
           mode: dropdown
           sort: true
@@ -333,43 +484,25 @@ record_vaccination:
       default: ml
       selector:
         select:
-          options:
-            - mcg
-            - mg
-            - g
-            - ul
-            - ml
-            - drop
-            - tablet
-            - dose
+          options: [mcg, mg, g, ul, ml, drop, tablet, dose]
           translation_key: dose_unit
           mode: dropdown
     route:
       selector:
         select:
-          options:
-            - oral
-            - topical
-            - subcutaneous
-            - intramuscular
-            - intravenous
-            - eye
-            - ear
-            - spray
-            - other
+          options: [oral, topical, subcutaneous, intramuscular, intravenous, eye, ear, spray, other]
           translation_key: administration_route
           mode: dropdown
     batch_number:
       selector:
-        text:
+        text: {}
     notes:
       selector:
         text:
           multiline: true
     correction_of_event_id:
       selector:
-        text:
-
+        text: {}
 list_events:
   fields:
     device_id:
