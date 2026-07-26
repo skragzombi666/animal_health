@@ -32,6 +32,8 @@ from .const import (
     ATTR_BREED,
     ATTR_COLOR,
     ATTR_CORRECTION_OF_EVENT_ID,
+    ATTR_CUSTOM_SPECIES,
+    ATTR_CUSTOM_SYMPTOM,
     ATTR_DEVICE_ID,
     ATTR_DOSE,
     ATTR_DOSE_UNIT,
@@ -69,7 +71,9 @@ from .const import (
     SERVICE_RESTORE_ANIMAL,
     SERVICE_SET_ANIMAL_STATUS,
     SERVICE_UPDATE_ANIMAL,
+    SYMPTOM_OTHER,
     SYMPTOM_SEVERITIES,
+    SYMPTOMS,
     WEIGHT_UNITS,
 )
 from .models import Animal
@@ -130,10 +134,31 @@ def _event_datetime_utc(hass: HomeAssistant, value: datetime | None) -> datetime
     return value.astimezone(UTC).replace(microsecond=0)
 
 
+def _catalog_or_custom_value(
+    selected: str,
+    custom: str | None,
+    *,
+    other_value: str,
+    field_name: str,
+) -> str:
+    if selected == other_value:
+        if custom is None:
+            raise ServiceValidationError(
+                f"A custom {field_name} is required when 'other' is selected"
+            )
+        return custom
+    if custom is not None:
+        raise ServiceValidationError(
+            f"A custom {field_name} may only be supplied when 'other' is selected"
+        )
+    return selected
+
+
 CREATE_ANIMAL_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_NAME): _required_text,
         vol.Required(ATTR_SPECIES): _required_text,
+        vol.Optional(ATTR_CUSTOM_SPECIES): _optional_text,
         vol.Optional(ATTR_BREED): _optional_text,
         vol.Optional(ATTR_COLOR): _optional_text,
         vol.Optional(ATTR_SEX): vol.In(ANIMAL_SEXES),
@@ -147,6 +172,7 @@ UPDATE_ANIMAL_SCHEMA = vol.Schema(
         vol.Required(ATTR_DEVICE_ID): _required_text,
         vol.Optional(ATTR_NAME): _required_text,
         vol.Optional(ATTR_SPECIES): _required_text,
+        vol.Optional(ATTR_CUSTOM_SPECIES): _optional_text,
         vol.Optional(ATTR_BREED): _optional_text,
         vol.Optional(ATTR_COLOR): _optional_text,
         vol.Optional(ATTR_SEX): vol.In(ANIMAL_SEXES),
@@ -194,7 +220,8 @@ RECORD_SYMPTOM_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_DEVICE_ID): _required_text,
         vol.Optional(ATTR_OCCURRED_AT): _optional_datetime,
-        vol.Required(ATTR_SYMPTOM): _required_text,
+        vol.Required(ATTR_SYMPTOM): vol.In(SYMPTOMS),
+        vol.Optional(ATTR_CUSTOM_SYMPTOM): _optional_text,
         vol.Optional(ATTR_SEVERITY, default="moderate"): vol.In(
             SYMPTOM_SEVERITIES
         ),
@@ -351,8 +378,14 @@ async def _create_event_response(
 def async_setup_services(hass: HomeAssistant) -> None:
     async def handle_create_animal(call: ServiceCall) -> ServiceResponse:
         runtime_data = _get_runtime_data(hass)
-        species, breed, _species_id = _canonical_animal_values(
+        species_input = _catalog_or_custom_value(
             call.data[ATTR_SPECIES],
+            call.data.get(ATTR_CUSTOM_SPECIES),
+            other_value="other",
+            field_name="species",
+        )
+        species, breed, _species_id = _canonical_animal_values(
+            species_input,
             call.data.get(ATTR_BREED),
         )
         animal = await runtime_data.database.create_animal(
@@ -380,11 +413,21 @@ def async_setup_services(hass: HomeAssistant) -> None:
             for field in EDITABLE_FIELDS
             if field in call.data
         }
-        if not changes:
-            raise ServiceValidationError("No animal fields were supplied")
+
+        custom_species = call.data.get(ATTR_CUSTOM_SPECIES)
+        if custom_species is not None and ATTR_SPECIES not in call.data:
+            raise ServiceValidationError(
+                "Select 'other' as species when providing a custom species"
+            )
 
         if ATTR_SPECIES in call.data or ATTR_BREED in call.data:
-            species_input = call.data.get(ATTR_SPECIES, current.species)
+            selected_species = call.data.get(ATTR_SPECIES, current.species)
+            species_input = _catalog_or_custom_value(
+                selected_species,
+                custom_species,
+                other_value="other",
+                field_name="species",
+            )
             species_name, species_id = canonical_species_name(species_input)
             changes[ATTR_SPECIES] = species_name
 
@@ -403,6 +446,9 @@ def async_setup_services(hass: HomeAssistant) -> None:
                 and species_name != current.species
             ):
                 changes[ATTR_BREED] = None
+
+        if not changes:
+            raise ServiceValidationError("No animal fields were supplied")
 
         try:
             await runtime_data.database.update_animal(animal_id, changes)
@@ -465,28 +511,28 @@ def async_setup_services(hass: HomeAssistant) -> None:
         )
 
     async def handle_record_symptom(call: ServiceCall) -> ServiceResponse:
-        known_symptoms = {
-            "reduced_appetite",
-            "lethargy",
-            "diarrhea",
-            "coughing",
-            "sneezing",
-            "lameness",
-            "weight_loss",
+        selected_symptom = call.data[ATTR_SYMPTOM]
+        symptom = _catalog_or_custom_value(
+            selected_symptom,
+            call.data.get(ATTR_CUSTOM_SYMPTOM),
+            other_value=SYMPTOM_OTHER,
+            field_name="symptom",
+        )
+        data: dict[str, Any] = {
+            "symptom": symptom,
+            "severity": call.data[ATTR_SEVERITY],
+            "catalog_source": (
+                "custom" if selected_symptom == SYMPTOM_OTHER else "builtin"
+            ),
         }
-        symptom = call.data[ATTR_SYMPTOM]
+        if selected_symptom != SYMPTOM_OTHER:
+            data["catalog_id"] = selected_symptom
         return await _create_event_response(
             hass,
             call,
             event_type=EVENT_TYPE_SYMPTOM,
             title=symptom,
-            data={
-                "symptom": symptom,
-                "severity": call.data[ATTR_SEVERITY],
-                "catalog_source": (
-                    "builtin" if symptom in known_symptoms else "custom"
-                ),
-            },
+            data=data,
         )
 
     async def handle_record_medication(call: ServiceCall) -> ServiceResponse:
