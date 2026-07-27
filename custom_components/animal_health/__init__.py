@@ -17,6 +17,7 @@ from .task_record_schema import async_initialize_task_record_schema
 from .task_record_services import async_setup_task_record_services
 from .task_service_schema import async_setup_task_service_descriptions
 from .task_services import async_setup_task_services
+from .task_stabilization import apply_task_stabilization
 
 PLATFORMS = [
     Platform.SENSOR,
@@ -29,6 +30,7 @@ type AnimalHealthConfigEntry = ConfigEntry[AnimalHealthRuntimeData]
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
+    apply_task_stabilization()
     async_setup_services(hass)
     async_setup_task_services(hass)
     async_setup_task_record_creation(hass)
@@ -38,6 +40,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry) -> bool:
+    apply_task_stabilization()
     database_path = Path(hass.config.path(DATABASE_NAME))
     database = AnimalHealthDatabase(hass, database_path)
     await database.initialize()
