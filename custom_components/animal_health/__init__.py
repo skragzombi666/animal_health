@@ -12,6 +12,7 @@ from .coordinator import AnimalHealthCoordinator
 from .database import AnimalHealthDatabase
 from .runtime import AnimalHealthRuntimeData
 from .services import async_setup_services
+from .task_record_creation import async_setup_task_record_creation
 from .task_record_schema import async_initialize_task_record_schema
 from .task_record_services import async_setup_task_record_services
 from .task_service_schema import async_setup_task_service_descriptions
@@ -30,6 +31,7 @@ type AnimalHealthConfigEntry = ConfigEntry[AnimalHealthRuntimeData]
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_services(hass)
     async_setup_task_services(hass)
+    async_setup_task_record_creation(hass)
     async_setup_task_record_services(hass)
     async_setup_task_service_descriptions(hass)
     return True
