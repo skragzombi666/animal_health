@@ -22,6 +22,17 @@ def _select_sql() -> str:
     raise AssertionError("Could not find stabilized task-select SQL")
 
 
+def _counts(
+    connection: sqlite3.Connection,
+    sql: str,
+    *,
+    now_utc: str,
+    local_day_start_utc: str,
+) -> dict[str, int]:
+    rows = connection.execute(sql, (now_utc, local_day_start_utc)).fetchall()
+    return {str(row["id"]): int(row["overdue_count"]) for row in rows}
+
+
 def main() -> None:
     connection = sqlite3.connect(":memory:")
     connection.row_factory = sqlite3.Row
@@ -96,20 +107,70 @@ def main() -> None:
 
     sql = _select_sql()
 
-    rows = connection.execute(sql, ("2026-07-27T12:00:00+00:00",)).fetchall()
-    counts = {str(row["id"]): int(row["overdue_count"]) for row in rows}
+    counts = _counts(
+        connection,
+        sql,
+        now_utc="2026-07-27T12:00:00+00:00",
+        local_day_start_utc="2026-07-26T22:00:00+00:00",
+    )
     assert counts["TK-ALL-DAY"] == 0
     assert counts["TK-TIMED"] == 1
 
-    rows = connection.execute(sql, ("2026-07-26T21:00:00+00:00",)).fetchall()
-    counts = {str(row["id"]): int(row["overdue_count"]) for row in rows}
+    counts = _counts(
+        connection,
+        sql,
+        now_utc="2026-07-26T21:00:00+00:00",
+        local_day_start_utc="2026-07-25T22:00:00+00:00",
+    )
     assert counts["TK-ALL-DAY"] == 0
     assert counts["TK-TIMED"] == 0
 
-    rows = connection.execute(sql, ("2026-07-27T22:00:00+00:00",)).fetchall()
-    counts = {str(row["id"]): int(row["overdue_count"]) for row in rows}
+    counts = _counts(
+        connection,
+        sql,
+        now_utc="2026-07-27T22:00:00+00:00",
+        local_day_start_utc="2026-07-27T22:00:00+00:00",
+    )
     assert counts["TK-ALL-DAY"] == 1
     assert counts["TK-TIMED"] == 1
+
+    connection.execute(
+        "UPDATE task_occurrences SET scheduled_for = ? WHERE id = 'OC-ALL-DAY'",
+        ("2026-03-28T23:00:00+00:00",),
+    )
+    counts = _counts(
+        connection,
+        sql,
+        now_utc="2026-03-29T21:59:00+00:00",
+        local_day_start_utc="2026-03-28T23:00:00+00:00",
+    )
+    assert counts["TK-ALL-DAY"] == 0
+    counts = _counts(
+        connection,
+        sql,
+        now_utc="2026-03-29T22:00:00+00:00",
+        local_day_start_utc="2026-03-29T22:00:00+00:00",
+    )
+    assert counts["TK-ALL-DAY"] == 1
+
+    connection.execute(
+        "UPDATE task_occurrences SET scheduled_for = ? WHERE id = 'OC-ALL-DAY'",
+        ("2026-10-24T22:00:00+00:00",),
+    )
+    counts = _counts(
+        connection,
+        sql,
+        now_utc="2026-10-25T22:59:00+00:00",
+        local_day_start_utc="2026-10-24T22:00:00+00:00",
+    )
+    assert counts["TK-ALL-DAY"] == 0
+    counts = _counts(
+        connection,
+        sql,
+        now_utc="2026-10-25T23:00:00+00:00",
+        local_day_start_utc="2026-10-25T23:00:00+00:00",
+    )
+    assert counts["TK-ALL-DAY"] == 1
 
     connection.close()
     print("task overdue smoke test passed")
