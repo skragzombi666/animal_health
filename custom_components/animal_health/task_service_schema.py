@@ -6,6 +6,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.service import async_set_service_schema
 
 from .const import DOMAIN
+from .task_record_descriptions import task_record_descriptions
 from .task_service_descriptions import task_service_descriptions
 
 _GERMAN_COUNTRIES = {"AT", "CH", "DE", "LI"}
@@ -58,6 +59,7 @@ def _replace_field(
 def async_setup_task_service_descriptions(hass: HomeAssistant) -> None:
     language = _task_language(hass)
     descriptions = task_service_descriptions(language)
+    descriptions.update(task_record_descriptions(language))
     german = language.startswith("de")
 
     _replace_field(
@@ -67,11 +69,11 @@ def async_setup_task_service_descriptions(hass: HomeAssistant) -> None:
         {
             "name": "Tiere" if german else "Animals",
             "description": (
-                "Für eine tierbezogene Aufgabe ein oder mehrere Tiere auswählen. "
-                "Für eine allgemeine Aufgabe leer lassen."
+                "Für eine tierbezogene Erinnerungsaufgabe ein oder mehrere Tiere auswählen. "
+                "Für fachlich verknüpfte Aufgaben die Aktion «Strukturierte Aufgabe anlegen» verwenden."
                 if german
-                else "Select one or more animals for an animal-specific task. "
-                "Leave empty for a general task."
+                else "Select one or more animals for an animal-specific reminder. "
+                "Use Create structured task for record-linked tasks."
             ),
             "selector": _multiple_animal_selector(),
         },
