@@ -61,6 +61,7 @@ def _initialize_sync(database_path: Path) -> None:
 
             DROP TRIGGER IF EXISTS trg_task_occurrence_plan_insert;
             DROP TRIGGER IF EXISTS trg_task_occurrence_plan_resolve;
+            DROP TRIGGER IF EXISTS trg_record_task_completion_guard;
 
             CREATE TRIGGER trg_task_occurrence_plan_insert
             AFTER INSERT ON task_occurrences
@@ -80,6 +81,27 @@ def _initialize_sync(database_path: Path) -> None:
                     NEW.updated_at
                 FROM task_record_configs AS config
                 WHERE config.task_id = NEW.task_id;
+            END;
+
+            CREATE TRIGGER trg_record_task_completion_guard
+            BEFORE UPDATE OF status ON task_occurrences
+            WHEN NEW.status = 'completed'
+              AND EXISTS (
+                  SELECT 1
+                  FROM task_record_configs AS config
+                  WHERE config.task_id = NEW.task_id
+                    AND config.task_kind <> 'reminder'
+              )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM events AS event
+                  WHERE event.task_occurrence_id = NEW.id
+              )
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'Record-linked task occurrences must be completed through their record action'
+                );
             END;
 
             CREATE TRIGGER trg_task_occurrence_plan_resolve
