@@ -58,6 +58,52 @@ def _initialize_sync(database_path: Path) -> None:
             CREATE UNIQUE INDEX IF NOT EXISTS idx_events_task_occurrence_unique
                 ON events(task_occurrence_id)
                 WHERE task_occurrence_id IS NOT NULL;
+
+            CREATE TRIGGER IF NOT EXISTS trg_task_occurrence_plan_insert
+            AFTER INSERT ON task_occurrences
+            BEGIN
+                INSERT OR IGNORE INTO task_occurrence_plans (
+                    occurrence_id,
+                    planned_json,
+                    resolved_at,
+                    created_at,
+                    updated_at
+                )
+                SELECT
+                    NEW.id,
+                    COALESCE(config.template_json, '{}'),
+                    NULL,
+                    NEW.created_at,
+                    NEW.updated_at
+                FROM tasks AS task
+                LEFT JOIN task_record_configs AS config ON config.task_id = task.id
+                WHERE task.id = NEW.task_id;
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_task_occurrence_plan_resolve
+            AFTER UPDATE OF status, completed_at, updated_at ON task_occurrences
+            WHEN NEW.status IN ('completed', 'skipped', 'cancelled')
+            BEGIN
+                INSERT INTO task_occurrence_plans (
+                    occurrence_id,
+                    planned_json,
+                    resolved_at,
+                    created_at,
+                    updated_at
+                )
+                SELECT
+                    NEW.id,
+                    COALESCE(config.template_json, '{}'),
+                    COALESCE(NEW.completed_at, NEW.updated_at),
+                    NEW.created_at,
+                    NEW.updated_at
+                FROM tasks AS task
+                LEFT JOIN task_record_configs AS config ON config.task_id = task.id
+                WHERE task.id = NEW.task_id
+                ON CONFLICT(occurrence_id) DO UPDATE SET
+                    resolved_at = excluded.resolved_at,
+                    updated_at = excluded.updated_at;
+            END;
             """
         )
         connection.execute(
