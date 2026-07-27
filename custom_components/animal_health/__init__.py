@@ -12,6 +12,8 @@ from .coordinator import AnimalHealthCoordinator
 from .database import AnimalHealthDatabase
 from .runtime import AnimalHealthRuntimeData
 from .services import async_setup_services
+from .task_record_schema import async_initialize_task_record_schema
+from .task_record_services import async_setup_task_record_services
 from .task_service_schema import async_setup_task_service_descriptions
 from .task_services import async_setup_task_services
 
@@ -28,6 +30,7 @@ type AnimalHealthConfigEntry = ConfigEntry[AnimalHealthRuntimeData]
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_services(hass)
     async_setup_task_services(hass)
+    async_setup_task_record_services(hass)
     async_setup_task_service_descriptions(hass)
     return True
 
@@ -36,6 +39,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
     database_path = Path(hass.config.path(DATABASE_NAME))
     database = AnimalHealthDatabase(hass, database_path)
     await database.initialize()
+    await async_initialize_task_record_schema(hass)
 
     coordinator = AnimalHealthCoordinator(hass, database)
     await coordinator.async_config_entry_first_refresh()
