@@ -1,7 +1,7 @@
 DOMAIN = "animal_health"
 NAME = "Animal Health"
 DATABASE_NAME = "animal_health.db"
-DATABASE_SCHEMA_VERSION = 3
+DATABASE_SCHEMA_VERSION = 4
 
 ANIMAL_STATUS_ACTIVE = "active"
 ANIMAL_STATUS_MISSING = "missing"
