@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, time, timedelta
-from typing import Any
+from typing import Any, cast
 
 import voluptuous as vol
 
@@ -10,8 +10,10 @@ from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, Supp
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN
+from .runtime import AnimalHealthRuntimeData
 from .task_store import (
     OCCURRENCE_CANCELLED,
     OCCURRENCE_COMPLETED,
@@ -24,6 +26,7 @@ from .task_store import (
     TASK_SCOPE_ANIMAL,
     TASK_SCOPE_GENERAL,
     TASK_SCOPES,
+    TaskOccurrenceRecord,
     TaskStore,
 )
 
@@ -41,6 +44,8 @@ ATTR_TASK_ID = "task_id"
 ATTR_OCCURRENCE_ID = "occurrence_id"
 ATTR_TASK_SCOPE = "task_scope"
 ATTR_DEVICE_ID = "device_id"
+ATTR_DEVICE_IDS = "device_ids"
+ATTR_ENTITY_IDS = "entity_ids"
 ATTR_TITLE = "title"
 ATTR_DESCRIPTION = "description"
 ATTR_RECURRENCE_TYPE = "recurrence_type"
@@ -60,6 +65,9 @@ ATTR_INCLUDE_GENERAL = "include_general"
 ATTR_LIMIT = "limit"
 ATTR_NOTES = "notes"
 
+_TASK_SWITCH_UNIQUE_ID_PREFIX = "task_active_"
+_INTERNAL_FILTER_LIMIT = 10000
+
 
 def _required_text(value: Any) -> str:
     text = cv.string(value).strip()
@@ -73,6 +81,16 @@ def _optional_text(value: Any) -> str | None:
         return None
     text = cv.string(value).strip()
     return text or None
+
+
+def _text_list(value: Any) -> list[str]:
+    values = cv.ensure_list(value)
+    result: list[str] = []
+    for item in values:
+        text = _required_text(item)
+        if text not in result:
+            result.append(text)
+    return result
 
 
 def _date_value(value: Any) -> date:
@@ -107,6 +125,7 @@ CREATE_TASK_SCHEMA = vol.Schema(
             (TASK_SCOPE_ANIMAL, TASK_SCOPE_GENERAL)
         ),
         vol.Optional(ATTR_DEVICE_ID): _required_text,
+        vol.Optional(ATTR_DEVICE_IDS): _text_list,
         vol.Required(ATTR_TITLE): _required_text,
         vol.Optional(ATTR_DESCRIPTION): _optional_text,
         vol.Required(ATTR_RECURRENCE_TYPE): vol.In(RECURRENCE_TYPES),
@@ -135,6 +154,7 @@ LIST_DUE_TASKS_SCHEMA = vol.Schema(
     {
         vol.Optional(ATTR_THROUGH_DATE): _date_value,
         vol.Optional(ATTR_DEVICE_ID): _required_text,
+        vol.Optional(ATTR_DEVICE_IDS): _text_list,
         vol.Optional(ATTR_INCLUDE_GENERAL, default=True): cv.boolean,
         vol.Optional(ATTR_LIMIT, default=200): vol.All(
             vol.Coerce(int),
@@ -182,7 +202,8 @@ UPDATE_TASK_SCHEMA = vol.Schema(
 
 SET_TASK_ACTIVE_SCHEMA = vol.Schema(
     {
-        vol.Required(ATTR_TASK_ID): _required_text,
+        vol.Optional(ATTR_TASK_ID): _required_text,
+        vol.Optional(ATTR_ENTITY_IDS): _text_list,
         vol.Required(ATTR_IS_ACTIVE): cv.boolean,
     }
 )
@@ -195,12 +216,11 @@ OCCURRENCE_ACTION_SCHEMA = vol.Schema(
 )
 
 
-def _ensure_integration_loaded(hass: HomeAssistant) -> None:
-    if not any(
-        entry.state is ConfigEntryState.LOADED
-        for entry in hass.config_entries.async_entries(DOMAIN)
-    ):
-        raise ServiceValidationError("Animal Health is not loaded")
+def _runtime_data(hass: HomeAssistant) -> AnimalHealthRuntimeData:
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        if entry.state is ConfigEntryState.LOADED:
+            return cast(AnimalHealthRuntimeData, entry.runtime_data)
+    raise ServiceValidationError("Animal Health is not loaded")
 
 
 def _animal_id_from_device(hass: HomeAssistant, device_id: str) -> str:
@@ -208,9 +228,30 @@ def _animal_id_from_device(hass: HomeAssistant, device_id: str) -> str:
     if device is None:
         raise ServiceValidationError("The selected animal device no longer exists")
     for identifier_domain, identifier in device.identifiers:
-        if identifier_domain == DOMAIN:
+        if identifier_domain == DOMAIN and identifier != "general_tasks":
             return identifier
     raise ServiceValidationError("The selected device is not an Animal Health animal")
+
+
+def _selected_device_ids(data: dict[str, Any]) -> list[str]:
+    selected: list[str] = []
+    legacy_device_id = data.get(ATTR_DEVICE_ID)
+    if legacy_device_id is not None:
+        selected.append(legacy_device_id)
+    for device_id in data.get(ATTR_DEVICE_IDS, []):
+        if device_id not in selected:
+            selected.append(device_id)
+    return selected
+
+
+def _animal_ids_from_devices(
+    hass: HomeAssistant,
+    data: dict[str, Any],
+) -> list[str]:
+    return [
+        _animal_id_from_device(hass, device_id)
+        for device_id in _selected_device_ids(data)
+    ]
 
 
 def _optional_animal_id(hass: HomeAssistant, data: dict[str, Any]) -> str | None:
@@ -218,18 +259,21 @@ def _optional_animal_id(hass: HomeAssistant, data: dict[str, Any]) -> str | None
     return _animal_id_from_device(hass, device_id) if device_id else None
 
 
-def _create_scope_animal_id(hass: HomeAssistant, data: dict[str, Any]) -> str | None:
+def _create_scope_animal_ids(
+    hass: HomeAssistant,
+    data: dict[str, Any],
+) -> list[str | None]:
     scope = data[ATTR_TASK_SCOPE]
-    device_id = data.get(ATTR_DEVICE_ID)
+    animal_ids = _animal_ids_from_devices(hass, data)
     if scope == TASK_SCOPE_ANIMAL:
-        if device_id is None:
+        if not animal_ids:
             raise ServiceValidationError(
-                "An animal must be selected for an animal-specific task"
+                "At least one animal must be selected for an animal-specific task"
             )
-        return _animal_id_from_device(hass, device_id)
-    if device_id is not None:
-        raise ServiceValidationError("Do not select an animal for a general task")
-    return None
+        return list(animal_ids)
+    if animal_ids:
+        raise ServiceValidationError("Do not select animals for a general task")
+    return [None]
 
 
 def _validate_scope_filter(scope: str, animal_id: str | None) -> None:
@@ -239,34 +283,121 @@ def _validate_scope_filter(scope: str, animal_id: str | None) -> None:
         )
 
 
-def async_setup_task_services(hass: HomeAssistant) -> None:
-    store = TaskStore(hass)
-
-    async def handle_create_task(call: ServiceCall) -> ServiceResponse:
-        _ensure_integration_loaded(hass)
-        animal_id = _create_scope_animal_id(hass, call.data)
-        try:
-            task = await store.create_task(
-                animal_id=animal_id,
-                title=call.data[ATTR_TITLE],
-                description=call.data.get(ATTR_DESCRIPTION),
-                recurrence_type=call.data[ATTR_RECURRENCE_TYPE],
-                recurrence_interval=call.data[ATTR_RECURRENCE_INTERVAL],
-                start_date=call.data[ATTR_START_DATE],
-                end_date=call.data.get(ATTR_END_DATE),
-                due_time=call.data.get(ATTR_DUE_TIME),
+def _task_ids_from_entities(
+    hass: HomeAssistant,
+    entity_ids: list[str],
+) -> list[str]:
+    registry = er.async_get(hass)
+    task_ids: list[str] = []
+    for entity_id in entity_ids:
+        entry = registry.async_get(entity_id)
+        if (
+            entry is None
+            or entry.domain != "switch"
+            or entry.platform != DOMAIN
+            or not entry.unique_id.startswith(_TASK_SWITCH_UNIQUE_ID_PREFIX)
+        ):
+            raise ServiceValidationError(
+                f"The selected entity is not an Animal Health task switch: {entity_id}"
             )
+        task_id = entry.unique_id.removeprefix(_TASK_SWITCH_UNIQUE_ID_PREFIX)
+        if task_id not in task_ids:
+            task_ids.append(task_id)
+    return task_ids
+
+
+async def _list_due_for_animals(
+    store: TaskStore,
+    *,
+    through_date: date,
+    animal_ids: list[str],
+    include_general: bool,
+    limit: int,
+) -> list[TaskOccurrenceRecord]:
+    occurrences: dict[str, TaskOccurrenceRecord] = {}
+
+    if animal_ids:
+        for animal_id in animal_ids:
+            animal_occurrences = await store.list_due_occurrences(
+                through_date=through_date,
+                animal_id=animal_id,
+                include_general=False,
+                limit=_INTERNAL_FILTER_LIMIT,
+            )
+            occurrences.update(
+                (occurrence.id, occurrence) for occurrence in animal_occurrences
+            )
+        if include_general:
+            all_occurrences = await store.list_due_occurrences(
+                through_date=through_date,
+                animal_id=None,
+                include_general=True,
+                limit=_INTERNAL_FILTER_LIMIT,
+            )
+            occurrences.update(
+                (occurrence.id, occurrence)
+                for occurrence in all_occurrences
+                if occurrence.animal_id is None
+            )
+    else:
+        all_occurrences = await store.list_due_occurrences(
+            through_date=through_date,
+            animal_id=None,
+            include_general=True,
+            limit=_INTERNAL_FILTER_LIMIT,
+        )
+        occurrences.update(
+            (occurrence.id, occurrence)
+            for occurrence in all_occurrences
+            if include_general or occurrence.animal_id is not None
+        )
+
+    return sorted(
+        occurrences.values(),
+        key=lambda occurrence: (
+            occurrence.scheduled_for,
+            occurrence.task_title.casefold(),
+            occurrence.id,
+        ),
+    )[:limit]
+
+
+def async_setup_task_services(hass: HomeAssistant) -> None:
+    async def handle_create_task(call: ServiceCall) -> ServiceResponse:
+        runtime_data = _runtime_data(hass)
+        store = runtime_data.coordinator.task_store
+        task_animal_ids = _create_scope_animal_ids(hass, call.data)
+        tasks = []
+        try:
+            for animal_id in task_animal_ids:
+                tasks.append(
+                    await store.create_task(
+                        animal_id=animal_id,
+                        title=call.data[ATTR_TITLE],
+                        description=call.data.get(ATTR_DESCRIPTION),
+                        recurrence_type=call.data[ATTR_RECURRENCE_TYPE],
+                        recurrence_interval=call.data[ATTR_RECURRENCE_INTERVAL],
+                        start_date=call.data[ATTR_START_DATE],
+                        end_date=call.data.get(ATTR_END_DATE),
+                        due_time=call.data.get(ATTR_DUE_TIME),
+                    )
+                )
         except KeyError as err:
             raise ServiceValidationError(
                 "The selected animal no longer exists"
             ) from err
         except ValueError as err:
             raise ServiceValidationError(str(err)) from err
-        response = {"task": task.as_dict(store.timezone)}
+        await runtime_data.coordinator.async_request_refresh()
+        task_data = [task.as_dict(store.timezone) for task in tasks]
+        response: dict[str, Any] = {"tasks": task_data}
+        if len(task_data) == 1:
+            response["task"] = task_data[0]
         return response if call.return_response else None
 
     async def handle_list_tasks(call: ServiceCall) -> ServiceResponse:
-        _ensure_integration_loaded(hass)
+        runtime_data = _runtime_data(hass)
+        store = runtime_data.coordinator.task_store
         animal_id = _optional_animal_id(hass, call.data)
         scope = call.data[ATTR_TASK_SCOPE]
         _validate_scope_filter(scope, animal_id)
@@ -282,13 +413,15 @@ def async_setup_task_services(hass: HomeAssistant) -> None:
         return {"tasks": [task.as_dict(store.timezone) for task in tasks]}
 
     async def handle_list_due_tasks(call: ServiceCall) -> ServiceResponse:
-        _ensure_integration_loaded(hass)
-        animal_id = _optional_animal_id(hass, call.data)
+        runtime_data = _runtime_data(hass)
+        store = runtime_data.coordinator.task_store
+        animal_ids = _animal_ids_from_devices(hass, call.data)
         through_date = call.data.get(ATTR_THROUGH_DATE, store.local_today())
         try:
-            occurrences = await store.list_due_occurrences(
+            occurrences = await _list_due_for_animals(
+                store,
                 through_date=through_date,
-                animal_id=animal_id,
+                animal_ids=animal_ids,
                 include_general=call.data[ATTR_INCLUDE_GENERAL],
                 limit=call.data[ATTR_LIMIT],
             )
@@ -296,13 +429,16 @@ def async_setup_task_services(hass: HomeAssistant) -> None:
             raise ServiceValidationError(str(err)) from err
         return {
             "through_date": through_date.isoformat(),
+            "animal_ids": animal_ids,
+            "include_general": call.data[ATTR_INCLUDE_GENERAL],
             "occurrences": [
                 occurrence.as_dict(store.timezone) for occurrence in occurrences
             ],
         }
 
     async def handle_list_task_occurrences(call: ServiceCall) -> ServiceResponse:
-        _ensure_integration_loaded(hass)
+        runtime_data = _runtime_data(hass)
+        store = runtime_data.coordinator.task_store
         animal_id = _optional_animal_id(hass, call.data)
         scope = call.data[ATTR_TASK_SCOPE]
         _validate_scope_filter(scope, animal_id)
@@ -331,7 +467,8 @@ def async_setup_task_services(hass: HomeAssistant) -> None:
         }
 
     async def handle_update_task(call: ServiceCall) -> ServiceResponse:
-        _ensure_integration_loaded(hass)
+        runtime_data = _runtime_data(hass)
+        store = runtime_data.coordinator.task_store
         task_id = call.data[ATTR_TASK_ID]
         current = await store.get_task(task_id)
         if current is None:
@@ -394,26 +531,49 @@ def async_setup_task_services(hass: HomeAssistant) -> None:
             ) from err
         except ValueError as err:
             raise ServiceValidationError(str(err)) from err
+        await runtime_data.coordinator.async_request_refresh()
         response = {"task": task.as_dict(store.timezone)}
         return response if call.return_response else None
 
     async def handle_set_task_active(call: ServiceCall) -> ServiceResponse:
-        _ensure_integration_loaded(hass)
+        runtime_data = _runtime_data(hass)
+        store = runtime_data.coordinator.task_store
+        task_ids: list[str] = []
+        if task_id := call.data.get(ATTR_TASK_ID):
+            task_ids.append(task_id)
+        for task_id in _task_ids_from_entities(
+            hass,
+            call.data.get(ATTR_ENTITY_IDS, []),
+        ):
+            if task_id not in task_ids:
+                task_ids.append(task_id)
+        if not task_ids:
+            raise ServiceValidationError("Select at least one task")
+
+        tasks = []
         try:
-            task = await store.set_task_active(
-                call.data[ATTR_TASK_ID],
-                call.data[ATTR_IS_ACTIVE],
-            )
+            for task_id in task_ids:
+                tasks.append(
+                    await store.set_task_active(
+                        task_id,
+                        call.data[ATTR_IS_ACTIVE],
+                    )
+                )
         except KeyError as err:
             raise ServiceValidationError("The selected task no longer exists") from err
-        response = {"task": task.as_dict(store.timezone)}
+        await runtime_data.coordinator.async_request_refresh()
+        task_data = [task.as_dict(store.timezone) for task in tasks]
+        response: dict[str, Any] = {"tasks": task_data}
+        if len(task_data) == 1:
+            response["task"] = task_data[0]
         return response if call.return_response else None
 
     async def _set_occurrence_status(
         call: ServiceCall,
         status: str,
     ) -> ServiceResponse:
-        _ensure_integration_loaded(hass)
+        runtime_data = _runtime_data(hass)
+        store = runtime_data.coordinator.task_store
         try:
             occurrence = await store.set_occurrence_status(
                 call.data[ATTR_OCCURRENCE_ID],
@@ -426,6 +586,7 @@ def async_setup_task_services(hass: HomeAssistant) -> None:
             ) from err
         except ValueError as err:
             raise ServiceValidationError(str(err)) from err
+        await runtime_data.coordinator.async_request_refresh()
         response = {"occurrence": occurrence.as_dict(store.timezone)}
         return response if call.return_response else None
 

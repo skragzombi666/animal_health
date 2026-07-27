@@ -15,7 +15,12 @@ from .services import async_setup_services
 from .task_service_schema import async_setup_task_service_descriptions
 from .task_services import async_setup_task_services
 
-PLATFORMS = [Platform.SENSOR, Platform.SELECT, Platform.BUTTON]
+PLATFORMS = [
+    Platform.SENSOR,
+    Platform.SELECT,
+    Platform.BUTTON,
+    Platform.SWITCH,
+]
 
 type AnimalHealthConfigEntry = ConfigEntry[AnimalHealthRuntimeData]
 
