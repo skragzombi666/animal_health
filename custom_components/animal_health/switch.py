@@ -61,6 +61,10 @@ class TaskActiveSwitch(
         return self.coordinator.tasks.get(self._task_id)
 
     @property
+    def task_metadata(self) -> dict[str, Any]:
+        return self.coordinator.task_metadata.get(self._task_id, {})
+
+    @property
     def available(self) -> bool:
         return super().available and self.task is not None
 
@@ -101,8 +105,11 @@ class TaskActiveSwitch(
         task = self.task
         if task is None:
             return {"task_id": self._task_id}
+        metadata = self.task_metadata
         return {
             "task_id": task.id,
+            "task_kind": metadata.get("task_kind", "reminder"),
+            "planned": metadata.get("planned", {}),
             "scope": TASK_SCOPE_ANIMAL if task.animal_id else TASK_SCOPE_GENERAL,
             "animal_id": task.animal_id,
             "animal_name": task.animal_name,
@@ -124,5 +131,5 @@ class TaskActiveSwitch(
                 else None
             ),
             "pending_count": task.pending_count,
-            "overdue_count": task.overdue_count,
+            "overdue_count": metadata.get("overdue_count", task.overdue_count),
         }
