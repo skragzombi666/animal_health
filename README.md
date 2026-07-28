@@ -192,21 +192,21 @@ The current Home Assistant action description is static. Typeable selectors can 
 
 The roadmap is provisional. Version numbers and scope may change as the integration develops.
 
-### 0.2.x — Project foundation
+### ✅ 0.2.x — Project foundation
 
 - Home Assistant and HACS-compatible repository structure
 - Versioned SQLite schema and migrations
 - Core data models for animals, events, tasks and task occurrences
 - Automated validation and initial schema tests
 
-### 0.3.x — Animal management
+### ✅ 0.3.x — Animal management
 
 - Create, edit, archive and restore animals
 - Extended animal profile data such as species, breed, color/markings, sex, birth date and arrival date
 - Stable identifiers and Home Assistant device registration for each animal
 - Separate factual status and administrative archival
 
-### 0.4.x — Health and care logbook
+### ✅ 0.4.x — Health and care logbook
 
 - Immutable event history for observations, treatments, medication, weight and other health-related records
 - Category-specific forms with validated values, units and option lists
@@ -214,7 +214,7 @@ The roadmap is provisional. Version numbers and scope may change as the integrat
 - Filtering and retrieval of an animal's history
 - Automatic status-change events
 
-### 0.5.x — Tasks and recurrences
+### ✅ 0.5.x — Tasks and recurrences
 
 - One-time, daily, weekly and monthly care tasks
 - Optional start and end dates
@@ -222,7 +222,7 @@ The roadmap is provisional. Version numbers and scope may change as the integrat
 - Completion, skipping and overdue state handling
 - Conversion of completed care actions into immutable logbook events
 
-### 0.6.x — Home Assistant entities and services
+### ✅ 0.6.x — Home Assistant entities and services
 
 - Entities for relevant animal status and upcoming care
 - Services or actions for creating records and completing tasks
@@ -244,6 +244,8 @@ The roadmap is provisional. Version numbers and scope may change as the integrat
 - Export of animal, event and task data
 - Controlled import and validation
 - Database diagnostics and migration safeguards
+- ? care logbook pdf export
+- ? AI assistance to fill logbook by scanning medicine and vet bills / reports
 
 ### 0.9.x — Beta and hardening
 
