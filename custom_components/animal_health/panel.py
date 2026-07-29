@@ -3,19 +3,23 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from aiohttp import web
+
 from homeassistant.components.frontend import (
     async_register_built_in_panel,
     async_remove_panel,
 )
-from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 
 PANEL_URL_PATH = "animal-health"
 PANEL_ELEMENT_NAME = "animal-health-panel"
-PANEL_STATIC_URL = f"/api/{DOMAIN}/frontend"
+PANEL_MODULE_URL = f"/api/{DOMAIN}/frontend/animal-health-panel.js"
 _PANEL_STATE_KEY = f"{DOMAIN}_panel"
+_FRONTEND_DIR = Path(__file__).parent / "frontend"
+_FRONTEND_PARTS = tuple(sorted(_FRONTEND_DIR.glob("animal-health-panel.part*.js")))
 
 
 def _integration_version() -> str:
@@ -24,24 +28,38 @@ def _integration_version() -> str:
         return str(json.load(file)["version"])
 
 
+def _frontend_source() -> str:
+    if not _FRONTEND_PARTS:
+        raise RuntimeError("Animal Health frontend source parts are missing")
+    return "".join(path.read_text(encoding="utf-8") for path in _FRONTEND_PARTS)
+
+
 INTEGRATION_VERSION = _integration_version()
 
 
-async def async_register_panel(hass: HomeAssistant) -> None:
-    """Register the Animal Health frontend panel and its static assets."""
-    state = hass.data.setdefault(_PANEL_STATE_KEY, {})
-    if not state.get("static_path_registered"):
-        frontend_path = Path(__file__).parent / "frontend"
-        await hass.http.async_register_static_paths(
-            [
-                StaticPathConfig(
-                    PANEL_STATIC_URL,
-                    str(frontend_path),
-                    cache_headers=False,
-                )
-            ]
+class AnimalHealthPanelView(HomeAssistantView):
+    """Serve the bundled Animal Health JavaScript module."""
+
+    url = PANEL_MODULE_URL
+    name = "api:animal_health:frontend"
+    requires_auth = False
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Return the assembled frontend module."""
+        source = await request.app["hass"].async_add_executor_job(_frontend_source)
+        return web.Response(
+            text=source,
+            content_type="application/javascript",
+            headers={"Cache-Control": "no-cache"},
         )
-        state["static_path_registered"] = True
+
+
+async def async_register_panel(hass: HomeAssistant) -> None:
+    """Register the Animal Health frontend panel and module endpoint."""
+    state = hass.data.setdefault(_PANEL_STATE_KEY, {})
+    if not state.get("frontend_view_registered"):
+        hass.http.register_view(AnimalHealthPanelView())
+        state["frontend_view_registered"] = True
 
     async_register_built_in_panel(
         hass,
@@ -52,15 +70,10 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         config={
             "_panel_custom": {
                 "name": PANEL_ELEMENT_NAME,
-                "module_url": (
-                    f"{PANEL_STATIC_URL}/animal-health-panel.js"
-                    f"?v={INTEGRATION_VERSION}"
-                ),
+                "module_url": f"{PANEL_MODULE_URL}?v={INTEGRATION_VERSION}",
                 "embed_iframe": False,
                 "trust_external": False,
-                "config": {
-                    "version": INTEGRATION_VERSION,
-                },
+                "config": {"version": INTEGRATION_VERSION},
             }
         },
         require_admin=False,
