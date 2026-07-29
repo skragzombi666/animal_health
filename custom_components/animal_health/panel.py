@@ -69,12 +69,12 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         sidebar_icon="mdi:paw",
         frontend_url_path=PANEL_URL_PATH,
         config={
+            "version": INTEGRATION_VERSION,
             "_panel_custom": {
                 "name": PANEL_ELEMENT_NAME,
                 "module_url": f"{PANEL_MODULE_URL}?v={INTEGRATION_VERSION}",
                 "embed_iframe": False,
                 "trust_external": False,
-                "config": {"version": INTEGRATION_VERSION},
             }
         },
         require_admin=False,
