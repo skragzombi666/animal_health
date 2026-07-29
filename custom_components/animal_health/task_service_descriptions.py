@@ -335,14 +335,32 @@ def _occurrence_action_de(name: str, description: str) -> dict[str, Any]:
         "name": name,
         "description": description,
         "fields": {
+            "task_entity_ids": {
+                "name": "Offene Aufgaben / Fälligkeiten",
+                "description": (
+                    "Eine oder mehrere offene Aufgaben auswählen. Pro Auswahl wird die früheste offene Fälligkeit verwendet."
+                ),
+                "required": False,
+                "selector": {
+                    "entity": {
+                        "filter": [{"integration": "animal_health", "domain": "switch"}],
+                        "multiple": True,
+                    }
+                },
+            },
+            "scheduled_date": {
+                "name": "Fälligkeitsdatum",
+                "description": "Optional auf ein bestimmtes Fälligkeitsdatum einschränken.",
+                "selector": {"date": {}},
+            },
             "occurrence_id": {
-                "name": "Fälligkeits-ID",
-                "required": True,
+                "name": "Fälligkeits-ID (Automation)",
+                "description": "Technische Alternative für bestehende Automationen.",
                 "selector": _text_selector(),
             },
             "notes": {
                 "name": "Notiz",
-                "description": "Optionale Bemerkung zur Bearbeitung.",
+                "description": "Eine gemeinsame Notiz für alle ausgewählten Fälligkeiten.",
                 "selector": _text_selector(multiline=True),
             },
         },
@@ -584,14 +602,29 @@ def _occurrence_action_en(name: str, description: str) -> dict[str, Any]:
         "name": name,
         "description": description,
         "fields": {
+            "task_entity_ids": {
+                "name": "Open tasks / occurrences",
+                "description": "Select one or more open tasks; the earliest open occurrence is used for each.",
+                "selector": {
+                    "entity": {
+                        "filter": [{"integration": "animal_health", "domain": "switch"}],
+                        "multiple": True,
+                    }
+                },
+            },
+            "scheduled_date": {
+                "name": "Scheduled date",
+                "description": "Optionally restrict selection to a date.",
+                "selector": {"date": {}},
+            },
             "occurrence_id": {
-                "name": "Occurrence ID",
-                "required": True,
+                "name": "Occurrence ID (automation)",
+                "description": "Technical alternative for existing automations.",
                 "selector": _text_selector(),
             },
             "notes": {
                 "name": "Notes",
-                "description": "Optional processing note.",
+                "description": "One shared note for all selected occurrences.",
                 "selector": _text_selector(multiline=True),
             },
         },
