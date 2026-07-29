@@ -1,7 +1,7 @@
 {
   "services": {
     "create_animal": {
-      "service": "mdi:paw-plus"
+      "service": "mdi:plus-circle-outline"
     },
     "update_animal": {
       "service": "mdi:paw"

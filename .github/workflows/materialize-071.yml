@@ -1,0 +1,41 @@
+name: Materialize 0.7.1 files
+
+on:
+  push:
+    branches:
+      - agent/animal-health-0.7.1
+    paths:
+      - ".build_chunks/**"
+      - ".github/workflows/materialize-071.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: agent/animal-health-0.7.1
+      - name: Materialize source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          materialize() {
+            local name="$1"
+            local target="$2"
+            mkdir -p "$(dirname "$target")"
+            cat ".build_chunks/${name}."* | base64 --decode > "$target"
+          }
+          materialize feature_store.py custom_components/animal_health/feature_store.py
+          materialize exports.py custom_components/animal_health/exports.py
+          materialize feature_api.py custom_components/animal_health/feature_api.py
+          materialize dashboard_frontend_smoke.py tests/dashboard_frontend_smoke.py
+          materialize feature_export_smoke.py tests/feature_export_smoke.py
+          rm -rf .build_chunks
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Materialize Animal Health 0.7.1 source files"
+          git push
