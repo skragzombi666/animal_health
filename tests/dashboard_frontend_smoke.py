@@ -30,6 +30,101 @@ def _panel_source() -> str:
     return "".join(_read(path) for path in parts)
 
 
+def _run_frontend_runtime_smoke(panel: str) -> None:
+    harness = r'''
+class MockShadowRoot {
+  constructor() {
+    this.listeners = new Map();
+    this.innerHTML = "";
+  }
+  addEventListener(type, listener) {
+    this.listeners.set(type, listener);
+  }
+  querySelector() {
+    return null;
+  }
+}
+globalThis.HTMLElement = class {
+  constructor() {
+    this.isConnected = true;
+    this.shadowRoot = null;
+  }
+  attachShadow() {
+    this.shadowRoot = new MockShadowRoot();
+    return this.shadowRoot;
+  }
+  toggleAttribute() {}
+  dispatchEvent() {}
+};
+globalThis.CustomEvent = class {};
+globalThis.customElements = {
+  elements: new Map(),
+  get(name) { return this.elements.get(name); },
+  define(name, constructor) { this.elements.set(name, constructor); },
+};
+'''
+    assertions = r'''
+const Panel = customElements.get("animal-health-panel");
+if (!Panel) throw new Error("Panel element was not registered");
+const panel = new Panel();
+panel.d = {
+  version: "0.7.0",
+  today: "2026-07-29",
+  summary: {
+    active_animals: 0,
+    overdue_tasks: 0,
+    today_tasks: 0,
+    pending_tasks: 0,
+  },
+  animals: [],
+  tasks: [],
+  occurrences: [],
+  events: [],
+};
+panel.c = {
+  animal_sexes: [],
+  animal_statuses: ["active"],
+  species: [],
+  breeds: [],
+  task_kinds: ["reminder"],
+  weight_units: ["kg"],
+  dose_units: ["mg"],
+  administration_routes: [],
+  symptoms: ["other"],
+  symptom_severities: ["moderate"],
+  vaccination_targets: [],
+  health_check_results: ["normal"],
+  medicine_names: [],
+  vaccine_names: [],
+};
+panel.connectedCallback();
+for (const eventType of ["click", "input", "change", "submit"]) {
+  if (!panel.shadowRoot.listeners.has(eventType)) {
+    throw new Error(`Missing ShadowRoot ${eventType} listener`);
+  }
+}
+panel.shadowRoot.listeners.get("click")({
+  composedPath: () => [{dataset: {action: "create-animal"}}],
+});
+if (panel.modal?.type !== "create-animal") {
+  throw new Error("Create-animal click did not open the dialog");
+}
+panel.shadowRoot.listeners.get("input")({
+  composedPath: () => [{dataset: {filter: ""}, value: "hen"}],
+});
+if (panel.filter !== "hen") {
+  throw new Error("Search input did not update the dashboard filter");
+}
+console.log("Animal Health dashboard runtime event validation passed");
+'''
+    with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:
+        file.write(harness)
+        file.write(panel)
+        file.write(assertions)
+        file.flush()
+        subprocess.run(["node", file.name], check=True)
+
+
 def main() -> None:
     panel = _panel_source()
     backend = _read(PANEL_BACKEND)
@@ -45,9 +140,13 @@ def main() -> None:
         file.flush()
         subprocess.run(["node", "--check", file.name], check=True)
 
+    _run_frontend_runtime_smoke(panel)
+
     assert 'customElements.define("animal-health-panel"' in panel
     assert 'const V="0.7.0",D="animal_health"' in panel
     assert "mdi:paw-plus" in panel
+    assert 'shadowRoot.addEventListener("click"' in panel
+    assert "shadowRoot.onclick" not in panel
     for task_kind in (
         "medication",
         "vaccination",
