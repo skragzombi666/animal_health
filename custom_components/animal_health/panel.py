@@ -11,6 +11,7 @@ from homeassistant.components.frontend import (
 )
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.http import KEY_HASS
 
 from .const import DOMAIN
 
@@ -46,7 +47,7 @@ class AnimalHealthPanelView(HomeAssistantView):
 
     async def get(self, request: web.Request) -> web.Response:
         """Return the assembled frontend module."""
-        source = await request.app["hass"].async_add_executor_job(_frontend_source)
+        source = await request.app[KEY_HASS].async_add_executor_job(_frontend_source)
         return web.Response(
             text=source,
             content_type="application/javascript",
