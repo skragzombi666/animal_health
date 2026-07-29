@@ -7,6 +7,7 @@ on:
     paths:
       - ".build_chunks/**"
       - ".github/workflows/materialize-071.yml"
+  workflow_dispatch:
 
 permissions:
   contents: write
