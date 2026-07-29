@@ -7,6 +7,12 @@ on:
     paths:
       - ".build_chunks/**"
       - ".github/workflows/materialize-071.yml"
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
   workflow_dispatch:
 
 permissions:
@@ -14,6 +20,7 @@ permissions:
 
 jobs:
   materialize:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -23,6 +30,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if ! compgen -G '.build_chunks/*' > /dev/null; then
+            echo 'No source chunks remain.'
+            exit 0
+          fi
           materialize() {
             local name="$1"
             local target="$2"
