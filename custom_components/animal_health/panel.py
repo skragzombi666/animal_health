@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -35,7 +36,13 @@ def _frontend_source() -> str:
     return "".join(path.read_text(encoding="utf-8") for path in _FRONTEND_PARTS)
 
 
+def _frontend_revision() -> str:
+    source = _frontend_source().encode("utf-8")
+    return hashlib.sha256(source).hexdigest()[:12]
+
+
 INTEGRATION_VERSION = _integration_version()
+FRONTEND_REVISION = _frontend_revision()
 
 
 class AnimalHealthPanelView(HomeAssistantView):
@@ -72,10 +79,12 @@ async def async_register_panel(hass: HomeAssistant) -> None:
             "version": INTEGRATION_VERSION,
             "_panel_custom": {
                 "name": PANEL_ELEMENT_NAME,
-                "module_url": f"{PANEL_MODULE_URL}?v={INTEGRATION_VERSION}",
+                "module_url": (
+                    f"{PANEL_MODULE_URL}?v={INTEGRATION_VERSION}-{FRONTEND_REVISION}"
+                ),
                 "embed_iframe": False,
                 "trust_external": False,
-            }
+            },
         },
         require_admin=False,
         update=True,
