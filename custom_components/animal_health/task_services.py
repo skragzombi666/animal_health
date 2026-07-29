@@ -42,6 +42,8 @@ SERVICE_CANCEL_TASK_OCCURRENCE = "cancel_task_occurrence"
 
 ATTR_TASK_ID = "task_id"
 ATTR_OCCURRENCE_ID = "occurrence_id"
+ATTR_TASK_ENTITY_IDS = "task_entity_ids"
+ATTR_SCHEDULED_DATE = "scheduled_date"
 ATTR_TASK_SCOPE = "task_scope"
 ATTR_DEVICE_ID = "device_id"
 ATTR_DEVICE_IDS = "device_ids"
@@ -210,7 +212,9 @@ SET_TASK_ACTIVE_SCHEMA = vol.Schema(
 
 OCCURRENCE_ACTION_SCHEMA = vol.Schema(
     {
-        vol.Required(ATTR_OCCURRENCE_ID): _required_text,
+        vol.Optional(ATTR_OCCURRENCE_ID): _required_text,
+        vol.Optional(ATTR_TASK_ENTITY_IDS): _text_list,
+        vol.Optional(ATTR_SCHEDULED_DATE): _date_value,
         vol.Optional(ATTR_NOTES): _optional_text,
     }
 )
@@ -568,18 +572,68 @@ def async_setup_task_services(hass: HomeAssistant) -> None:
             response["task"] = task_data[0]
         return response if call.return_response else None
 
+    async def _resolve_occurrence_ids(call: ServiceCall, store: TaskStore) -> list[str]:
+        direct_id = call.data.get(ATTR_OCCURRENCE_ID)
+        entity_ids = call.data.get(ATTR_TASK_ENTITY_IDS, [])
+        if direct_id and entity_ids:
+            raise ServiceValidationError(
+                "Use either a task selection or an occurrence ID, not both"
+            )
+        if direct_id:
+            return [str(direct_id)]
+        if not entity_ids:
+            raise ServiceValidationError(
+                "Select one or more open tasks or enter an occurrence ID"
+            )
+
+        today = store.local_today()
+        start_date = today - timedelta(days=3660)
+        end_date = today + timedelta(days=3660)
+        scheduled_date = call.data.get(ATTR_SCHEDULED_DATE)
+        occurrence_ids: list[str] = []
+        for task_id in _task_ids_from_entities(hass, entity_ids):
+            occurrences = await store.list_occurrences(
+                task_id=task_id,
+                scope=TASK_SCOPE_ALL,
+                animal_id=None,
+                status=OCCURRENCE_PENDING,
+                start_date=start_date,
+                end_date=end_date,
+                include_general=True,
+                limit=100,
+            )
+            if scheduled_date is not None:
+                occurrences = [
+                    occurrence
+                    for occurrence in occurrences
+                    if occurrence.scheduled_for.astimezone(store.timezone).date()
+                    == scheduled_date
+                ]
+            if not occurrences:
+                raise ServiceValidationError(
+                    "No matching open occurrence exists for one of the selected tasks"
+                )
+            selected = min(occurrences, key=lambda occurrence: occurrence.scheduled_for)
+            if selected.id not in occurrence_ids:
+                occurrence_ids.append(selected.id)
+        return occurrence_ids
+
     async def _set_occurrence_status(
         call: ServiceCall,
         status: str,
     ) -> ServiceResponse:
         runtime_data = _runtime_data(hass)
         store = runtime_data.coordinator.task_store
+        occurrence_ids = await _resolve_occurrence_ids(call, store)
+        occurrences: list[dict[str, Any]] = []
         try:
-            occurrence = await store.set_occurrence_status(
-                call.data[ATTR_OCCURRENCE_ID],
-                status,
-                call.data.get(ATTR_NOTES),
-            )
+            for occurrence_id in occurrence_ids:
+                occurrence = await store.set_occurrence_status(
+                    occurrence_id,
+                    status,
+                    call.data.get(ATTR_NOTES),
+                )
+                occurrences.append(occurrence.as_dict(store.timezone))
         except KeyError as err:
             raise ServiceValidationError(
                 "The selected task occurrence no longer exists"
@@ -587,7 +641,9 @@ def async_setup_task_services(hass: HomeAssistant) -> None:
         except ValueError as err:
             raise ServiceValidationError(str(err)) from err
         await runtime_data.coordinator.async_request_refresh()
-        response = {"occurrence": occurrence.as_dict(store.timezone)}
+        response: dict[str, Any] = {"occurrences": occurrences}
+        if len(occurrences) == 1:
+            response["occurrence"] = occurrences[0]
         return response if call.return_response else None
 
     async def handle_complete_occurrence(call: ServiceCall) -> ServiceResponse:
