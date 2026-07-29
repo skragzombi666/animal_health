@@ -179,6 +179,57 @@ def _selected_device_ids(data: dict[str, Any]) -> list[str]:
     return selected
 
 
+def _validate_planned_fields(task_kind: str, data: dict[str, Any]) -> None:
+    allowed_by_kind = {
+        "reminder": set(),
+        "weight": set(),
+        "medication": {
+            ATTR_PLANNED_MEDICATION_NAME,
+            ATTR_PLANNED_DOSE,
+            ATTR_PLANNED_DOSE_UNIT,
+            ATTR_PLANNED_ROUTE,
+        },
+        "vaccination": {
+            ATTR_PLANNED_VACCINATION_TARGETS,
+            ATTR_PLANNED_CUSTOM_VACCINATION_TARGET,
+            ATTR_PLANNED_VACCINE_NAME,
+            ATTR_PLANNED_ANTIGEN,
+            ATTR_PLANNED_VACCINATION_DOSE,
+            ATTR_PLANNED_VACCINATION_DOSE_UNIT,
+            ATTR_PLANNED_VACCINATION_ROUTE,
+        },
+        "health_check": {ATTR_PLANNED_CHECK_FOCUS},
+        "care": {ATTR_PLANNED_CARE_ACTION},
+        "veterinary_visit": {ATTR_PLANNED_VISIT_REASON, ATTR_PLANNED_PROVIDER},
+    }
+    planned_keys = {
+        key
+        for key in (
+            ATTR_PLANNED_MEDICATION_NAME,
+            ATTR_PLANNED_DOSE,
+            ATTR_PLANNED_DOSE_UNIT,
+            ATTR_PLANNED_ROUTE,
+            ATTR_PLANNED_VACCINATION_TARGETS,
+            ATTR_PLANNED_CUSTOM_VACCINATION_TARGET,
+            ATTR_PLANNED_VACCINE_NAME,
+            ATTR_PLANNED_ANTIGEN,
+            ATTR_PLANNED_VACCINATION_DOSE,
+            ATTR_PLANNED_VACCINATION_DOSE_UNIT,
+            ATTR_PLANNED_VACCINATION_ROUTE,
+            ATTR_PLANNED_CHECK_FOCUS,
+            ATTR_PLANNED_CARE_ACTION,
+            ATTR_PLANNED_VISIT_REASON,
+            ATTR_PLANNED_PROVIDER,
+        )
+        if data.get(key) not in (None, "", [])
+    }
+    ignored = planned_keys - allowed_by_kind.get(task_kind, set())
+    if ignored:
+        raise ServiceValidationError(
+            "Die angegebenen Planungsfelder passen nicht zur gewählten Aufgabenart: "
+            + ", ".join(sorted(ignored))
+        )
+
 def async_setup_task_record_creation(hass: HomeAssistant) -> None:
     async def handle_create_record_task(call: ServiceCall) -> ServiceResponse:
         runtime_data = _runtime_data(hass)
@@ -208,6 +259,7 @@ def async_setup_task_record_creation(hass: HomeAssistant) -> None:
             ]
 
         try:
+            _validate_planned_fields(task_kind, call.data)
             template = build_task_template(
                 task_kind,
                 call.data,
