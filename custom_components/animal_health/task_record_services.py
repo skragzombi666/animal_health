@@ -47,7 +47,6 @@ from .const import (
     WEIGHT_UNITS,
 )
 from .runtime import AnimalHealthRuntimeData
-from .task_kinds import task_kind_label, task_language
 from .task_records import (
     ATTR_CARE_ACTION,
     ATTR_CHECK_RESULT,
@@ -83,85 +82,26 @@ from .task_records import (
 ATTR_OCCURRENCE_ID = "occurrence_id"
 _TASK_SWITCH_UNIQUE_ID_PREFIX = "task_active_"
 
-_ERROR_MESSAGES = {
-    "integration_not_loaded": {
-        "de": "Animal Health ist nicht geladen.",
-        "en": "Animal Health is not loaded.",
-    },
-    "invalid_task_switch": {
-        "de": "Die ausgewählte Entität ist kein Animal-Health-Aufgabenschalter.",
-        "en": "The selected entity is not an Animal Health task switch.",
-    },
-    "task_and_occurrence_mutually_exclusive": {
-        "de": "Entweder eine Aufgabe oder eine Fälligkeits-ID angeben, nicht beides.",
-        "en": "Use either a task selection or an occurrence ID, not both.",
-    },
-    "choose_task_or_occurrence": {
-        "de": "Eine Aufgabe auswählen oder eine Fälligkeits-ID eingeben.",
-        "en": "Select a task or enter an occurrence ID.",
-    },
-    "selected_task_missing": {
-        "de": "Die ausgewählte Aufgabe existiert nicht mehr.",
-        "en": "The selected task no longer exists.",
-    },
-    "no_matching_open_occurrence": {
-        "de": "Für die ausgewählte Aufgabe gibt es keine passende offene Fälligkeit.",
-        "en": "No matching open occurrence exists for the selected task.",
-    },
-    "occurrence_missing": {
-        "de": "Die ausgewählte Aufgabenfälligkeit existiert nicht mehr.",
-        "en": "The selected task occurrence no longer exists.",
-    },
-    "wrong_task_kind": {
-        "de": (
-            "Die ausgewählte Aufgabe hat die Aufgabenart „{actual_kind}“, "
-            "erwartet wird „{expected_kind}“."
-        ),
-        "en": (
-            "The selected task has the kind “{actual_kind}”; "
-            "“{expected_kind}” is required."
-        ),
-    },
-    "occurrence_not_pending": {
-        "de": (
-            "Die ausgewählte Aufgabenfälligkeit ist bereits „{status}“ "
-            "und nicht mehr offen."
-        ),
-        "en": (
-            "The selected task occurrence is already “{status}” "
-            "and is no longer pending."
-        ),
-    },
-}
-
-
 def _validation_error(
-    hass: HomeAssistant,
+    _hass: HomeAssistant,
     message_key: str,
     **placeholders: str,
 ) -> ServiceValidationError:
-    language = task_language(
-        getattr(hass.config, "language", "en"),
-        getattr(hass.config, "country", None),
+    return ServiceValidationError(
+        translation_domain=DOMAIN,
+        translation_key=message_key,
+        translation_placeholders=placeholders,
     )
-    template = _ERROR_MESSAGES[message_key][language]
-    return ServiceValidationError(template.format(**placeholders))
 
 
 def _wrong_task_kind_error(
     hass: HomeAssistant,
-    actual_kind: str,
+    _actual_kind: str,
     expected_kind: str,
 ) -> ServiceValidationError:
-    language = task_language(
-        getattr(hass.config, "language", "en"),
-        getattr(hass.config, "country", None),
-    )
     return _validation_error(
         hass,
-        "wrong_task_kind",
-        actual_kind=task_kind_label(actual_kind, language),
-        expected_kind=task_kind_label(expected_kind, language),
+        f"wrong_task_kind_{expected_kind}",
     )
 
 
@@ -424,11 +364,7 @@ def async_setup_task_record_services(hass: HomeAssistant) -> None:
                 expected_kind,
             )
         if context["status"] != "pending":
-            raise _validation_error(
-                hass,
-                "occurrence_not_pending",
-                status=str(context["status"]),
-            )
+            raise _validation_error(hass, "occurrence_not_pending")
         return (
             occurrence_id,
             context,

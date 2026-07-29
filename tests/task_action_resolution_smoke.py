@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import json
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
@@ -16,17 +17,6 @@ def _load_task_kinds():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
-def _literal_assignment(tree: ast.Module, name: str) -> dict:
-    for node in tree.body:
-        if not isinstance(node, ast.Assign):
-            continue
-        if any(isinstance(target, ast.Name) and target.id == name for target in node.targets):
-            value = ast.literal_eval(node.value)
-            if isinstance(value, dict):
-                return value
-    raise AssertionError(f"Could not find literal assignment {name}")
 
 
 def _context_expected_kind(function: ast.AsyncFunctionDef) -> str:
@@ -55,9 +45,12 @@ def main() -> None:
     for task_kind, label in expected_labels.items():
         assert task_kinds.task_kind_label(task_kind, "de") == label
     assert task_kinds.task_language("de-CH", "CH") == "de"
-    assert task_kinds.task_language("en", "CH") == "en"
-    assert task_kinds.task_language(None, "CH") == "de"
+    for country in ("AT", "CH", "DE", "LI"):
+        assert task_kinds.task_language("en", country) == "en"
+        assert task_kinds.task_language(None, country) == "de"
     assert task_kinds.task_language("en", "US") == "en"
+    assert task_kinds.task_language(None, "GB") == "en"
+    assert task_kinds.task_language("de", "US") == "de"
 
     first = task_kinds.task_display_name(
         "Tiere wägen",
@@ -94,38 +87,32 @@ def main() -> None:
     for handler_name, expected_kind in expected_handlers.items():
         assert _context_expected_kind(handlers[handler_name]) == expected_kind
 
-    messages = _literal_assignment(tree, "_ERROR_MESSAGES")
-    expected_german = {
-        "invalid_task_switch": (
-            "Die ausgewählte Entität ist kein Animal-Health-Aufgabenschalter."
-        ),
-        "task_and_occurrence_mutually_exclusive": (
-            "Entweder eine Aufgabe oder eine Fälligkeits-ID angeben, nicht beides."
-        ),
-        "choose_task_or_occurrence": (
-            "Eine Aufgabe auswählen oder eine Fälligkeits-ID eingeben."
-        ),
-        "no_matching_open_occurrence": (
-            "Für die ausgewählte Aufgabe gibt es keine passende offene Fälligkeit."
-        ),
-        "occurrence_missing": (
-            "Die ausgewählte Aufgabenfälligkeit existiert nicht mehr."
-        ),
-    }
-    for key, message in expected_german.items():
-        assert messages[key]["de"] == message
-    assert "{actual_kind}" in messages["wrong_task_kind"]["de"]
-    assert "{expected_kind}" in messages["wrong_task_kind"]["de"]
+    service_source = services_path.read_text(encoding="utf-8")
+    assert "translation_domain=DOMAIN" in service_source
+    assert "translation_key=message_key" in service_source
+    assert 'f"wrong_task_kind_{expected_kind}"' in service_source
 
-    creation_tree = ast.parse(
-        (COMPONENT_DIR / "task_record_creation.py").read_text(encoding="utf-8")
-    )
-    creation_messages = _literal_assignment(creation_tree, "_ERROR_MESSAGES")
-    assert creation_messages["general_task_requires_reminder"]["de"] == (
+    creation_source = (
+        COMPONENT_DIR / "task_record_creation.py"
+    ).read_text(encoding="utf-8")
+    assert "translation_domain=DOMAIN" in creation_source
+    assert "translation_key=message_key" in creation_source
+
+    with (COMPONENT_DIR / "strings.json").open(encoding="utf-8") as file:
+        english_exceptions = json.load(file)["exceptions"]
+    with (COMPONENT_DIR / "translations" / "de.json").open(
+        encoding="utf-8"
+    ) as file:
+        german_exceptions = json.load(file)["exceptions"]
+    assert set(english_exceptions) == set(german_exceptions)
+    assert german_exceptions["general_task_requires_reminder"]["message"] == (
         "Als allgemeine Aufgabe kann nur eine Erinnerung angelegt werden."
     )
-    assert creation_messages["invalid_animal_device"]["de"] == (
+    assert german_exceptions["invalid_animal_device"]["message"] == (
         "Das ausgewählte Gerät ist kein Animal-Health-Tier."
+    )
+    assert german_exceptions["wrong_task_kind_weight"]["message"] == (
+        "Die ausgewählte Aufgabe ist keine Gewichtsaufgabe."
     )
 
     switch_source = (COMPONENT_DIR / "switch.py").read_text(encoding="utf-8")

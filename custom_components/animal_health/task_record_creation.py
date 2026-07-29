@@ -18,7 +18,6 @@ from .const import (
     VACCINATION_TARGETS,
 )
 from .runtime import AnimalHealthRuntimeData
-from .task_kinds import task_language
 from .task_records import (
     ATTR_PLANNED_ANTIGEN,
     ATTR_PLANNED_CARE_ACTION,
@@ -60,47 +59,16 @@ ATTR_START_DATE = "start_date"
 ATTR_END_DATE = "end_date"
 ATTR_DUE_TIME = "due_time"
 
-_ERROR_MESSAGES = {
-    "integration_not_loaded": {
-        "de": "Animal Health ist nicht geladen.",
-        "en": "Animal Health is not loaded.",
-    },
-    "animal_device_missing": {
-        "de": "Das ausgewählte Tiergerät existiert nicht mehr.",
-        "en": "The selected animal device no longer exists.",
-    },
-    "invalid_animal_device": {
-        "de": "Das ausgewählte Gerät ist kein Animal-Health-Tier.",
-        "en": "The selected device is not an Animal Health animal.",
-    },
-    "general_task_with_animals": {
-        "de": "Für eine allgemeine Aufgabe dürfen keine Tiere ausgewählt werden.",
-        "en": "Do not select animals for a general task.",
-    },
-    "general_task_requires_reminder": {
-        "de": "Als allgemeine Aufgabe kann nur eine Erinnerung angelegt werden.",
-        "en": "Only a reminder may be created as a general task.",
-    },
-    "animal_task_requires_animal": {
-        "de": "Für eine tierbezogene Aufgabe mindestens ein Tier auswählen.",
-        "en": "Select at least one animal for an animal-specific task.",
-    },
-    "selected_animal_missing": {
-        "de": "Das ausgewählte Tier existiert nicht mehr.",
-        "en": "The selected animal no longer exists.",
-    },
-}
-
-
 def _validation_error(
-    hass: HomeAssistant,
+    _hass: HomeAssistant,
     message_key: str,
+    **placeholders: str,
 ) -> ServiceValidationError:
-    language = task_language(
-        getattr(hass.config, "language", "en"),
-        getattr(hass.config, "country", None),
+    return ServiceValidationError(
+        translation_domain=DOMAIN,
+        translation_key=message_key,
+        translation_placeholders=placeholders,
     )
-    return ServiceValidationError(_ERROR_MESSAGES[message_key][language])
 
 
 def _required_text(value: Any) -> str:
@@ -222,7 +190,11 @@ def _selected_device_ids(data: dict[str, Any]) -> list[str]:
     return selected
 
 
-def _validate_planned_fields(task_kind: str, data: dict[str, Any]) -> None:
+def _validate_planned_fields(
+    hass: HomeAssistant,
+    task_kind: str,
+    data: dict[str, Any],
+) -> None:
     allowed_by_kind = {
         "reminder": set(),
         "weight": set(),
@@ -268,10 +240,12 @@ def _validate_planned_fields(task_kind: str, data: dict[str, Any]) -> None:
     }
     ignored = planned_keys - allowed_by_kind.get(task_kind, set())
     if ignored:
-        raise ServiceValidationError(
-            "Die angegebenen Planungsfelder passen nicht zur gewählten Aufgabenart: "
-            + ", ".join(sorted(ignored))
+        raise _validation_error(
+            hass,
+            "planned_fields_mismatch",
+            fields=", ".join(sorted(ignored)),
         )
+
 
 def async_setup_task_record_creation(hass: HomeAssistant) -> None:
     async def handle_create_record_task(call: ServiceCall) -> ServiceResponse:
@@ -296,7 +270,7 @@ def async_setup_task_record_creation(hass: HomeAssistant) -> None:
             ]
 
         try:
-            _validate_planned_fields(task_kind, call.data)
+            _validate_planned_fields(hass, task_kind, call.data)
             template = build_task_template(
                 task_kind,
                 call.data,
