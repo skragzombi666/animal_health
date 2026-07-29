@@ -3,11 +3,15 @@
   "name": "Animal Health",
   "codeowners": [],
   "config_flow": true,
-  "dependencies": [],
+  "dependencies": [
+    "frontend",
+    "http",
+    "websocket_api"
+  ],
   "documentation": "https://github.com/skragzombi666/animal_health",
   "integration_type": "hub",
   "iot_class": "local_push",
   "requirements": [],
   "single_config_entry": true,
-  "version": "0.6.2"
+  "version": "0.7.0"
 }
