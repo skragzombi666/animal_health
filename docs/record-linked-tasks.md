@@ -1,6 +1,6 @@
 # Record-linked tasks
 
-Animal Health 0.6.0 links planned care tasks to the records created when the task is actually performed.
+Animal Health 0.6.2 links planned care tasks to the records created when the task is actually performed.
 
 ## Task kinds
 
@@ -59,6 +59,12 @@ For record-linked task kinds, one record action performs all required changes in
 5. mark the occurrence completed
 
 The unique task-occurrence link prevents duplicate logbook events for the same occurrence.
+
+## Execution form in 0.6.2
+
+Task switches are labelled with title, task kind and task ID so that tasks with the same title remain distinguishable. Each record action validates the selected task kind before resolving or changing an occurrence.
+
+Medication and vaccination planning and execution use the complete bundled catalogues. A custom product name can still be entered. Animal selectors only show actual animal devices, not the virtual general-tasks device.
 
 ## Skipped and cancelled occurrences
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .catalog import medicine_catalog_names, vaccine_catalog_names
 from .const import DOMAIN
 from .task_record_creation import SERVICE_CREATE_RECORD_TASK
 from .task_records import (
@@ -37,6 +38,7 @@ def _animal_selector() -> dict[str, Any]:
     return {
         "device": {
             "filter": [{"integration": DOMAIN}],
+            "entity": [{"integration": DOMAIN, "domain": "sensor"}],
             "multiple": True,
         }
     }
@@ -49,42 +51,6 @@ def _text(*, multiline: bool = False) -> dict[str, Any]:
 def _number() -> dict[str, Any]:
     return {"number": {"min": 0.001, "step": "any", "mode": "box"}}
 
-_MEDICATION_CATALOG = [
-    "Flubenol 5% ad us. vet.",
-    "Flubenol KH ad us. vet.",
-    "Baycox 2.5% ad us. vet.",
-    "Baycox 5% ad us. vet.",
-    "Metacam 1.5 mg/ml orale Suspension für Hunde",
-    "Metacam 0.5 mg/ml orale Suspension für Katzen",
-    "Panacur PetPaste ad us. vet.",
-    "Panacur Tabletten ad us. vet.",
-    "Milbemax Kautabletten für Hunde ad us. vet.",
-    "Milbemax Tabletten für Katzen ad us. vet.",
-    "Bravecto Plus Spot-on für Katzen ad us. vet.",
-    "Apoquel ad us. vet.",
-    "Easotic ad us. vet.",
-    "Optimmune Augensalbe ad us. vet.",
-    "Milteforan ad us. vet.",
-    "Bonqat 50 mg/ml ad us. vet.",
-    "Zycortal 25 mg/ml ad us. vet.",
-]
-
-_VACCINE_CATALOG = [
-    "Nobivac DHPPi ad us. vet.",
-    "Nobivac DHP ad us. vet.",
-    "Nobivac Pi ad us. vet.",
-    "Nobivac LEPTO 6 ad us. vet.",
-    "Nobivac RABIES ad us. vet.",
-    "Nobivac KC ad us. vet.",
-    "Nobivac TRICAT III ad us. vet.",
-    "Purevax FeLV ad us. vet.",
-    "Nobilis IB 4-91 ad us. vet.",
-    "Nobilis IB Ma5 ad us. vet.",
-    "Poulvac Procerta HVT-IBD ad us. vet.",
-    "Bultavo 3 ad us. vet.",
-    "Protivity ad us. vet.",
-    "Nobilis Paramyxo P201 ad us. vet.",
-]
 
 def _catalog_selector(values: list[str]) -> dict[str, Any]:
     return {
@@ -102,9 +68,13 @@ def _common_record_fields(german: bool) -> dict[str, Any]:
         "task_entity_id": {
             "name": "Aufgabe" if german else "Task",
             "description": (
-                "Aufgabe anhand ihres Namens auswählen. Standardmässig wird die früheste offene Fälligkeit verwendet."
+                "Aufgabe anhand von Titel, Aufgabenart und ID auswählen. "
+                "Es werden nur Fälligkeiten der passenden Aufgabenart akzeptiert; "
+                "standardmässig wird die früheste offene Fälligkeit verwendet."
                 if german
-                else "Select the task by name. The earliest open occurrence is used by default."
+                else "Select the task by title, kind and ID. Only occurrences of "
+                "the matching task kind are accepted; the earliest open occurrence "
+                "is used by default."
             ),
             "selector": _task_selector(),
         },
@@ -281,7 +251,7 @@ def _create_description(german: bool) -> dict[str, Any]:
                 if german
                 else "Required for medication tasks. Choose a catalogue product or enter a custom name."
             ),
-            "selector": _catalog_selector(_MEDICATION_CATALOG),
+            "selector": _catalog_selector(medicine_catalog_names()),
         },
         "planned_dose": {
             "name": "Geplante Dosis" if german else "Planned dose",
@@ -315,7 +285,7 @@ def _create_description(german: bool) -> dict[str, Any]:
                 if german
                 else "Optionally choose a catalogue vaccine or enter a custom product."
             ),
-            "selector": _catalog_selector(_VACCINE_CATALOG),
+            "selector": _catalog_selector(vaccine_catalog_names()),
         },
         "planned_antigen": {
             "name": "Geplantes Antigen / Impfstamm" if german else "Planned antigen / strain",
@@ -453,7 +423,15 @@ def task_record_descriptions(language: str) -> dict[str, dict[str, Any]]:
         description_de="Übernimmt geplante Medikamentenangaben als Vorbelegung. Tatsächliche Angaben können korrigiert werden und werden getrennt von der Planung gespeichert.",
         description_en="Uses the medication plan as defaults. Actual values may be changed and are stored separately from the plan.",
         extra_fields={
-            "medication_name": {"name": "Tatsächliches Medikament" if german else "Actual medication", "selector": _text()},
+            "medication_name": {
+                "name": "Tatsächliches Medikament" if german else "Actual medication",
+                "description": (
+                    "Geplantes Präparat beibehalten, aus dem vollständigen Katalog wählen oder einen eigenen Produktnamen eingeben."
+                    if german
+                    else "Keep the planned product, choose from the complete catalogue or enter a custom product name."
+                ),
+                "selector": _catalog_selector(medicine_catalog_names()),
+            },
             "dose": {"name": "Tatsächliche Dosis" if german else "Actual dose", "selector": _number()},
             "dose_unit": {"name": "Tatsächliche Dosiseinheit" if german else "Actual dose unit", "selector": _select(dose_units)},
             "route": {"name": "Tatsächlicher Applikationsweg" if german else "Actual route", "selector": _select(routes)},
@@ -468,7 +446,15 @@ def task_record_descriptions(language: str) -> dict[str, dict[str, Any]]:
         extra_fields={
             "vaccination_targets": {"name": "Tatsächlich geimpft gegen" if german else "Actually vaccinated against", "selector": vaccination_targets},
             "custom_vaccination_target": {"name": "Anderes tatsächliches Impfziel" if german else "Other actual target", "selector": _text()},
-            "vaccine_name": {"name": "Tatsächlicher Impfstoff" if german else "Actual vaccine", "selector": _text()},
+            "vaccine_name": {
+                "name": "Tatsächlicher Impfstoff" if german else "Actual vaccine",
+                "description": (
+                    "Geplanten Impfstoff beibehalten, aus dem vollständigen Katalog wählen oder einen eigenen Produktnamen eingeben."
+                    if german
+                    else "Keep the planned vaccine, choose from the complete catalogue or enter a custom product name."
+                ),
+                "selector": _catalog_selector(vaccine_catalog_names()),
+            },
             "antigen": {"name": "Antigen / Impfstamm" if german else "Antigen / strain", "selector": _text()},
             "dose": {"name": "Tatsächliche Impfdosis" if german else "Actual vaccination dose", "selector": _number()},
             "dose_unit": {"name": "Einheit" if german else "Unit", "selector": _select(dose_units)},

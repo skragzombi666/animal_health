@@ -14,7 +14,12 @@ def _select(options: list[tuple[str, str]], *, multiple: bool = False) -> dict[s
 
 
 def _device_selector() -> dict[str, Any]:
-    return {"device": {"filter": [{"integration": "animal_health"}]}}
+    return {
+        "device": {
+            "filter": [{"integration": "animal_health"}],
+            "entity": [{"integration": "animal_health", "domain": "sensor"}],
+        }
+    }
 
 
 def _text_selector(*, multiline: bool = False) -> dict[str, Any]:
