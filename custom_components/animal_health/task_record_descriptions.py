@@ -49,6 +49,53 @@ def _text(*, multiline: bool = False) -> dict[str, Any]:
 def _number() -> dict[str, Any]:
     return {"number": {"min": 0.001, "step": "any", "mode": "box"}}
 
+_MEDICATION_CATALOG = [
+    "Flubenol 5% ad us. vet.",
+    "Flubenol KH ad us. vet.",
+    "Baycox 2.5% ad us. vet.",
+    "Baycox 5% ad us. vet.",
+    "Metacam 1.5 mg/ml orale Suspension für Hunde",
+    "Metacam 0.5 mg/ml orale Suspension für Katzen",
+    "Panacur PetPaste ad us. vet.",
+    "Panacur Tabletten ad us. vet.",
+    "Milbemax Kautabletten für Hunde ad us. vet.",
+    "Milbemax Tabletten für Katzen ad us. vet.",
+    "Bravecto Plus Spot-on für Katzen ad us. vet.",
+    "Apoquel ad us. vet.",
+    "Easotic ad us. vet.",
+    "Optimmune Augensalbe ad us. vet.",
+    "Milteforan ad us. vet.",
+    "Bonqat 50 mg/ml ad us. vet.",
+    "Zycortal 25 mg/ml ad us. vet.",
+]
+
+_VACCINE_CATALOG = [
+    "Nobivac DHPPi ad us. vet.",
+    "Nobivac DHP ad us. vet.",
+    "Nobivac Pi ad us. vet.",
+    "Nobivac LEPTO 6 ad us. vet.",
+    "Nobivac RABIES ad us. vet.",
+    "Nobivac KC ad us. vet.",
+    "Nobivac TRICAT III ad us. vet.",
+    "Purevax FeLV ad us. vet.",
+    "Nobilis IB 4-91 ad us. vet.",
+    "Nobilis IB Ma5 ad us. vet.",
+    "Poulvac Procerta HVT-IBD ad us. vet.",
+    "Bultavo 3 ad us. vet.",
+    "Protivity ad us. vet.",
+    "Nobilis Paramyxo P201 ad us. vet.",
+]
+
+def _catalog_selector(values: list[str]) -> dict[str, Any]:
+    return {
+        "select": {
+            "options": values,
+            "custom_value": True,
+            "mode": "dropdown",
+            "sort": True,
+        }
+    }
+
 
 def _common_record_fields(german: bool) -> dict[str, Any]:
     return {
@@ -230,11 +277,11 @@ def _create_description(german: bool) -> dict[str, Any]:
         "planned_medication_name": {
             "name": "Geplantes Medikament" if german else "Planned medication",
             "description": (
-                "Für Aufgabenart Medikament zwingend."
+                "Für Aufgabenart Medikament zwingend. Katalogauswahl oder eigener Präparatname."
                 if german
-                else "Required for medication tasks."
+                else "Required for medication tasks. Choose a catalogue product or enter a custom name."
             ),
-            "selector": _text(),
+            "selector": _catalog_selector(_MEDICATION_CATALOG),
         },
         "planned_dose": {
             "name": "Geplante Dosis" if german else "Planned dose",
@@ -263,7 +310,12 @@ def _create_description(german: bool) -> dict[str, Any]:
         },
         "planned_vaccine_name": {
             "name": "Geplanter Impfstoff" if german else "Planned vaccine",
-            "selector": _text(),
+            "description": (
+                "Optional aus dem Katalog auswählen oder eigenen Impfstoff eingeben."
+                if german
+                else "Optionally choose a catalogue vaccine or enter a custom product."
+            ),
+            "selector": _catalog_selector(_VACCINE_CATALOG),
         },
         "planned_antigen": {
             "name": "Geplantes Antigen / Impfstamm" if german else "Planned antigen / strain",
