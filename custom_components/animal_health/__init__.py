@@ -9,7 +9,9 @@ from homeassistant.core import HomeAssistant
 
 from .const import DATABASE_NAME
 from .coordinator import AnimalHealthCoordinator
+from .dashboard_api import async_setup_dashboard_api
 from .database import AnimalHealthDatabase
+from .panel import async_register_panel, async_unregister_panel
 from .runtime import AnimalHealthRuntimeData
 from .services import async_setup_services
 from .task_record_creation import async_setup_task_record_creation
@@ -36,6 +38,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_task_record_creation(hass)
     async_setup_task_record_services(hass)
     async_setup_task_service_descriptions(hass)
+    async_setup_dashboard_api(hass)
     return True
 
 
@@ -54,6 +57,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
         coordinator=coordinator,
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await async_register_panel(hass)
     return True
 
 
@@ -61,4 +65,7 @@ async def async_unload_entry(
     hass: HomeAssistant,
     entry: AnimalHealthConfigEntry,
 ) -> bool:
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok:
+        async_unregister_panel(hass)
+    return unload_ok
