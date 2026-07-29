@@ -6,5 +6,5 @@ const S={reminder:"record_task_reminder",weight:"record_task_weight",medication:
 const esc=x=>String(x??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
 const data=f=>{const o={};for(const[k,v]of new FormData(f)){o[k]=k in o?(Array.isArray(o[k])?[...o[k],v]:[o[k],v]):v}return o};
 class AnimalHealthPanel extends HTMLElement{
- constructor(){super();this.attachShadow({mode:"open"});this.h=null;this.p=null;this.d=null;this.c=null;this.detail=null;this.view="overview";this.modal=null;this.filter="";this.busy=false;this.err=null}
+ constructor(){super();this.attachShadow({mode:"open"});this.h=null;this.p=null;this.d=null;this.c=null;this.detail=null;this.view="overview";this.modal=null;this.filter="";this.busy=false;this.err=null;this.eventsBound=false}
  set hass(v){this.h=v;if(this.isConnected&&!this.d&&!this.busy)this.load()}get hass(){return this.h}set panel(v){this.p=v}set narrow(v){this.toggleAttribute("narrow",!!v)}
