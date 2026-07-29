@@ -6,24 +6,23 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.service import async_set_service_schema
 
 from .const import DOMAIN
+from .task_kinds import task_language
 from .task_record_descriptions import task_record_descriptions
 from .task_service_descriptions import task_service_descriptions
 
-_GERMAN_COUNTRIES = {"AT", "CH", "DE", "LI"}
-
 
 def _task_language(hass: HomeAssistant) -> str:
-    language = str(getattr(hass.config, "language", "en") or "en")
-    country = str(getattr(hass.config, "country", "") or "").upper()
-    if language.startswith("de") or country in _GERMAN_COUNTRIES:
-        return "de"
-    return language
+    return task_language(
+        getattr(hass.config, "language", None),
+        getattr(hass.config, "country", None),
+    )
 
 
 def _multiple_animal_selector() -> dict[str, object]:
     return {
         "device": {
             "filter": [{"integration": DOMAIN}],
+            "entity": [{"integration": DOMAIN, "domain": "sensor"}],
             "multiple": True,
         }
     }

@@ -114,6 +114,29 @@ def resolve_vaccine(value: str | None) -> CatalogMatch | None:
     return _resolve("vaccines_ch.json", value)
 
 
+def _catalog_product_names(filename: str) -> list[str]:
+    names = [
+        str(
+            item.get("name")
+            or item.get("name_de")
+            or item.get("name_en")
+            or item["id"]
+        )
+        for item in _load_catalog(filename)["items"]
+    ]
+    return sorted(names, key=str.casefold)
+
+
+def medicine_catalog_names() -> list[str]:
+    """Return all medication names offered by the bundled catalogue."""
+    return _catalog_product_names("medicines_ch.json")
+
+
+def vaccine_catalog_names() -> list[str]:
+    """Return all vaccine names offered by the bundled catalogue."""
+    return _catalog_product_names("vaccines_ch.json")
+
+
 def canonical_species_name(value: str) -> tuple[str, str | None]:
     match = resolve_species(value)
     if match is None:

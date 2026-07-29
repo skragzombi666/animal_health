@@ -3,6 +3,7 @@ from __future__ import annotations
 import calendar
 import secrets
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
@@ -467,21 +468,22 @@ class TaskStore:
         end_date: date | None,
         due_time: time | None,
     ) -> TaskRecord:
-        return await self._hass.async_add_executor_job(
-            self._create_task_sync,
-            animal_id,
-            title,
-            description,
-            recurrence_type,
-            recurrence_interval,
-            start_date,
-            end_date,
-            due_time,
+        tasks = await self.create_tasks(
+            animal_ids=[animal_id],
+            title=title,
+            description=description,
+            recurrence_type=recurrence_type,
+            recurrence_interval=recurrence_interval,
+            start_date=start_date,
+            end_date=end_date,
+            due_time=due_time,
         )
+        return tasks[0]
 
-    def _create_task_sync(
+    async def create_tasks(
         self,
-        animal_id: str | None,
+        *,
+        animal_ids: list[str | None],
         title: str,
         description: str | None,
         recurrence_type: str,
@@ -489,7 +491,34 @@ class TaskStore:
         start_date: date,
         end_date: date | None,
         due_time: time | None,
-    ) -> TaskRecord:
+        configure_task: Callable[[sqlite3.Connection, str], None] | None = None,
+    ) -> list[TaskRecord]:
+        """Create and optionally configure a batch of tasks atomically."""
+        return await self._hass.async_add_executor_job(
+            self._create_tasks_sync,
+            animal_ids,
+            title,
+            description,
+            recurrence_type,
+            recurrence_interval,
+            start_date,
+            end_date,
+            due_time,
+            configure_task,
+        )
+
+    def _create_tasks_sync(
+        self,
+        animal_ids: list[str | None],
+        title: str,
+        description: str | None,
+        recurrence_type: str,
+        recurrence_interval: int,
+        start_date: date,
+        end_date: date | None,
+        due_time: time | None,
+        configure_task: Callable[[sqlite3.Connection, str], None] | None,
+    ) -> list[TaskRecord]:
         self._validate_schedule(
             recurrence_type,
             recurrence_interval,
@@ -500,53 +529,100 @@ class TaskStore:
             recurrence_interval = 1
 
         now = datetime.now(UTC).replace(microsecond=0).isoformat()
+        tasks: list[TaskRecord] = []
         with self._connect() as connection:
-            if animal_id is not None and not self._animal_exists(connection, animal_id):
-                raise KeyError(animal_id)
+            for animal_id in animal_ids:
+                if (
+                    animal_id is not None
+                    and not self._animal_exists(connection, animal_id)
+                ):
+                    raise KeyError(animal_id)
             existing_ids = {
-                str(row[0]) for row in connection.execute("SELECT id FROM tasks").fetchall()
+                str(row[0])
+                for row in connection.execute("SELECT id FROM tasks").fetchall()
             }
-            task_id = self._generate_record_id("TK", existing_ids)
-            connection.execute(
-                """
-                INSERT INTO tasks (
-                    id,
-                    animal_id,
-                    title,
-                    description,
-                    recurrence_type,
-                    recurrence_interval,
-                    start_date,
-                    end_date,
-                    due_time,
-                    is_active,
-                    created_at,
-                    updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-                """,
-                (
-                    task_id,
-                    animal_id,
-                    title.strip(),
-                    description,
-                    recurrence_type,
-                    recurrence_interval,
-                    start_date.isoformat(),
-                    end_date.isoformat() if end_date else None,
-                    due_time.isoformat(timespec="minutes") if due_time else None,
-                    now,
-                    now,
-                ),
-            )
-            task = self._get_task_from_connection(connection, task_id)
-            if task is None:
-                raise RuntimeError("Created task could not be loaded")
-            initial_through = max(
+            for animal_id in animal_ids:
+                task = self._create_task_in_connection(
+                    connection,
+                    existing_ids,
+                    animal_id=animal_id,
+                    title=title,
+                    description=description,
+                    recurrence_type=recurrence_type,
+                    recurrence_interval=recurrence_interval,
+                    start_date=start_date,
+                    end_date=end_date,
+                    due_time=due_time,
+                    now=now,
+                )
+                if configure_task is not None:
+                    configure_task(connection, task.id)
+                tasks.append(task)
+        return tasks
+
+    def _create_task_in_connection(
+        self,
+        connection: sqlite3.Connection,
+        existing_ids: set[str],
+        *,
+        animal_id: str | None,
+        title: str,
+        description: str | None,
+        recurrence_type: str,
+        recurrence_interval: int,
+        start_date: date,
+        end_date: date | None,
+        due_time: time | None,
+        now: str,
+    ) -> TaskRecord:
+        if animal_id is not None and not self._animal_exists(connection, animal_id):
+            raise KeyError(animal_id)
+        task_id = self._generate_record_id("TK", existing_ids)
+        existing_ids.add(task_id)
+        connection.execute(
+            """
+            INSERT INTO tasks (
+                id,
+                animal_id,
+                title,
+                description,
+                recurrence_type,
+                recurrence_interval,
                 start_date,
-                self.local_today() + timedelta(days=INITIAL_OCCURRENCE_HORIZON_DAYS),
-            )
-            self._ensure_occurrences_for_task(connection, task, initial_through)
-            task = self._get_task_from_connection(connection, task_id)
+                end_date,
+                due_time,
+                is_active,
+                created_at,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+            """,
+            (
+                task_id,
+                animal_id,
+                title.strip(),
+                description,
+                recurrence_type,
+                recurrence_interval,
+                start_date.isoformat(),
+                end_date.isoformat() if end_date else None,
+                due_time.isoformat(timespec="minutes") if due_time else None,
+                now,
+                now,
+            ),
+        )
+        task = self._get_task_from_connection(connection, task_id)
+        if task is None:
+            raise RuntimeError("Created task could not be loaded")
+        initial_through = max(
+            start_date,
+            self.local_today() + timedelta(days=INITIAL_OCCURRENCE_HORIZON_DAYS),
+        )
+        self._ensure_occurrences_for_task(
+            connection,
+            task,
+            initial_through,
+        )
+        task = self._get_task_from_connection(connection, task_id)
         if task is None:
             raise RuntimeError("Created task could not be loaded")
         return task

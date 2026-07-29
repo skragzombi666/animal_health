@@ -47,6 +47,7 @@ from .const import (
     WEIGHT_UNITS,
 )
 from .runtime import AnimalHealthRuntimeData
+from .task_kinds import task_kind_label, task_language
 from .task_records import (
     ATTR_CARE_ACTION,
     ATTR_CHECK_RESULT,
@@ -81,6 +82,87 @@ from .task_records import (
 
 ATTR_OCCURRENCE_ID = "occurrence_id"
 _TASK_SWITCH_UNIQUE_ID_PREFIX = "task_active_"
+
+_ERROR_MESSAGES = {
+    "integration_not_loaded": {
+        "de": "Animal Health ist nicht geladen.",
+        "en": "Animal Health is not loaded.",
+    },
+    "invalid_task_switch": {
+        "de": "Die ausgewählte Entität ist kein Animal-Health-Aufgabenschalter.",
+        "en": "The selected entity is not an Animal Health task switch.",
+    },
+    "task_and_occurrence_mutually_exclusive": {
+        "de": "Entweder eine Aufgabe oder eine Fälligkeits-ID angeben, nicht beides.",
+        "en": "Use either a task selection or an occurrence ID, not both.",
+    },
+    "choose_task_or_occurrence": {
+        "de": "Eine Aufgabe auswählen oder eine Fälligkeits-ID eingeben.",
+        "en": "Select a task or enter an occurrence ID.",
+    },
+    "selected_task_missing": {
+        "de": "Die ausgewählte Aufgabe existiert nicht mehr.",
+        "en": "The selected task no longer exists.",
+    },
+    "no_matching_open_occurrence": {
+        "de": "Für die ausgewählte Aufgabe gibt es keine passende offene Fälligkeit.",
+        "en": "No matching open occurrence exists for the selected task.",
+    },
+    "occurrence_missing": {
+        "de": "Die ausgewählte Aufgabenfälligkeit existiert nicht mehr.",
+        "en": "The selected task occurrence no longer exists.",
+    },
+    "wrong_task_kind": {
+        "de": (
+            "Die ausgewählte Aufgabe hat die Aufgabenart „{actual_kind}“, "
+            "erwartet wird „{expected_kind}“."
+        ),
+        "en": (
+            "The selected task has the kind “{actual_kind}”; "
+            "“{expected_kind}” is required."
+        ),
+    },
+    "occurrence_not_pending": {
+        "de": (
+            "Die ausgewählte Aufgabenfälligkeit ist bereits „{status}“ "
+            "und nicht mehr offen."
+        ),
+        "en": (
+            "The selected task occurrence is already “{status}” "
+            "and is no longer pending."
+        ),
+    },
+}
+
+
+def _validation_error(
+    hass: HomeAssistant,
+    message_key: str,
+    **placeholders: str,
+) -> ServiceValidationError:
+    language = task_language(
+        getattr(hass.config, "language", "en"),
+        getattr(hass.config, "country", None),
+    )
+    template = _ERROR_MESSAGES[message_key][language]
+    return ServiceValidationError(template.format(**placeholders))
+
+
+def _wrong_task_kind_error(
+    hass: HomeAssistant,
+    actual_kind: str,
+    expected_kind: str,
+) -> ServiceValidationError:
+    language = task_language(
+        getattr(hass.config, "language", "en"),
+        getattr(hass.config, "country", None),
+    )
+    return _validation_error(
+        hass,
+        "wrong_task_kind",
+        actual_kind=task_kind_label(actual_kind, language),
+        expected_kind=task_kind_label(expected_kind, language),
+    )
 
 
 def _required_text(value: Any) -> str:
@@ -154,7 +236,7 @@ def _runtime_data(hass: HomeAssistant) -> AnimalHealthRuntimeData:
     for entry in hass.config_entries.async_entries(DOMAIN):
         if entry.state is ConfigEntryState.LOADED:
             return cast(AnimalHealthRuntimeData, entry.runtime_data)
-    raise ServiceValidationError("Animal Health is not loaded")
+    raise _validation_error(hass, "integration_not_loaded")
 
 
 def _task_id_from_entity(hass: HomeAssistant, entity_id: str) -> str:
@@ -165,9 +247,7 @@ def _task_id_from_entity(hass: HomeAssistant, entity_id: str) -> str:
         or entry.platform != DOMAIN
         or not entry.unique_id.startswith(_TASK_SWITCH_UNIQUE_ID_PREFIX)
     ):
-        raise ServiceValidationError(
-            "The selected entity is not an Animal Health task switch"
-        )
+        raise _validation_error(hass, "invalid_task_switch")
     return entry.unique_id.removeprefix(_TASK_SWITCH_UNIQUE_ID_PREFIX)
 
 
@@ -175,27 +255,30 @@ async def _resolve_occurrence_id(
     hass: HomeAssistant,
     store: TaskRecordStore,
     data: dict[str, Any],
+    expected_kind: str,
 ) -> str:
     occurrence_id = data.get(ATTR_OCCURRENCE_ID)
     task_entity_id = data.get(ATTR_TASK_ENTITY_ID)
     if occurrence_id and task_entity_id:
-        raise ServiceValidationError(
-            "Use either a task selection or an occurrence ID, not both"
-        )
+        raise _validation_error(hass, "task_and_occurrence_mutually_exclusive")
     if occurrence_id:
         return str(occurrence_id)
     if not task_entity_id:
-        raise ServiceValidationError("Select a task or enter an occurrence ID")
+        raise _validation_error(hass, "choose_task_or_occurrence")
     task_id = _task_id_from_entity(hass, str(task_entity_id))
+    try:
+        config = await store.get_task_config(task_id)
+    except KeyError as err:
+        raise _validation_error(hass, "selected_task_missing") from err
+    if config.task_kind != expected_kind:
+        raise _wrong_task_kind_error(hass, config.task_kind, expected_kind)
     try:
         return await store.resolve_occurrence(
             task_id,
             data.get(ATTR_SCHEDULED_DATE),
         )
     except KeyError as err:
-        raise ServiceValidationError(
-            "No matching open occurrence exists for the selected task"
-        ) from err
+        raise _validation_error(hass, "no_matching_open_occurrence") from err
 
 
 async def _load_occurrence_plan(
@@ -320,14 +403,32 @@ RECORD_VETERINARY_VISIT_SCHEMA = vol.Schema(
 def async_setup_task_record_services(hass: HomeAssistant) -> None:
     store = TaskRecordStore(hass)
 
-    async def _context(call: ServiceCall) -> tuple[str, dict[str, Any], datetime]:
-        occurrence_id = await _resolve_occurrence_id(hass, store, call.data)
+    async def _context(
+        call: ServiceCall,
+        expected_kind: str,
+    ) -> tuple[str, dict[str, Any], datetime]:
+        occurrence_id = await _resolve_occurrence_id(
+            hass,
+            store,
+            call.data,
+            expected_kind,
+        )
         try:
             context = await _load_occurrence_plan(hass, occurrence_id)
         except KeyError as err:
-            raise ServiceValidationError(
-                "The selected task occurrence no longer exists"
-            ) from err
+            raise _validation_error(hass, "occurrence_missing") from err
+        if context["task_kind"] != expected_kind:
+            raise _wrong_task_kind_error(
+                hass,
+                str(context["task_kind"]),
+                expected_kind,
+            )
+        if context["status"] != "pending":
+            raise _validation_error(
+                hass,
+                "occurrence_not_pending",
+                status=str(context["status"]),
+            )
         return (
             occurrence_id,
             context,
@@ -340,7 +441,10 @@ def async_setup_task_record_services(hass: HomeAssistant) -> None:
         return result.as_dict()
 
     async def handle_record_reminder(call: ServiceCall) -> ServiceResponse:
-        occurrence_id, _context_data, performed_at = await _context(call)
+        occurrence_id, _context_data, performed_at = await _context(
+            call,
+            TASK_KIND_REMINDER,
+        )
         try:
             result = await store.execute(
                 occurrence_id=occurrence_id,
@@ -357,7 +461,10 @@ def async_setup_task_record_services(hass: HomeAssistant) -> None:
         return await _finish(result)
 
     async def handle_record_weight(call: ServiceCall) -> ServiceResponse:
-        occurrence_id, _context_data, performed_at = await _context(call)
+        occurrence_id, _context_data, performed_at = await _context(
+            call,
+            TASK_KIND_WEIGHT,
+        )
         actual = {
             "weight": call.data[ATTR_WEIGHT],
             "weight_unit": call.data[ATTR_WEIGHT_UNIT],
@@ -381,7 +488,10 @@ def async_setup_task_record_services(hass: HomeAssistant) -> None:
         return await _finish(result)
 
     async def handle_record_medication(call: ServiceCall) -> ServiceResponse:
-        occurrence_id, context, performed_at = await _context(call)
+        occurrence_id, context, performed_at = await _context(
+            call,
+            TASK_KIND_MEDICATION,
+        )
         try:
             actual, event_data, dose, unit, medication_name = actual_medication(
                 context["planned"],
@@ -408,7 +518,10 @@ def async_setup_task_record_services(hass: HomeAssistant) -> None:
         return await _finish(result)
 
     async def handle_record_vaccination(call: ServiceCall) -> ServiceResponse:
-        occurrence_id, context, performed_at = await _context(call)
+        occurrence_id, context, performed_at = await _context(
+            call,
+            TASK_KIND_VACCINATION,
+        )
         try:
             actual, event_data, dose, unit, title = actual_vaccination(
                 context["planned"],
@@ -439,7 +552,10 @@ def async_setup_task_record_services(hass: HomeAssistant) -> None:
         return await _finish(result)
 
     async def handle_record_health_check(call: ServiceCall) -> ServiceResponse:
-        occurrence_id, _context_data, performed_at = await _context(call)
+        occurrence_id, _context_data, performed_at = await _context(
+            call,
+            TASK_KIND_HEALTH_CHECK,
+        )
         try:
             actual, event_type, title, event_data = actual_health_check(
                 result=call.data[ATTR_CHECK_RESULT],
@@ -464,7 +580,10 @@ def async_setup_task_record_services(hass: HomeAssistant) -> None:
         return await _finish(result)
 
     async def handle_record_care(call: ServiceCall) -> ServiceResponse:
-        occurrence_id, context, performed_at = await _context(call)
+        occurrence_id, context, performed_at = await _context(
+            call,
+            TASK_KIND_CARE,
+        )
         care_action = (
             call.data.get(ATTR_CARE_ACTION)
             or context["planned"].get("care_action")
@@ -490,7 +609,10 @@ def async_setup_task_record_services(hass: HomeAssistant) -> None:
         return await _finish(result)
 
     async def handle_record_veterinary_visit(call: ServiceCall) -> ServiceResponse:
-        occurrence_id, context, performed_at = await _context(call)
+        occurrence_id, context, performed_at = await _context(
+            call,
+            TASK_KIND_VETERINARY_VISIT,
+        )
         visit_reason = (
             call.data.get(ATTR_VISIT_REASON)
             or context["planned"].get("visit_reason")

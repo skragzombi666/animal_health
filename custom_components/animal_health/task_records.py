@@ -26,23 +26,17 @@ from .const import (
     WEIGHT_UNITS,
 )
 from .models import HealthEvent
-
-TASK_KIND_REMINDER = "reminder"
-TASK_KIND_WEIGHT = "weight"
-TASK_KIND_MEDICATION = "medication"
-TASK_KIND_VACCINATION = "vaccination"
-TASK_KIND_HEALTH_CHECK = "health_check"
-TASK_KIND_CARE = "care"
-TASK_KIND_VETERINARY_VISIT = "veterinary_visit"
-TASK_KINDS = (
-    TASK_KIND_REMINDER,
-    TASK_KIND_WEIGHT,
-    TASK_KIND_MEDICATION,
-    TASK_KIND_VACCINATION,
-    TASK_KIND_HEALTH_CHECK,
+from .task_kinds import (
     TASK_KIND_CARE,
+    TASK_KIND_HEALTH_CHECK,
+    TASK_KIND_MEDICATION,
+    TASK_KIND_REMINDER,
+    TASK_KIND_VACCINATION,
     TASK_KIND_VETERINARY_VISIT,
+    TASK_KIND_WEIGHT,
+    TASK_KINDS,
 )
+from .task_store import TaskRecord, TaskStore
 
 HEALTH_CHECK_NORMAL = "normal"
 HEALTH_CHECK_CONCERN = "concern"
@@ -365,6 +359,43 @@ class TaskRecordStore:
         loaded = json.loads(str(value))
         return loaded if isinstance(loaded, dict) else {}
 
+    async def create_configured_tasks(
+        self,
+        task_store: TaskStore,
+        *,
+        animal_ids: list[str | None],
+        task_kind: str,
+        template: dict[str, Any],
+        title: str,
+        description: str | None,
+        recurrence_type: str,
+        recurrence_interval: int,
+        start_date: date,
+        end_date: date | None,
+        due_time: time | None,
+    ) -> list[TaskRecord]:
+        """Create and configure a batch of tasks in one transaction."""
+
+        def configure_task(connection: sqlite3.Connection, task_id: str) -> None:
+            self._configure_task_in_connection(
+                connection,
+                task_id,
+                task_kind,
+                template,
+            )
+
+        return await task_store.create_tasks(
+            animal_ids=animal_ids,
+            title=title,
+            description=description,
+            recurrence_type=recurrence_type,
+            recurrence_interval=recurrence_interval,
+            start_date=start_date,
+            end_date=end_date,
+            due_time=due_time,
+            configure_task=configure_task,
+        )
+
     async def configure_task(
         self,
         task_id: str,
@@ -386,30 +417,46 @@ class TaskRecordStore:
     ) -> TaskRecordingConfig:
         if task_kind not in TASK_KINDS:
             raise ValueError(f"Unsupported task kind: {task_kind}")
+        with self._connect() as connection:
+            return self._configure_task_in_connection(
+                connection,
+                task_id,
+                task_kind,
+                template,
+            )
+
+    def _configure_task_in_connection(
+        self,
+        connection: sqlite3.Connection,
+        task_id: str,
+        task_kind: str,
+        template: dict[str, Any],
+    ) -> TaskRecordingConfig:
+        if task_kind not in TASK_KINDS:
+            raise ValueError(f"Unsupported task kind: {task_kind}")
         now = datetime.now(UTC).replace(microsecond=0).isoformat()
         template_json = json.dumps(template, ensure_ascii=False, sort_keys=True)
-        with self._connect() as connection:
-            task = connection.execute(
-                "SELECT animal_id FROM tasks WHERE id = ?",
-                (task_id,),
-            ).fetchone()
-            if task is None:
-                raise KeyError(task_id)
-            if task_kind != TASK_KIND_REMINDER and task["animal_id"] is None:
-                raise ValueError("Only reminder tasks may be general tasks")
-            connection.execute(
-                """
-                INSERT INTO task_record_configs (
-                    task_id, task_kind, template_json, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(task_id) DO UPDATE SET
-                    task_kind = excluded.task_kind,
-                    template_json = excluded.template_json,
-                    updated_at = excluded.updated_at
-                """,
-                (task_id, task_kind, template_json, now, now),
-            )
-            self._sync_occurrence_plans(connection, task_id, now)
+        task = connection.execute(
+            "SELECT animal_id FROM tasks WHERE id = ?",
+            (task_id,),
+        ).fetchone()
+        if task is None:
+            raise KeyError(task_id)
+        if task_kind != TASK_KIND_REMINDER and task["animal_id"] is None:
+            raise ValueError("Only reminder tasks may be general tasks")
+        connection.execute(
+            """
+            INSERT INTO task_record_configs (
+                task_id, task_kind, template_json, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(task_id) DO UPDATE SET
+                task_kind = excluded.task_kind,
+                template_json = excluded.template_json,
+                updated_at = excluded.updated_at
+            """,
+            (task_id, task_kind, template_json, now, now),
+        )
+        self._sync_occurrence_plans(connection, task_id, now)
         return TaskRecordingConfig(task_id, task_kind, dict(template))
 
     @staticmethod

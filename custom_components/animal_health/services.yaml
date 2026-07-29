@@ -126,6 +126,9 @@ update_animal:
         device:
           filter:
             - integration: animal_health
+          entity:
+            - integration: animal_health
+              domain: sensor
     name:
       selector:
         text: {}
@@ -249,6 +252,9 @@ set_animal_status:
         device:
           filter:
             - integration: animal_health
+          entity:
+            - integration: animal_health
+              domain: sensor
     status:
       required: true
       selector:
@@ -264,6 +270,9 @@ archive_animal:
         device:
           filter:
             - integration: animal_health
+          entity:
+            - integration: animal_health
+              domain: sensor
 restore_animal:
   fields:
     device_id:
@@ -272,6 +281,9 @@ restore_animal:
         device:
           filter:
             - integration: animal_health
+          entity:
+            - integration: animal_health
+              domain: sensor
 create_event:
   fields:
     device_id:
@@ -280,6 +292,9 @@ create_event:
         device:
           filter:
             - integration: animal_health
+          entity:
+            - integration: animal_health
+              domain: sensor
     event_type:
       required: true
       selector:
@@ -309,6 +324,9 @@ record_weight:
         device:
           filter:
             - integration: animal_health
+          entity:
+            - integration: animal_health
+              domain: sensor
     occurred_at:
       selector:
         datetime: {}
@@ -342,6 +360,9 @@ record_symptom:
         device:
           filter:
             - integration: animal_health
+          entity:
+            - integration: animal_health
+              domain: sensor
     occurred_at:
       selector:
         datetime: {}
@@ -379,6 +400,9 @@ record_medication:
         device:
           filter:
             - integration: animal_health
+          entity:
+            - integration: animal_health
+              domain: sensor
     occurred_at:
       selector:
         datetime: {}
@@ -452,6 +476,9 @@ record_vaccination:
         device:
           filter:
             - integration: animal_health
+          entity:
+            - integration: animal_health
+              domain: sensor
     occurred_at:
       selector:
         datetime: {}
@@ -530,6 +557,9 @@ list_events:
         device:
           filter:
             - integration: animal_health
+          entity:
+            - integration: animal_health
+              domain: sensor
     limit:
       default: 50
       selector:

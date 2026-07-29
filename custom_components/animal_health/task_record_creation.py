@@ -18,6 +18,7 @@ from .const import (
     VACCINATION_TARGETS,
 )
 from .runtime import AnimalHealthRuntimeData
+from .task_kinds import task_language
 from .task_records import (
     ATTR_PLANNED_ANTIGEN,
     ATTR_PLANNED_CARE_ACTION,
@@ -58,6 +59,48 @@ ATTR_RECURRENCE_INTERVAL = "recurrence_interval"
 ATTR_START_DATE = "start_date"
 ATTR_END_DATE = "end_date"
 ATTR_DUE_TIME = "due_time"
+
+_ERROR_MESSAGES = {
+    "integration_not_loaded": {
+        "de": "Animal Health ist nicht geladen.",
+        "en": "Animal Health is not loaded.",
+    },
+    "animal_device_missing": {
+        "de": "Das ausgewählte Tiergerät existiert nicht mehr.",
+        "en": "The selected animal device no longer exists.",
+    },
+    "invalid_animal_device": {
+        "de": "Das ausgewählte Gerät ist kein Animal-Health-Tier.",
+        "en": "The selected device is not an Animal Health animal.",
+    },
+    "general_task_with_animals": {
+        "de": "Für eine allgemeine Aufgabe dürfen keine Tiere ausgewählt werden.",
+        "en": "Do not select animals for a general task.",
+    },
+    "general_task_requires_reminder": {
+        "de": "Als allgemeine Aufgabe kann nur eine Erinnerung angelegt werden.",
+        "en": "Only a reminder may be created as a general task.",
+    },
+    "animal_task_requires_animal": {
+        "de": "Für eine tierbezogene Aufgabe mindestens ein Tier auswählen.",
+        "en": "Select at least one animal for an animal-specific task.",
+    },
+    "selected_animal_missing": {
+        "de": "Das ausgewählte Tier existiert nicht mehr.",
+        "en": "The selected animal no longer exists.",
+    },
+}
+
+
+def _validation_error(
+    hass: HomeAssistant,
+    message_key: str,
+) -> ServiceValidationError:
+    language = task_language(
+        getattr(hass.config, "language", "en"),
+        getattr(hass.config, "country", None),
+    )
+    return ServiceValidationError(_ERROR_MESSAGES[message_key][language])
 
 
 def _required_text(value: Any) -> str:
@@ -156,17 +199,17 @@ def _runtime_data(hass: HomeAssistant) -> AnimalHealthRuntimeData:
     for entry in hass.config_entries.async_entries(DOMAIN):
         if entry.state is ConfigEntryState.LOADED:
             return cast(AnimalHealthRuntimeData, entry.runtime_data)
-    raise ServiceValidationError("Animal Health is not loaded")
+    raise _validation_error(hass, "integration_not_loaded")
 
 
 def _animal_id_from_device(hass: HomeAssistant, device_id: str) -> str:
     device = dr.async_get(hass).async_get(device_id)
     if device is None:
-        raise ServiceValidationError("The selected animal device no longer exists")
+        raise _validation_error(hass, "animal_device_missing")
     for identifier_domain, identifier in device.identifiers:
         if identifier_domain == DOMAIN and identifier != "general_tasks":
             return identifier
-    raise ServiceValidationError("The selected device is not an Animal Health animal")
+    raise _validation_error(hass, "invalid_animal_device")
 
 
 def _selected_device_ids(data: dict[str, Any]) -> list[str]:
@@ -241,19 +284,13 @@ def async_setup_task_record_creation(hass: HomeAssistant) -> None:
 
         if scope == TASK_SCOPE_GENERAL:
             if device_ids:
-                raise ServiceValidationError(
-                    "Do not select animals for a general task"
-                )
+                raise _validation_error(hass, "general_task_with_animals")
             if task_kind != TASK_KIND_REMINDER:
-                raise ServiceValidationError(
-                    "Als allgemeine Aufgabe kann nur eine Erinnerung angelegt werden."
-                )
+                raise _validation_error(hass, "general_task_requires_reminder")
             animal_ids: list[str | None] = [None]
         else:
             if not device_ids:
-                raise ServiceValidationError(
-                    "Select at least one animal for an animal-specific task"
-                )
+                raise _validation_error(hass, "animal_task_requires_animal")
             animal_ids = [
                 _animal_id_from_device(hass, device_id) for device_id in device_ids
             ]
@@ -265,24 +302,24 @@ def async_setup_task_record_creation(hass: HomeAssistant) -> None:
                 call.data,
                 title=call.data[ATTR_TITLE],
             )
-            tasks = []
-            for animal_id in animal_ids:
-                task = await task_store.create_task(
-                    animal_id=animal_id,
-                    title=call.data[ATTR_TITLE],
-                    description=call.data.get(ATTR_DESCRIPTION),
-                    recurrence_type=call.data[ATTR_RECURRENCE_TYPE],
-                    recurrence_interval=call.data[ATTR_RECURRENCE_INTERVAL],
-                    start_date=call.data[ATTR_START_DATE],
-                    end_date=call.data.get(ATTR_END_DATE),
-                    due_time=call.data.get(ATTR_DUE_TIME),
-                )
-                await record_store.configure_task(task.id, task_kind, template)
-                tasks.append(task.as_dict(task_store.timezone))
+            created_tasks = await record_store.create_configured_tasks(
+                task_store,
+                animal_ids=animal_ids,
+                task_kind=task_kind,
+                template=template,
+                title=call.data[ATTR_TITLE],
+                description=call.data.get(ATTR_DESCRIPTION),
+                recurrence_type=call.data[ATTR_RECURRENCE_TYPE],
+                recurrence_interval=call.data[ATTR_RECURRENCE_INTERVAL],
+                start_date=call.data[ATTR_START_DATE],
+                end_date=call.data.get(ATTR_END_DATE),
+                due_time=call.data.get(ATTR_DUE_TIME),
+            )
+            tasks = [
+                task.as_dict(task_store.timezone) for task in created_tasks
+            ]
         except KeyError as err:
-            raise ServiceValidationError(
-                "The selected animal no longer exists"
-            ) from err
+            raise _validation_error(hass, "selected_animal_missing") from err
         except ValueError as err:
             raise ServiceValidationError(str(err)) from err
 

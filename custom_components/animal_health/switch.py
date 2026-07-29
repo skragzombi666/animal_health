@@ -11,6 +11,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import AnimalHealthConfigEntry
 from .const import DOMAIN, NAME
 from .coordinator import AnimalHealthCoordinator
+from .task_kinds import TASK_KIND_ICONS, task_display_name, task_language
 from .task_store import TASK_SCOPE_ANIMAL, TASK_SCOPE_GENERAL, TaskRecord
 
 GENERAL_TASKS_DEVICE_ID = "general_tasks"
@@ -45,8 +46,6 @@ class TaskActiveSwitch(
     SwitchEntity,
 ):
     _attr_has_entity_name = True
-    _attr_icon = "mdi:calendar-check"
-
     def __init__(
         self,
         coordinator: AnimalHealthCoordinator,
@@ -71,7 +70,26 @@ class TaskActiveSwitch(
     @property
     def name(self) -> str | None:
         task = self.task
-        return task.title if task else None
+        if task is None:
+            return None
+        metadata = self.task_metadata
+        language = task_language(
+            getattr(self.coordinator.hass.config, "language", "en"),
+            getattr(self.coordinator.hass.config, "country", None),
+        )
+        return task_display_name(
+            task.title,
+            str(metadata.get("task_kind", "reminder")),
+            task.id,
+            language,
+        )
+
+    @property
+    def icon(self) -> str:
+        return TASK_KIND_ICONS.get(
+            str(self.task_metadata.get("task_kind", "reminder")),
+            "mdi:calendar-check",
+        )
 
     @property
     def is_on(self) -> bool | None:

@@ -20,6 +20,12 @@ jobs:
         run: python tests/task_overdue_smoke.py
       - name: Validate task resolution states
         run: python tests/task_resolution_smoke.py
+      - name: Validate task catalogue selectors
+        run: python tests/catalog_selector_smoke.py
+      - name: Validate task action resolution UX
+        run: python tests/task_action_resolution_smoke.py
+      - name: Validate atomic multi-animal task creation
+        run: python tests/task_batch_atomicity_smoke.py
       - name: Validate JSON files
         run: |
           python - <<'PY'
