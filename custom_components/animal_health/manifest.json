@@ -5,7 +5,8 @@
   "config_flow": true,
   "dependencies": [
     "frontend",
-    "http"
+    "http",
+    "websocket_api"
   ],
   "documentation": "https://github.com/skragzombi666/animal_health",
   "integration_type": "hub",
