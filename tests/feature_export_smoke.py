@@ -104,7 +104,7 @@ def main() -> None:
             assert "animal_health.json" in names
             assert "attachments/AT-TEST001.pdf" in names
 
-    print("Animal Health 0.7.1 export validation passed")
+    print("Animal Health 0.7.2 export validation passed")
 
 
 if __name__ == "__main__":
