@@ -52,19 +52,40 @@ const Panel = customElements.get("animal-health-panel");
 if (!Panel) throw new Error("Panel element was not registered");
 const panel = new Panel();
 panel.d = {
-  version: "0.7.1",
-  today: "2026-07-29",
-  summary: {active_animals: 0, overdue_tasks: 0, today_tasks: 0, pending_tasks: 0},
-  animals: [], tasks: [], occurrences: [], events: [],
+  version: "0.7.2",
+  today: "2026-08-06",
+  summary: {active_animals: 1, overdue_tasks: 0, today_tasks: 0, pending_tasks: 0},
+  animals: [{
+    id: "AH-HEN", device_id: "device-hen", name: "BBQ", species: "Huhn",
+    breed: "", status: "active", is_archived: false,
+    latest_weight: {original_value: 2.5, original_unit: "kg"},
+  }],
+  tasks: [{
+    id: "TASK-ONCE", title: "Erledigte Einmalserie", task_kind: "reminder",
+    recurrence_type: "once", is_active: true, animal_name: "BBQ",
+  }],
+  occurrences: [{
+    id: "OCC-DONE", task_id: "TASK-ONCE", task_title: "Erledigte Einmalserie",
+    task_kind: "reminder", animal_id: "AH-HEN", animal_name: "BBQ",
+    status: "completed", scheduled_local: "2026-08-06T11:00:00+02:00",
+    is_overdue: false, is_today: false, is_upcoming: false,
+  }],
+  events: [],
 };
+panel.h = {language: "de"};
 panel.c = {
-  animal_sexes: [], animal_statuses: ["active"], species: [], breeds: [],
-  task_kinds: ["reminder"], weight_units: ["kg"], dose_units: ["mg"],
-  administration_routes: [], symptoms: ["other"],
+  animal_sexes: [], animal_statuses: ["active"],
+  species: [{id: "chicken", name_de: "Huhn", name_en: "Chicken", aliases: ["Haushuhn"]}],
+  breeds: [], task_kinds: ["reminder"], weight_units: ["kg"], dose_units: ["mg"],
+  administration_routes: [], symptoms: ["reduced_appetite", "other"],
   symptom_severities: ["moderate"], vaccination_targets: [],
   health_check_results: ["normal"], medicine_names: [], vaccine_names: [],
 };
-panel.features = {groups: [], memberships: {}, max_attachment_size_bytes: 15728640};
+panel.features = {
+  groups: [{id: "GR-CHICKIES", name: "Chickies", species: "chicken", animal_count: 1}],
+  memberships: {"AH-HEN": "GR-CHICKIES"}, max_attachment_size_bytes: 15728640,
+};
+panel.decorateFeatures();
 panel.connectedCallback();
 for (const eventType of ["click", "input", "change", "submit"]) {
   if (!panel.shadowRoot.listeners.has(eventType)) throw new Error(`Missing ${eventType} listener`);
@@ -73,7 +94,30 @@ panel.shadowRoot.listeners.get("click")({composedPath: () => [{dataset: {action:
 if (panel.modal?.type !== "create-animal") throw new Error("Create-animal dialog failed");
 panel.shadowRoot.listeners.get("input")({composedPath: () => [{dataset: {filter: ""}, value: "hen"}]});
 if (panel.filter !== "hen") throw new Error("Search filter failed");
-console.log("Animal Health 0.7.1 dashboard runtime validation passed");
+if (panel.l("reduced_appetite") !== "Verminderter Appetit") throw new Error("German symptom localization failed");
+panel.modal = {type: "create-group"};
+const groupForm = panel.form();
+if (!groupForm.includes('<select name="species" required>')) throw new Error("Group species is not a required select");
+if (groupForm.includes('name="species" type="text"')) throw new Error("Group species is still free text");
+panel.modal = {type: "create-task", animalId: "AH-HEN"};
+if (!panel.form().includes('value="device-hen" checked')) throw new Error("Current animal is not preselected for tasks");
+panel.view = "animals";
+panel.groupFilter = "GR-CHICKIES";
+panel.modal = null;
+panel.handleClick({composedPath: () => [{dataset: {action: "create-animal"}}]});
+if (panel.modal?.groupId !== "GR-CHICKIES") throw new Error("Current group is not carried into animal creation");
+const groupedAnimalForm = panel.form();
+if (!groupedAnimalForm.includes('value="GR-CHICKIES" selected')) throw new Error("Current group is not selected");
+if (!groupedAnimalForm.includes('name="species" type="text" value="Huhn"')) throw new Error("Group species is not prefilled");
+const weightInput = {value: "2.5", focus() {}};
+panel.shadowRoot.querySelector = selector => selector.includes('input[name="weight"]') ? weightInput : selector.includes('select[name="weight_unit"]') ? {value: "kg"} : null;
+panel.handleClick({composedPath: () => [{dataset: {action: "weight-step", delta: "1"}}]});
+if (weightInput.value !== "2.51") throw new Error(`Weight rounding failed: ${weightInput.value}`);
+const taskHtml = panel.tasks();
+if ((taskHtml.match(/data-action="toggle"/g) || []).length !== 0) throw new Error("Completed one-off task still has an activation toggle");
+if (panel.speciesIcon("chicken") !== "mdi:bird") throw new Error("Species icon mapping failed");
+if (!panel.overview().includes('data-action="edit-group"')) throw new Error("Group edit action is missing");
+console.log("Animal Health 0.7.2 dashboard runtime validation passed");
 '''
     with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:
         file.write(harness)
@@ -105,8 +149,15 @@ def main() -> None:
 
     _runtime_smoke(panel)
 
-    assert manifest["version"] == "0.7.1"
-    assert 'const V="0.7.1",D="animal_health"' in panel
+    assert manifest["version"] == "0.7.2"
+    assert 'const V="0.7.2",D="animal_health"' in panel
+    assert "Verminderter Appetit" in panel
+    assert "response.blob()" in panel
+    assert "link.download=filename" in panel
+    assert "URL.createObjectURL(blob)" in panel
+    assert "toFixed(decimals)" in panel
+    assert 'class="brand"' in panel
+    assert ".brand span{display:none}" in panel
     assert "mdi:plus-circle-outline" in panel
     assert "mdi:paw-plus" not in panel
     assert "content_base64" not in panel
@@ -141,7 +192,7 @@ def main() -> None:
     for marker in ("http://", "https://", "unpkg", "jsdelivr", "cdnjs"):
         assert marker not in panel.lower()
 
-    print("Animal Health 0.7.1 dashboard frontend validation passed")
+    print("Animal Health 0.7.2 dashboard frontend validation passed")
 
 
 if __name__ == "__main__":
