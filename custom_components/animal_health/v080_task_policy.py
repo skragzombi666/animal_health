@@ -12,7 +12,14 @@ from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, Supp
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
-from .const import ATTR_NOTES, DATABASE_NAME, DOMAIN, EVENT_TYPE_OBSERVATION
+from .const import (
+    ATTR_NOTES,
+    DATABASE_NAME,
+    DOMAIN,
+    EVENT_TYPE_OBSERVATION,
+    EVENT_TYPE_TREATMENT,
+)
+from . import task_record_creation
 from .task_record_services import (
     ATTR_OCCURRENCE_ID,
     _load_occurrence_plan,
@@ -33,8 +40,12 @@ from .task_records import (
     TASK_KIND_REMINDER,
     TaskRecordStore,
 )
+from .task_kinds import TASK_KIND_TREATMENT
 
 ATTR_DOCUMENT_IN_TIMELINE = "document_in_timeline"
+ATTR_TREATMENT_ACTION = "treatment_action"
+ATTR_TREATMENT_OUTCOME = "outcome"
+SERVICE_RECORD_TASK_TREATMENT = "record_task_treatment"
 
 RECORD_REMINDER_V080_SCHEMA = vol.Schema(
     {
@@ -47,6 +58,42 @@ RECORD_REMINDER_V080_SCHEMA = vol.Schema(
         vol.Optional(ATTR_DOCUMENT_IN_TIMELINE, default=False): cv.boolean,
     }
 )
+
+RECORD_TREATMENT_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_OCCURRENCE_ID): _required_text,
+        vol.Optional(ATTR_TASK_ENTITY_ID): _required_text,
+        vol.Optional(ATTR_SCHEDULED_DATE): _optional_date,
+        vol.Optional(ATTR_PERFORMED_AT): _optional_datetime,
+        vol.Optional(ATTR_DEVIATION_REASON): _optional_text,
+        vol.Optional(ATTR_NOTES): _optional_text,
+        vol.Optional(ATTR_TREATMENT_ACTION): _optional_text,
+        vol.Optional(ATTR_TREATMENT_OUTCOME): _optional_text,
+    }
+)
+
+
+def _install_treatment_template_support() -> None:
+    if getattr(task_record_creation, "_animal_health_v080_treatment_patch", False):
+        return
+    original = task_record_creation.build_task_template
+
+    def build_task_template(
+        task_kind: str,
+        data: dict[str, Any],
+        *,
+        title: str,
+        current: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if task_kind == TASK_KIND_TREATMENT:
+            action = str((current or {}).get("treatment_action") or title).strip()
+            if not action:
+                raise ValueError("A treatment description is required")
+            return {"treatment_action": action}
+        return original(task_kind, data, title=title, current=current)
+
+    task_record_creation.build_task_template = build_task_template
+    task_record_creation._animal_health_v080_treatment_patch = True
 
 
 def _insert_optional_reminder_event_sync(
@@ -155,25 +202,41 @@ def _insert_optional_reminder_event_sync(
         connection.close()
 
 
+async def _context(
+    hass: HomeAssistant,
+    store: TaskRecordStore,
+    call: ServiceCall,
+    expected_kind: str,
+) -> tuple[str, dict[str, Any], datetime]:
+    occurrence_id = await _resolve_occurrence_id(
+        hass,
+        store,
+        call.data,
+        expected_kind,
+    )
+    try:
+        context = await _load_occurrence_plan(hass, occurrence_id)
+    except KeyError as err:
+        raise ServiceValidationError(str(err)) from err
+    if context["task_kind"] != expected_kind:
+        raise ServiceValidationError(f"This occurrence is not a {expected_kind} task")
+    if context["status"] != "pending":
+        raise ServiceValidationError("Occurrence is not pending")
+    return (
+        occurrence_id,
+        context,
+        _performed_at_utc(hass, call.data.get(ATTR_PERFORMED_AT)),
+    )
+
+
 def async_setup_v080_task_policy(hass: HomeAssistant) -> None:
+    _install_treatment_template_support()
     store = TaskRecordStore(hass)
 
     async def handle_record_reminder(call: ServiceCall) -> ServiceResponse:
-        occurrence_id = await _resolve_occurrence_id(
-            hass,
-            store,
-            call.data,
-            TASK_KIND_REMINDER,
+        occurrence_id, _context_data, performed_at = await _context(
+            hass, store, call, TASK_KIND_REMINDER
         )
-        try:
-            context = await _load_occurrence_plan(hass, occurrence_id)
-        except KeyError as err:
-            raise ServiceValidationError(str(err)) from err
-        if context["task_kind"] != TASK_KIND_REMINDER:
-            raise ServiceValidationError("This occurrence is not a reminder task")
-        if context["status"] != "pending":
-            raise ServiceValidationError("Occurrence is not pending")
-        performed_at = _performed_at_utc(hass, call.data.get(ATTR_PERFORMED_AT))
         try:
             result = await store.execute(
                 occurrence_id=occurrence_id,
@@ -201,10 +264,48 @@ def async_setup_v080_task_policy(hass: HomeAssistant) -> None:
         await _runtime_data(hass).coordinator.async_request_refresh()
         return response
 
+    async def handle_record_treatment(call: ServiceCall) -> ServiceResponse:
+        occurrence_id, context, performed_at = await _context(
+            hass, store, call, TASK_KIND_TREATMENT
+        )
+        action = str(
+            call.data.get(ATTR_TREATMENT_ACTION)
+            or context.get("planned", {}).get("treatment_action")
+            or context.get("task_title")
+            or "Behandlung"
+        ).strip()
+        outcome = call.data.get(ATTR_TREATMENT_OUTCOME)
+        actual: dict[str, Any] = {"treatment_action": action}
+        if outcome:
+            actual["outcome"] = outcome
+        try:
+            result = await store.execute(
+                occurrence_id=occurrence_id,
+                expected_kind=TASK_KIND_TREATMENT,
+                performed_at=performed_at,
+                actual=actual,
+                notes=call.data.get(ATTR_NOTES),
+                deviation_reason=call.data.get(ATTR_DEVIATION_REASON),
+                event_type=EVENT_TYPE_TREATMENT,
+                event_title=action,
+                event_data={"treatment_action": action, **({"outcome": outcome} if outcome else {})},
+            )
+        except (KeyError, ValueError) as err:
+            raise ServiceValidationError(str(err)) from err
+        await _runtime_data(hass).coordinator.async_request_refresh()
+        return result.as_dict()
+
     hass.services.async_register(
         DOMAIN,
         SERVICE_RECORD_TASK_REMINDER,
         handle_record_reminder,
         schema=RECORD_REMINDER_V080_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_RECORD_TASK_TREATMENT,
+        handle_record_treatment,
+        schema=RECORD_TREATMENT_SCHEMA,
         supports_response=SupportsResponse.ONLY,
     )
