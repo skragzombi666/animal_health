@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
-from .catalog import medicine_catalog_names, vaccine_catalog_names
+from .catalog import breed_catalog_items, medicine_catalog_names, vaccine_catalog_names
 from .const import (
     ADMINISTRATION_ROUTES,
     ANIMAL_SEXES,
@@ -156,7 +156,7 @@ def _catalog_snapshot() -> dict[str, Any]:
         "medicine_names": medicine_catalog_names(),
         "vaccine_names": vaccine_catalog_names(),
         "species": _catalog_items("species.json"),
-        "breeds": _catalog_items("breeds.json"),
+        "breeds": breed_catalog_items(),
     }
 
 
