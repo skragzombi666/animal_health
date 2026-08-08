@@ -29,6 +29,7 @@ from .task_services import async_setup_task_services
 from .task_stabilization import apply_task_stabilization
 from .v080_features import async_initialize_v080_features, async_setup_v080_features
 from .v080_task_policy import async_setup_v080_task_policy
+from .v080_weight import async_setup_v080_weight_api
 
 PLATFORMS = [
     Platform.SENSOR,
@@ -53,6 +54,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_feature_api(hass)
     async_setup_group_lifecycle_api(hass)
     async_setup_v080_features(hass)
+    async_setup_v080_weight_api(hass)
     return True
 
 
