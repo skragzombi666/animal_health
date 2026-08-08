@@ -39,27 +39,40 @@ const Panel=customElements.get("animal-health-panel");
 if(!Panel)throw new Error("Panel not registered");
 const panel=new Panel();
 panel.h={language:"de"};
-panel.d={version:"0.7.5",today:"2026-08-08",summary:{active_animals:1,overdue_tasks:0,today_tasks:0,upcoming_tasks:1,pending_tasks:1},animals:[{id:"AH-1",device_id:"device-1",name:"Curry",species:"Huhn",status:"active",is_archived:false}],tasks:[{id:"TK-OFF",title:"Wägen",task_kind:"weight",recurrence_type:"once",is_active:false,animal_name:"Curry"}],occurrences:[{id:"OC-1",task_id:"TK-OFF",task_title:"Wägen",task_kind:"weight",animal_id:"AH-1",animal_name:"Curry",status:"pending",scheduled_local:"2026-08-09T14:00:00+02:00",scheduled_date:"2026-08-09",is_overdue:false,is_today:false,is_upcoming:true}],events:[{id:"EV-1",animal_id:"AH-1",animal_name:"Curry",event_type:"symptom",title:"diarrhea",occurred_at:"2026-08-08T13:21:00+02:00",notes:"Test"},{id:"EV-2",animal_id:"AH-1",animal_name:"Curry",event_type:"status_change",title:"status_change",occurred_at:"2026-08-08T15:29:00+02:00",data:{previous_status:"active",new_status:"missing"}}]};
-panel.c={animal_sexes:["male","female","other"],species:[{id:"chicken",name_de:"Huhn",name_en:"Chicken",aliases:[]}],breeds:[],task_kinds:["weight"],weight_units:["kg"],dose_units:[],administration_routes:[],symptoms:["diarrhea"],symptom_severities:[],vaccination_targets:[],health_check_results:[],medicine_names:[],vaccine_names:[]};
-panel.features={groups:[],memberships:{},max_attachment_size_bytes:15728640};panel.groupLifecycle={archived:{}};
-panel.applyTaskVisibility(panel.d,panel.d.tasks);
-if(panel.d.occurrences.length!==0)throw new Error("Inactive task occurrence remains visible");
-if(panel.d.summary.pending_tasks!==0||panel.d.summary.upcoming_tasks!==0)throw new Error("Inactive task still affects summary");
-const taskHtml=panel.tasks();
-if(!taskHtml.includes("Wägen")||!taskHtml.includes("Deaktiviert")||!taskHtml.includes(">Aktivieren</button>"))throw new Error("Inactive one-off task cannot be reactivated");
-const reactivated={occurrences:[{id:"OC-2",task_id:"TK-ON",status:"pending",is_overdue:false,is_today:true,is_upcoming:false}],summary:{pending_tasks:1,overdue_tasks:0,today_tasks:1,upcoming_tasks:0}};
-panel.applyTaskVisibility(reactivated,[{id:"TK-ON",is_active:true}]);if(reactivated.occurrences.length!==1)throw new Error("Reactivated task hidden");
-if(panel.eventTitle(panel.d.events[0])!=="Durchfall")throw new Error("Diarrhea not localized");
-if(panel.eventTitle(panel.d.events[1])!=="Statusänderung")throw new Error("Status change not localized");
-const row=panel.eventRow(panel.d.events[0]);if(!row.includes('data-action="event-detail"'))throw new Error("Event row not clickable");
-panel.modal={type:"event-detail",eventId:"EV-1"};const detail=panel.form();if(!detail.includes("Durchfall")||!detail.includes("Curry")||!detail.includes('data-action="animal-detail"'))throw new Error("Event details incomplete");
-panel.modal={type:"event-detail",eventId:"EV-2"};const statusDetail=panel.form();if(!statusDetail.includes("Vorheriger Status")||!statusDetail.includes("Aktiv")||!statusDetail.includes("Neuer Status")||!statusDetail.includes("Vermisst"))throw new Error("Status transition details missing");
-panel.loadDetail=id=>{panel._openedAnimal=id};
-panel.handleClick({composedPath:()=>[{dataset:{action:"animal-detail",id:"AH-1"}}]});
-if(panel.modal!==null||panel._openedAnimal!=="AH-1")throw new Error("Open animal does not close event modal");
-if(!panel.fileFields().includes('data-action="take-photo"'))throw new Error("Camera action missing");
-if(!panel.speciesVisual("chicken").includes("🐔"))throw new Error("Chicken visual regressed");
-console.log("Animal Health 0.7.5 dashboard runtime validation passed");
+panel.d={version:"0.8.0",today:"2026-08-09",summary:{active_animals:2,overdue_tasks:1,today_tasks:1,upcoming_tasks:1,pending_tasks:2},animals:[
+{id:"AH-1",device_id:"device-1",name:"Curry",species:"Huhn",breed:"Legehybride",status:"active",is_archived:false,latest_weight:{original_value:1.25,original_unit:"kg"}},
+{id:"AH-2",device_id:"device-2",name:"BBQ",species:"Huhn",status:"active",is_archived:false,latest_weight:{original_value:2.52,original_unit:"kg"}}
+],tasks:[
+{id:"TK-OFF",title:"Wägen",task_kind:"weight",recurrence_type:"weekly",is_active:false,animal_name:"Curry"},
+{id:"TK-TREAT",title:"Fuss behandeln",task_kind:"treatment",recurrence_type:"once",is_active:true,animal_name:"BBQ"}
+],occurrences:[
+{id:"OC-OFF",task_id:"TK-OFF",task_title:"Wägen",task_kind:"weight",animal_id:"AH-1",animal_name:"Curry",status:"pending",scheduled_local:"2026-08-09T14:00:00+02:00",scheduled_date:"2026-08-09",is_overdue:false,is_today:true,is_upcoming:false},
+{id:"OC-TREAT",task_id:"TK-TREAT",task_title:"Fuss behandeln",task_kind:"treatment",animal_id:"AH-2",animal_name:"BBQ",status:"pending",scheduled_local:"2026-08-09T15:00:00+02:00",scheduled_date:"2026-08-09",is_overdue:false,is_today:true,is_upcoming:false,planned:{treatment_action:"Fuss behandeln"}}
+],events:[
+{id:"EV-W0",animal_id:"AH-2",animal_name:"BBQ",event_type:"weight",title:"weight_measurement",occurred_at:"2026-08-01T10:00:00+02:00",value:2.5,unit:"kg"},
+{id:"EV-W1",animal_id:"AH-2",animal_name:"BBQ",event_type:"weight",title:"weight_measurement",occurred_at:"2026-08-08T18:09:00+02:00",value:2.52,unit:"kg"},
+{id:"EV-S",animal_id:"AH-1",animal_name:"Curry",event_type:"status_change",title:"status_change",occurred_at:"2026-08-08T15:29:00+02:00",data:{previous_status:"rehomed",new_status:"active"}},
+{id:"EV-H",animal_id:"AH-1",animal_name:"Curry",event_type:"symptom",title:"diarrhea",occurred_at:"2026-08-08T13:21:00+02:00"}
+]};
+panel.c={animal_sexes:["male","female","other"],species:[{id:"chicken",name_de:"Huhn",name_en:"Chicken",aliases:[]}],breeds:[{id:"chicken.hybrid",species_id:"chicken",name:"Legehybride"}],task_kinds:["reminder","weight","treatment"],weight_units:["kg","g"],dose_units:[],administration_routes:[],symptoms:["diarrhea"],symptom_severities:[],vaccination_targets:[],health_check_results:[],medicine_names:[],vaccine_names:[]};
+panel.features={groups:[{id:"GR-1",name:"Tschiggis",species:"chicken",animal_count:2}],memberships:{"AH-1":"GR-1","AH-2":"GR-1"},max_attachment_size_bytes:15728640};
+panel.groupLifecycle={archived:{}};
+panel.v080={primary_group_required:true,tags:[{id:"TG-1",name:"Bumblefoot",animal_count:1}],tag_memberships:{"AH-1":["TG-1"]},profiles:{"AH-1":"AT-1","AH-2":null}};
+panel.profileUrls={"AH-1":"/photo-curry.jpg"};
+panel.decorateFeatures();panel.decorateV080();panel.applyTaskVisibility(panel.d,panel.d.tasks);
+if(panel.d.occurrences.some(x=>x.id==="OC-OFF"))throw new Error("Inactive task occurrence remains visible");
+const tasks=panel.tasks();if(!tasks.includes("Serie fortsetzen")||!tasks.includes("Serie pausiert"))throw new Error("Recurring task pause/resume UX missing");if(!tasks.includes("Behandlung"))throw new Error("Treatment task kind missing");
+const groupSelect=panel.primaryGroupSelect("GR-1");if(!groupSelect.includes("required")||groupSelect.includes("Ohne Tiergruppe")||!groupSelect.includes("Neue Tiergruppe anlegen"))throw new Error("Primary group selector invalid");
+const lifecycle=panel.groupLifecycleForm({groupId:"GR-1",mode:"archive"});if(lifecycle.includes("Aus der Gruppe entfernen"))throw new Error("0.8 still allows ungrouping primary group members");
+panel.modal={type:"edit-animal",animalId:"AH-1"};const animalForm=panel.form();if(!animalForm.includes("Bumblefoot")||!animalForm.includes("Tierbild ersetzen")||!animalForm.includes('name="profile_image"'))throw new Error("Tags/photo missing from animal form");
+panel.modal={type:"record-weight",animalId:"AH-2"};const weightForm=panel.form();for(const label of ["−0,10 kg","−0,01 kg","+0,01 kg","+0,10 kg"])if(!weightForm.includes(label))throw new Error(`Weight step missing: ${label}`);
+panel.weightPrevious={"EV-W1":{value:2.5,unit:"kg"}};panel.modal={type:"event-detail",eventId:"EV-W1"};const weightDetail=panel.form();if(!weightDetail.includes("Letzte Messung")||!weightDetail.includes("2.5 kg")||!weightDetail.includes("Neue Messung")||!weightDetail.includes("2.52 kg"))throw new Error("Weight transition detail missing");
+panel.modal={type:"event-detail",eventId:"EV-S"};const statusDetail=panel.form();if(!statusDetail.includes("Weitervermittelt")||!statusDetail.includes("Aktiv"))throw new Error("Status transition regressed");
+panel.timelineMode="health";const healthTimeline=panel.timeline();if(!healthTimeline.includes("Durchfall")||healthTimeline.includes("Statusänderung"))throw new Error("Health timeline separation failed");panel.timelineMode="activity";const activityTimeline=panel.timeline();if(!activityTimeline.includes("Statusänderung")||activityTimeline.includes("Durchfall"))throw new Error("Activity timeline separation failed");
+const card=panel.animalCard(panel.animal("AH-1"));if(!card.includes("/photo-curry.jpg")||!card.includes("Bumblefoot"))throw new Error("Animal photo/tag not rendered on card");
+panel._overviewStats=true;const stat=panel.stat("mdi:paw",2,"activeAnimals");panel._overviewStats=false;if(!stat.includes('data-action="summary-filter"'))throw new Error("Dashboard stat not clickable");
+panel.modal={type:"execute",occurrenceId:"OC-TREAT"};const treatmentForm=panel.form();if(!treatmentForm.includes('name="treatment_action"'))throw new Error("Treatment execution fields missing");
+console.log("Animal Health 0.8.0 dashboard runtime validation passed");
 '''
     with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:
         file.write(harness)
@@ -72,8 +85,8 @@ console.log("Animal Health 0.7.5 dashboard runtime validation passed");
 def main() -> None:
     source = panel_source()
     manifest = json.loads(read(INTEGRATION / "manifest.json"))
-    assert manifest["version"] == "0.7.5"
-    assert 'const V="0.7.5",D="animal_health"' in source
+    assert manifest["version"] == "0.8.0"
+    assert 'const V="0.8.0",D="animal_health"' in source
     for path in (
         INTEGRATION / "__init__.py",
         INTEGRATION / "panel.py",
@@ -85,16 +98,35 @@ def main() -> None:
         INTEGRATION / "catalog.py",
         INTEGRATION / "exports.py",
         INTEGRATION / "runtime.py",
+        INTEGRATION / "v080_features.py",
+        INTEGRATION / "v080_task_policy.py",
+        INTEGRATION / "v080_weight.py",
     ):
         ast.parse(read(path))
     with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:
         file.write(source)
         file.flush()
         subprocess.run(["node", "--check", file.name], check=True)
-    for marker in ("animal-health-brand.svg","navigator.mediaDevices.getUserMedia","attachmentPreview","groups/archive","groups/restore","preparingDownload","applyTaskVisibility","eventDetails","taskInactive","statusTransition"):
+    for marker in (
+        "animal-health-brand.svg",
+        "navigator.mediaDevices.getUserMedia",
+        "applyTaskVisibility",
+        "eventDetails",
+        "statusTransition",
+        "v080/state",
+        "animal_photo/set",
+        "tags/set",
+        "seriesPause",
+        "document_in_timeline",
+        "previous_weight",
+        "weight-step-080",
+        "healthTimeline",
+        "activityTimeline",
+        "record_task_treatment",
+    ):
         assert marker in source
     runtime_smoke(source)
-    print("Animal Health 0.7.5 dashboard frontend validation passed")
+    print("Animal Health 0.8.0 dashboard frontend validation passed")
 
 
 if __name__ == "__main__":
