@@ -20,6 +20,8 @@ jobs:
         run: python tests/feature_export_smoke.py
       - name: Validate breed catalogue coverage
         run: python tests/breed_catalog_smoke.py
+      - name: Validate retry-safe downloads
+        run: python tests/download_stabilization_smoke.py
       - name: Validate linked task schema
         run: python tests/task_record_schema_smoke.py
       - name: Validate all-day overdue handling
