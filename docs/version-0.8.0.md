@@ -1,6 +1,6 @@
 # Animal Health 0.8.0
 
-0.8.0 ist die erste Beta-Basis nach Abschluss des 0.7.x-Praxistests. Der Schwerpunkt liegt auf einer belastbaren Tierorganisation, Bildern, einer klareren Aufgaben-/Chroniklogik und einer mobil schnelleren Bedienung.
+0.8.0 ist die erste Beta-Basis nach Abschluss des 0.7.x-Praxistests. Der Schwerpunkt liegt auf einer belastbaren Tierorganisation, Bildern, einer klareren Aufgaben-/Chroniklogik, mobil schnellerer Bedienung und einem bewusst begrenzten KI-Assistenten zur Dateneingabe.
 
 ## Tierorganisation
 
@@ -42,6 +42,23 @@
 - Allgemeine Erinnerungen bleiben reine Aufgaben und erzeugen keinen Tierchronikeintrag.
 - Die Chronik bietet getrennte Ansichten für `Gesundheitschronik`, `Aktivitätsverlauf` und `Alle Einträge`.
 
+## KI-Dokumentassistent
+
+0.8.0 enthält ein bewusst einfach gehaltenes KI-MVP für die Dateneingabe:
+
+- In der Animal-Health-Oberfläche kann ein Foto aufgenommen oder eine JPEG-, PNG-, WebP- oder PDF-Datei ausgewählt werden.
+- Die Analyse verwendet Home Assistants `AI Task`-Schnittstelle. Animal Health enthält keinen fest verdrahteten Cloud-Anbieter und keinen eigenen API-Schlüssel.
+- Damit kann derselbe Workflow mit einer vom Benutzer gewählten AI-Task-Entität verwendet werden; ob die Verarbeitung lokal oder extern erfolgt, hängt vom in Home Assistant konfigurierten Provider ab.
+- Extrahiert werden ausschliesslich Angaben, die im Dokument sichtbar sind, z. B. Dokumentart, Tiername, Medikament/Impfstoff, Dosis und Einheit, Applikationsweg, Praxis/Behandler, Behandlungstext, Terminangaben und Notizen.
+- Die KI darf keine Diagnose stellen, keine Dosis berechnen, nichts verschreiben und fehlende medizinische Angaben nicht ergänzen.
+- Unsichere oder nicht vorhandene Angaben sollen leer bleiben und als Unsicherheit kenntlich gemacht werden.
+- Erkannte Angaben werden zunächst nur als Vorschau angezeigt.
+- Mit `Aufgabe mit diesen Angaben vorbereiten` werden passende Felder im normalen Aufgabenformular vorausgefüllt. Erst dort kontrolliert der Benutzer alle Angaben und löst den Speichervorgang selbst aus.
+- Es gibt keine automatische Speicherung und keine autonome medizinische Entscheidung.
+- Temporäre KI-Uploads werden getrennt von der Tierchronik gespeichert und verfallen automatisch; ein Dokument wird nur dann dauerhaft Animal Health zugeordnet, wenn der Benutzer es über die reguläre Dokumentfunktion speichert.
+
+Weitergehende mehrseitige Dokumentanalyse, robuste Evaluationsfälle und zusätzliche direkte Chronik-Workflows bleiben Folgeausbau.
+
 ## Datenmodell und Rückwärtskompatibilität
 
 Zusätzliche 0.8-Tabellen werden idempotent angelegt:
@@ -51,6 +68,8 @@ Zusätzliche 0.8-Tabellen werden idempotent angelegt:
 - `animal_profiles`
 
 Bestehende Tier-, Ereignis-, Aufgaben-, Attachment- und Gruppendaten bleiben unverändert erhalten. Die bisherige Gruppenzuordnung wird als primäre Tiergruppe weiterverwendet. Nur tatsächlich ungruppierte Altdaten werden nach `Unzugeordnet` migriert.
+
+Der KI-Assistent ändert das fachliche Datenmodell nicht. Analyseergebnisse sind temporäre Entwürfe und werden erst über die bestehenden, validierten Animal-Health-Funktionen gespeichert.
 
 ## Teststrategie
 
@@ -67,7 +86,8 @@ Die CI prüft zusätzlich zu den bestehenden 0.7.x-Smoke-Tests:
 - Gesundheitschronik vs. Aktivitätsverlauf,
 - klickbare Dashboard-Kennzahlen,
 - Serien-Pause/Fortsetzen,
-- strukturierte Behandlungsaufgaben.
+- strukturierte Behandlungsaufgaben,
+- KI-Sicherheitsvorgaben, temporären Uploadpfad und Entwurfs-/Bestätigungsworkflow.
 
 ## Release-Ablauf
 
