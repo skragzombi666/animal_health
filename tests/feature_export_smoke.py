@@ -43,6 +43,9 @@ def main() -> None:
                 CREATE TABLE animal_group_memberships (
                     animal_id TEXT PRIMARY KEY, group_id TEXT, updated_at TEXT
                 );
+                CREATE TABLE animal_group_lifecycle (
+                    group_id TEXT PRIMARY KEY, archived_at TEXT NOT NULL
+                );
                 CREATE TABLE attachments (
                     id TEXT PRIMARY KEY, animal_id TEXT, event_id TEXT,
                     filename TEXT, media_type TEXT, size_bytes INTEGER,
@@ -89,6 +92,7 @@ def main() -> None:
         exported = json.loads(EXPORTS.json_export_bytes(database))
         assert exported["format"] == "animal-health-portable-export"
         assert exported["tables"]["animals"][0]["name"] == "Tina"
+        assert "animal_group_lifecycle" in exported["tables"]
 
         filename, pdf = EXPORTS.animal_health_pdf_bytes(database, "AH-TEST001")
         assert filename.endswith(".pdf")
@@ -104,7 +108,7 @@ def main() -> None:
             assert "animal_health.json" in names
             assert "attachments/AT-TEST001.pdf" in names
 
-    print("Animal Health 0.7.2 export validation passed")
+    print("Animal Health 0.7.3 export validation passed")
 
 
 if __name__ == "__main__":
