@@ -27,6 +27,8 @@ from .task_record_services import async_setup_task_record_services
 from .task_service_schema import async_setup_task_service_descriptions
 from .task_services import async_setup_task_services
 from .task_stabilization import apply_task_stabilization
+from .v080_features import async_initialize_v080_features, async_setup_v080_features
+from .v080_task_policy import async_setup_v080_task_policy
 
 PLATFORMS = [
     Platform.SENSOR,
@@ -45,10 +47,12 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_task_services(hass)
     async_setup_task_record_creation(hass)
     async_setup_task_record_services(hass)
+    async_setup_v080_task_policy(hass)
     async_setup_task_service_descriptions(hass)
     async_setup_dashboard_api(hass)
     async_setup_feature_api(hass)
     async_setup_group_lifecycle_api(hass)
+    async_setup_v080_features(hass)
     return True
 
 
@@ -67,6 +71,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
     )
     await feature_store.initialize()
     await async_initialize_group_lifecycle_store(feature_store)
+    await async_initialize_v080_features(feature_store)
 
     coordinator = AnimalHealthCoordinator(hass, database)
     await coordinator.async_config_entry_first_refresh()
