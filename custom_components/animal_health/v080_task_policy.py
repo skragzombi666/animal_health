@@ -1,0 +1,210 @@
+from __future__ import annotations
+
+import json
+import sqlite3
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+import voluptuous as vol
+
+from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import config_validation as cv
+
+from .const import ATTR_NOTES, DATABASE_NAME, DOMAIN, EVENT_TYPE_OBSERVATION
+from .task_record_services import (
+    ATTR_OCCURRENCE_ID,
+    _load_occurrence_plan,
+    _optional_date,
+    _optional_datetime,
+    _optional_text,
+    _performed_at_utc,
+    _required_text,
+    _resolve_occurrence_id,
+    _runtime_data,
+)
+from .task_records import (
+    ATTR_DEVIATION_REASON,
+    ATTR_PERFORMED_AT,
+    ATTR_SCHEDULED_DATE,
+    ATTR_TASK_ENTITY_ID,
+    SERVICE_RECORD_TASK_REMINDER,
+    TASK_KIND_REMINDER,
+    TaskRecordStore,
+)
+
+ATTR_DOCUMENT_IN_TIMELINE = "document_in_timeline"
+
+RECORD_REMINDER_V080_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_OCCURRENCE_ID): _required_text,
+        vol.Optional(ATTR_TASK_ENTITY_ID): _required_text,
+        vol.Optional(ATTR_SCHEDULED_DATE): _optional_date,
+        vol.Optional(ATTR_PERFORMED_AT): _optional_datetime,
+        vol.Optional(ATTR_DEVIATION_REASON): _optional_text,
+        vol.Optional(ATTR_NOTES): _optional_text,
+        vol.Optional(ATTR_DOCUMENT_IN_TIMELINE, default=False): cv.boolean,
+    }
+)
+
+
+def _insert_optional_reminder_event_sync(
+    database_path: Path,
+    occurrence_id: str,
+    performed_at: datetime,
+    notes: str | None,
+    deviation_reason: str | None,
+) -> dict[str, Any] | None:
+    connection = sqlite3.connect(database_path)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+    connection.execute("PRAGMA busy_timeout = 5000")
+    try:
+        row = connection.execute(
+            """
+            SELECT
+                occurrence.task_id,
+                occurrence.scheduled_for,
+                task.animal_id,
+                task.title AS task_title
+            FROM task_occurrences AS occurrence
+            JOIN tasks AS task ON task.id = occurrence.task_id
+            WHERE occurrence.id = ?
+            """,
+            (occurrence_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(occurrence_id)
+        if row["animal_id"] is None:
+            return None
+        linked = connection.execute(
+            "SELECT id FROM events WHERE task_occurrence_id = ?",
+            (occurrence_id,),
+        ).fetchone()
+        if linked is not None:
+            return None
+
+        existing = {
+            str(item[0]) for item in connection.execute("SELECT id FROM events").fetchall()
+        }
+        from .database import AnimalHealthDatabase
+
+        event_id = AnimalHealthDatabase._generate_record_id("EV", existing)
+        performed_at = performed_at.astimezone(UTC).replace(microsecond=0)
+        now = datetime.now(UTC).replace(microsecond=0).isoformat()
+        data = {
+            "source": "task_occurrence",
+            "generic_reminder": True,
+            "documented_by_user": True,
+            "task_execution": {
+                "source": "task_occurrence",
+                "task_id": str(row["task_id"]),
+                "task_title": str(row["task_title"]),
+                "task_kind": TASK_KIND_REMINDER,
+                "occurrence_id": occurrence_id,
+                "scheduled_for": str(row["scheduled_for"]),
+                "performed_at": performed_at.isoformat(),
+                "actual": {"result": "completed"},
+                "deviation_reason": deviation_reason,
+            },
+        }
+        connection.execute(
+            """
+            INSERT INTO events (
+                id,
+                animal_id,
+                event_type,
+                occurred_at,
+                title,
+                notes,
+                value,
+                unit,
+                correction_of_event_id,
+                data_json,
+                task_id,
+                task_occurrence_id,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?)
+            """,
+            (
+                event_id,
+                str(row["animal_id"]),
+                EVENT_TYPE_OBSERVATION,
+                performed_at.isoformat(),
+                str(row["task_title"]),
+                notes,
+                json.dumps(data, ensure_ascii=False, sort_keys=True),
+                str(row["task_id"]),
+                occurrence_id,
+                now,
+            ),
+        )
+        return {
+            "id": event_id,
+            "animal_id": str(row["animal_id"]),
+            "event_type": EVENT_TYPE_OBSERVATION,
+            "occurred_at": performed_at.isoformat(),
+            "title": str(row["task_title"]),
+            "notes": notes,
+            "task_id": str(row["task_id"]),
+            "task_occurrence_id": occurrence_id,
+            "data": data,
+        }
+    finally:
+        connection.close()
+
+
+def async_setup_v080_task_policy(hass: HomeAssistant) -> None:
+    store = TaskRecordStore(hass)
+
+    async def handle_record_reminder(call: ServiceCall) -> ServiceResponse:
+        occurrence_id = await _resolve_occurrence_id(
+            hass,
+            store,
+            call.data,
+            TASK_KIND_REMINDER,
+        )
+        try:
+            context = await _load_occurrence_plan(hass, occurrence_id)
+        except KeyError as err:
+            raise ServiceValidationError(str(err)) from err
+        if context["task_kind"] != TASK_KIND_REMINDER:
+            raise ServiceValidationError("This occurrence is not a reminder task")
+        if context["status"] != "pending":
+            raise ServiceValidationError("Occurrence is not pending")
+        performed_at = _performed_at_utc(hass, call.data.get(ATTR_PERFORMED_AT))
+        try:
+            result = await store.execute(
+                occurrence_id=occurrence_id,
+                expected_kind=TASK_KIND_REMINDER,
+                performed_at=performed_at,
+                actual={"result": "completed"},
+                notes=call.data.get(ATTR_NOTES),
+                deviation_reason=call.data.get(ATTR_DEVIATION_REASON),
+                event_type=None,
+                event_title=None,
+            )
+            response = result.as_dict()
+            if call.data.get(ATTR_DOCUMENT_IN_TIMELINE):
+                event = await hass.async_add_executor_job(
+                    _insert_optional_reminder_event_sync,
+                    Path(hass.config.path(DATABASE_NAME)),
+                    occurrence_id,
+                    performed_at,
+                    call.data.get(ATTR_NOTES),
+                    call.data.get(ATTR_DEVIATION_REASON),
+                )
+                response["event"] = event
+        except (KeyError, ValueError) as err:
+            raise ServiceValidationError(str(err)) from err
+        await _runtime_data(hass).coordinator.async_request_refresh()
+        return response
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_RECORD_TASK_REMINDER,
+        handle_record_reminder,
+        schema=RECORD_REMINDER_V080_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
