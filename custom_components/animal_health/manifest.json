@@ -4,8 +4,10 @@
   "codeowners": [],
   "config_flow": true,
   "dependencies": [
+    "ai_task",
     "frontend",
     "http",
+    "media_source",
     "websocket_api"
   ],
   "documentation": "https://github.com/skragzombi666/animal_health",
