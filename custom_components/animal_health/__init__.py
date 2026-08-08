@@ -13,6 +13,10 @@ from .dashboard_api import async_setup_dashboard_api
 from .database import AnimalHealthDatabase
 from .feature_api import async_setup_feature_api
 from .feature_store import AnimalHealthFeatureStore
+from .group_lifecycle import (
+    async_initialize_group_lifecycle_store,
+    async_setup_group_lifecycle_api,
+)
 from .panel import async_register_panel, async_unregister_panel
 from .runtime import AnimalHealthRuntimeData
 from .services import async_setup_services
@@ -42,6 +46,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_task_service_descriptions(hass)
     async_setup_dashboard_api(hass)
     async_setup_feature_api(hass)
+    async_setup_group_lifecycle_api(hass)
     return True
 
 
@@ -58,6 +63,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
         Path(hass.config.path(".storage", DOMAIN, "attachments")),
     )
     await feature_store.initialize()
+    await async_initialize_group_lifecycle_store(feature_store)
 
     coordinator = AnimalHealthCoordinator(hass, database)
     await coordinator.async_config_entry_first_refresh()
