@@ -11,6 +11,7 @@ from .const import DATABASE_NAME, DOMAIN
 from .coordinator import AnimalHealthCoordinator
 from .dashboard_api import async_setup_dashboard_api
 from .database import AnimalHealthDatabase
+from .download_stabilization import apply_download_stabilization
 from .feature_api import async_setup_feature_api
 from .feature_store import AnimalHealthFeatureStore
 from .group_lifecycle import (
@@ -39,6 +40,7 @@ type AnimalHealthConfigEntry = ConfigEntry[AnimalHealthRuntimeData]
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     apply_task_stabilization()
+    apply_download_stabilization()
     async_setup_services(hass)
     async_setup_task_services(hass)
     async_setup_task_record_creation(hass)
@@ -52,6 +54,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry) -> bool:
     apply_task_stabilization()
+    apply_download_stabilization()
     database_path = Path(hass.config.path(DATABASE_NAME))
     database = AnimalHealthDatabase(hass, database_path)
     await database.initialize()
