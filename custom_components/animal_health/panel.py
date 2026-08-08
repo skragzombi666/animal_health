@@ -19,9 +19,11 @@ from .const import DOMAIN
 PANEL_URL_PATH = "animal-health"
 PANEL_ELEMENT_NAME = "animal-health-panel"
 PANEL_MODULE_URL = f"/api/{DOMAIN}/frontend/animal-health-panel.js"
+PANEL_BRAND_URL = f"/api/{DOMAIN}/frontend/animal-health-brand.svg"
 _PANEL_STATE_KEY = f"{DOMAIN}_panel"
 _FRONTEND_DIR = Path(__file__).parent / "frontend"
 _FRONTEND_PARTS = tuple(sorted(_FRONTEND_DIR.glob("animal-health-panel.part*.js")))
+_BRAND_ICON_PATH = _FRONTEND_DIR / "animal-health-brand.svg"
 
 
 def _integration_version() -> str:
@@ -62,11 +64,31 @@ class AnimalHealthPanelView(HomeAssistantView):
         )
 
 
+class AnimalHealthBrandView(HomeAssistantView):
+    """Serve the bundled Animal Health brand icon."""
+
+    url = PANEL_BRAND_URL
+    name = "api:animal_health:brand"
+    requires_auth = False
+
+    async def get(self, request: web.Request) -> web.Response:
+        source = await request.app[KEY_HASS].async_add_executor_job(
+            _BRAND_ICON_PATH.read_text,
+            "utf-8",
+        )
+        return web.Response(
+            text=source,
+            content_type="image/svg+xml",
+            headers={"Cache-Control": "no-cache"},
+        )
+
+
 async def async_register_panel(hass: HomeAssistant) -> None:
     """Register the Animal Health frontend panel and module endpoint."""
     state = hass.data.setdefault(_PANEL_STATE_KEY, {})
     if not state.get("frontend_view_registered"):
         hass.http.register_view(AnimalHealthPanelView())
+        hass.http.register_view(AnimalHealthBrandView())
         state["frontend_view_registered"] = True
 
     async_register_built_in_panel(
