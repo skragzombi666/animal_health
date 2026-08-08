@@ -7,6 +7,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
+from .ai_assist import async_setup_ai_assist
 from .const import DATABASE_NAME, DOMAIN
 from .coordinator import AnimalHealthCoordinator
 from .dashboard_api import async_setup_dashboard_api
@@ -55,6 +56,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_group_lifecycle_api(hass)
     async_setup_v080_features(hass)
     async_setup_v080_weight_api(hass)
+    async_setup_ai_assist(hass)
     return True
 
 
