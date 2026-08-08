@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, Supp
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
+from . import task_record_creation, task_service_schema
 from .const import (
     ATTR_NOTES,
     DATABASE_NAME,
@@ -19,7 +20,6 @@ from .const import (
     EVENT_TYPE_OBSERVATION,
     EVENT_TYPE_TREATMENT,
 )
-from . import task_record_creation
 from .task_record_services import (
     ATTR_OCCURRENCE_ID,
     _load_occurrence_plan,
@@ -94,6 +94,97 @@ def _install_treatment_template_support() -> None:
 
     task_record_creation.build_task_template = build_task_template
     task_record_creation._animal_health_v080_treatment_patch = True
+
+
+def _install_task_description_support() -> None:
+    if getattr(task_service_schema, "_animal_health_v080_description_patch", False):
+        return
+    original = task_service_schema.task_record_descriptions
+
+    def descriptions(language: str) -> dict[str, dict[str, Any]]:
+        german = language.startswith("de")
+        result = original(language)
+        create = result.get("create_record_task", {})
+        options = (
+            create.get("fields", {})
+            .get("task_kind", {})
+            .get("selector", {})
+            .get("select", {})
+            .get("options", [])
+        )
+        if not any(option.get("value") == TASK_KIND_TREATMENT for option in options):
+            options.append(
+                {
+                    "value": TASK_KIND_TREATMENT,
+                    "label": "Behandlung" if german else "Treatment",
+                }
+            )
+
+        reminder = result.get(SERVICE_RECORD_TASK_REMINDER)
+        if reminder is not None:
+            fields = reminder.setdefault("fields", {})
+            ordered: dict[str, Any] = {}
+            for key, value in fields.items():
+                if key == "deviation_reason":
+                    ordered[ATTR_DOCUMENT_IN_TIMELINE] = {
+                        "name": (
+                            "Erledigung in Chronik dokumentieren"
+                            if german
+                            else "Document completion in timeline"
+                        ),
+                        "description": (
+                            "Nur für tierbezogene generische Erinnerungen. Gesundheitlich relevante Aufgaben werden immer automatisch dokumentiert."
+                            if german
+                            else "Only for animal-specific generic reminders. Health-relevant tasks are always documented automatically."
+                        ),
+                        "default": False,
+                        "selector": {"boolean": {}},
+                    }
+                ordered[key] = value
+            reminder["fields"] = ordered
+            reminder["description"] = (
+                "Dokumentiert die Ausführung einer reinen Erinnerung. Bei tierbezogenen Erinnerungen kann optional ein Eintrag im Aktivitätsverlauf erzeugt werden."
+                if german
+                else "Records completion of a reminder. Animal-specific reminders may optionally create an activity-timeline entry."
+            )
+
+        common = original(language)[SERVICE_RECORD_TASK_REMINDER]["fields"]
+        treatment_fields: dict[str, Any] = {}
+        for key in ("task_entity_id", "scheduled_date", "occurrence_id", "performed_at"):
+            treatment_fields[key] = common[key]
+        treatment_fields[ATTR_TREATMENT_ACTION] = {
+            "name": "Durchgeführte Behandlung" if german else "Treatment performed",
+            "description": (
+                "Die tatsächlich durchgeführte Behandlung; standardmässig wird der Aufgabentitel verwendet."
+                if german
+                else "The treatment actually performed; the task title is used by default."
+            ),
+            "selector": {"text": {}},
+        }
+        treatment_fields[ATTR_TREATMENT_OUTCOME] = {
+            "name": "Ergebnis" if german else "Outcome",
+            "description": (
+                "Optionales Ergebnis der Behandlung."
+                if german
+                else "Optional treatment outcome."
+            ),
+            "selector": {"text": {"multiline": True}},
+        }
+        for key in ("deviation_reason", "notes"):
+            treatment_fields[key] = common[key]
+        result[SERVICE_RECORD_TASK_TREATMENT] = {
+            "name": "Behandlungsaufgabe ausführen" if german else "Record treatment task",
+            "description": (
+                "Dokumentiert die Behandlung verpflichtend in der Gesundheitschronik und erledigt die Fälligkeit atomar."
+                if german
+                else "Documents the treatment in the health timeline and completes the occurrence atomically."
+            ),
+            "fields": treatment_fields,
+        }
+        return result
+
+    task_service_schema.task_record_descriptions = descriptions
+    task_service_schema._animal_health_v080_description_patch = True
 
 
 def _insert_optional_reminder_event_sync(
@@ -231,6 +322,7 @@ async def _context(
 
 def async_setup_v080_task_policy(hass: HomeAssistant) -> None:
     _install_treatment_template_support()
+    _install_task_description_support()
     store = TaskRecordStore(hass)
 
     async def handle_record_reminder(call: ServiceCall) -> ServiceResponse:
@@ -288,7 +380,10 @@ def async_setup_v080_task_policy(hass: HomeAssistant) -> None:
                 deviation_reason=call.data.get(ATTR_DEVIATION_REASON),
                 event_type=EVENT_TYPE_TREATMENT,
                 event_title=action,
-                event_data={"treatment_action": action, **({"outcome": outcome} if outcome else {})},
+                event_data={
+                    "treatment_action": action,
+                    **({"outcome": outcome} if outcome else {}),
+                },
             )
         except (KeyError, ValueError) as err:
             raise ServiceValidationError(str(err)) from err
