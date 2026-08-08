@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from homeassistant.components.media_player import BrowseError
 from homeassistant.components.media_source import MediaSource, MediaSourceItem, PlayMedia, Unresolvable
 from homeassistant.core import HomeAssistant
@@ -26,7 +28,7 @@ class AnimalHealthMediaSource(MediaSource):
         return PlayMedia(
             url="",
             mime_type=str(record["media_type"]),
-            path=__import__("pathlib").Path(record["path"]),
+            path=Path(record["path"]),
         )
 
     async def async_browse_media(self, item: MediaSourceItem):
