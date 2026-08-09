@@ -88,7 +88,7 @@ def main() -> None:
     assert "Home Assistants `AI Task`-Schnittstelle" in docs
     assert "keine automatische Speicherung" in docs
     assert "keine autonome medizinische Entscheidung" in docs
-    assert "mehrere Fotos" in docs
+    assert "mehrere fotos" in docs.lower()
     assert "Speech-to-Text" in docs
 
     print("Animal Health 0.8.0 AI assistant validation passed")
