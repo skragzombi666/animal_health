@@ -9,7 +9,7 @@ from typing import Any, cast
 import voluptuous as vol
 from aiohttp import web
 
-from homeassistant.components import ai_task, websocket_api
+from homeassistant.components import ai_task, stt, websocket_api
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.http import KEY_HASS
@@ -20,15 +20,20 @@ from .runtime import AnimalHealthRuntimeData
 AI_STATE_KEY = f"{DOMAIN}_ai_assist"
 _AI_UPLOAD_COMMAND = f"{DOMAIN}/ai/upload"
 _AI_ANALYZE_COMMAND = f"{DOMAIN}/ai/analyze"
+_AI_TRANSCRIBE_COMMAND = f"{DOMAIN}/ai/transcribe"
 _AI_STATUS_COMMAND = f"{DOMAIN}/ai/status"
 _MAX_AI_FILE_SIZE = 15 * 1024 * 1024
+_MAX_AI_DOCUMENTS = 10
+_MAX_AI_CONTEXT_LENGTH = 4000
 _AI_UPLOAD_TTL = timedelta(minutes=15)
-_ALLOWED_MEDIA_TYPES = {
+_DOCUMENT_MEDIA_TYPES = {
     "application/pdf",
     "image/jpeg",
     "image/png",
     "image/webp",
 }
+_AUDIO_MEDIA_TYPES = {"audio/wav", "audio/x-wav"}
+_ALLOWED_MEDIA_TYPES = _DOCUMENT_MEDIA_TYPES | _AUDIO_MEDIA_TYPES
 _AI_RESULT_FIELDS = (
     "document_type",
     "suggested_record_type",
@@ -74,6 +79,13 @@ def _required_text(value: Any) -> str:
     return text
 
 
+def _optional_context(value: Any) -> str:
+    text = str(value or "").strip()
+    if len(text) > _MAX_AI_CONTEXT_LENGTH:
+        raise vol.Invalid(f"context must not exceed {_MAX_AI_CONTEXT_LENGTH} characters")
+    return text
+
+
 def _state(hass: HomeAssistant) -> dict[str, Any]:
     return hass.data.setdefault(AI_STATE_KEY, {})
 
@@ -84,9 +96,14 @@ def _cleanup_uploads(hass: HomeAssistant) -> None:
     for upload_id, record in list(uploads.items()):
         if record["expires_at"] > now:
             continue
-        path = Path(record["path"])
-        path.unlink(missing_ok=True)
+        Path(record["path"]).unlink(missing_ok=True)
         uploads.pop(upload_id, None)
+
+
+def _discard_upload(hass: HomeAssistant, upload_id: str) -> None:
+    record = _state(hass).setdefault("uploads", {}).pop(upload_id, None)
+    if record is not None:
+        Path(record["path"]).unlink(missing_ok=True)
 
 
 def get_ai_upload(hass: HomeAssistant, upload_id: str) -> dict[str, Any] | None:
@@ -111,11 +128,13 @@ def _consume_upload_token(request: web.Request) -> None:
 
 
 def _suffix_for(filename: str, media_type: str) -> str:
+    if media_type in _AUDIO_MEDIA_TYPES:
+        return ".wav"
     suffix = mimetypes.guess_extension(media_type, strict=False)
     if suffix:
         return suffix
     candidate = Path(filename).suffix.lower()
-    return candidate if candidate in {".jpg", ".jpeg", ".png", ".webp", ".pdf"} else ""
+    return candidate if candidate in {".jpg", ".jpeg", ".png", ".webp", ".pdf", ".wav"} else ""
 
 
 def _animal_context(hass: HomeAssistant) -> tuple[list[str], dict[str, str]]:
@@ -131,7 +150,7 @@ def _animal_context(hass: HomeAssistant) -> tuple[list[str], dict[str, str]]:
     return sorted(names, key=str.casefold), by_name
 
 
-def _instructions(hass: HomeAssistant) -> str:
+def _instructions(hass: HomeAssistant, context: str = "") -> str:
     names, _ = _animal_context(hass)
     vaccination_targets = (
         "rabies, distemper, canine_adenovirus, canine_parvovirus, leptospirosis, "
@@ -140,26 +159,36 @@ def _instructions(hass: HomeAssistant) -> str:
         "gumboro, avian_pox, paramyxovirus, myxomatosis, rabbit_hemorrhagic_disease, "
         "tetanus, equine_influenza, strangles, bluetongue, other"
     )
-    return (
-        "Extract factual information from this animal-health document or medicine label. "
-        "This is data entry assistance only. Never diagnose, prescribe, recommend, calculate, "
-        "change a dose, infer a treatment, or fill information that is not explicitly visible. "
-        "When a field is absent, ambiguous, partially hidden or uncertain, return an empty string "
-        "for that field and describe the uncertainty in uncertainties. "
-        "suggested_record_type must be one of medication, vaccination, veterinary_visit, "
-        "treatment, health_check, weight, reminder, other. It only classifies the visible document; "
-        "it is not a medical recommendation. suggested_title should be a short neutral title based "
-        "only on visible text. For dates use YYYY-MM-DD only when clearly printed. For due_time use "
-        "HH:MM only when a future/scheduled time is explicitly printed. scheduled_date is only for "
+    instructions = (
+        "Extract factual information from all attached animal-health documents, medicine labels "
+        "and images as one coherent data-entry case. Multiple attachments may show different sides "
+        "or pages of the same item. This is data entry assistance only. Never diagnose, prescribe, "
+        "recommend, calculate, change a dose, infer a treatment, or fill information that is not "
+        "explicitly visible in an attachment or explicitly stated in the user-provided supplemental "
+        "context. When a field is absent, ambiguous, partially hidden, contradictory or uncertain, "
+        "return an empty string for that field and describe the uncertainty in uncertainties. "
+        "suggested_record_type must be one of medication, vaccination, veterinary_visit, treatment, "
+        "health_check, weight, reminder, other. It only classifies the supplied material; it is not "
+        "a medical recommendation. suggested_title should be a short neutral title based only on "
+        "supplied information. For dates use YYYY-MM-DD only when clearly supplied. For due_time use "
+        "HH:MM only when a future/scheduled time is explicitly supplied. scheduled_date is only for "
         "an explicitly stated future appointment or administration date; do not reuse an invoice, "
-        "issue or document date as a schedule. dose must contain the printed numeric dose only and "
-        "dose_unit its printed unit. route is only an explicitly stated administration route. "
+        "issue or document date as a schedule. dose must contain the supplied numeric dose only and "
+        "dose_unit its supplied unit. route is only an explicitly supplied administration route. "
         f"Known animal names are: {', '.join(names) if names else '(none)'}. "
-        "Set animal_name only when the document clearly names exactly one of these animals; otherwise "
-        "leave it empty. For vaccination_target use an exact identifier only when the vaccination "
-        f"target is explicit and clearly maps to one of: {vaccination_targets}. Otherwise leave it empty. "
-        "confidence should be high, medium or low for the extraction as a whole."
+        "Set animal_name only when the attachments or supplemental context clearly identify exactly "
+        "one of these animals; otherwise leave it empty. For vaccination_target use an exact identifier "
+        f"only when clearly supplied and mapping to one of: {vaccination_targets}. Otherwise leave it "
+        "empty. confidence should be high, medium or low for the extraction as a whole."
     )
+    if context:
+        instructions += (
+            "\n\nUser-provided supplemental context follows. Treat it as factual user input, not as a medical "
+            "instruction to invent missing information:\n---\n"
+            + context
+            + "\n---"
+        )
+    return instructions
 
 
 def _normalize_result(hass: HomeAssistant, data: Any) -> dict[str, Any]:
@@ -182,6 +211,47 @@ def _normalize_result(hass: HomeAssistant, data: Any) -> dict[str, Any]:
     _, by_name = _animal_context(hass)
     result["matched_animal_id"] = by_name.get(result["animal_name"].casefold(), "")
     return result
+
+
+def _stt_entity(hass: HomeAssistant, requested: str | None):
+    entities = sorted(hass.states.async_entity_ids("stt"))
+    entity_id = requested
+    if entity_id and entity_id not in entities:
+        raise ValueError("Selected speech-to-text entity is not available")
+    if not entity_id:
+        default_engine = stt.async_default_engine(hass)
+        if default_engine in entities:
+            entity_id = default_engine
+        elif len(entities) == 1:
+            entity_id = entities[0]
+        elif entities:
+            entity_id = entities[0]
+    if not entity_id:
+        raise ValueError("No Home Assistant speech-to-text entity is available")
+    entity = stt.async_get_speech_to_text_entity(hass, entity_id)
+    if entity is None:
+        raise ValueError("Speech-to-text entity is unavailable")
+    return entity_id, entity
+
+
+def _stt_language(hass: HomeAssistant, entity: Any) -> str:
+    supported = list(entity.supported_languages or [])
+    if not supported:
+        raise ValueError("Speech-to-text entity exposes no supported language")
+    configured = str(hass.config.language or "en").replace("_", "-")
+    base = configured.split("-", 1)[0].lower()
+    country = str(hass.config.country or "").upper()
+    candidates = [configured]
+    if country:
+        candidates.insert(0, f"{base}-{country}")
+    lowered = {item.lower(): item for item in supported}
+    for candidate in candidates:
+        if candidate.lower() in lowered:
+            return lowered[candidate.lower()]
+    for item in supported:
+        if item.lower().split("-", 1)[0] == base:
+            return item
+    return supported[0]
 
 
 class AnimalHealthAIUploadView(HomeAssistantView):
@@ -212,7 +282,7 @@ class AnimalHealthAIUploadView(HomeAssistantView):
             raise web.HTTPBadRequest(text="A non-empty file is required")
         if media_type not in _ALLOWED_MEDIA_TYPES:
             raise web.HTTPUnsupportedMediaType(
-                text="Supported AI documents are JPEG, PNG, WebP and PDF"
+                text="Supported AI inputs are JPEG, PNG, WebP, PDF and WAV"
             )
         upload_id = secrets.token_urlsafe(18)
         root = Path(hass.config.path(".storage", DOMAIN, "ai_uploads"))
@@ -254,6 +324,7 @@ def async_setup_ai_assist(hass: HomeAssistant) -> None:
             {
                 "url": f"/api/{DOMAIN}/ai/upload?token={token}",
                 "max_size_bytes": _MAX_AI_FILE_SIZE,
+                "max_documents": _MAX_AI_DOCUMENTS,
                 "accepted_media_types": sorted(_ALLOWED_MEDIA_TYPES),
             },
         )
@@ -266,16 +337,26 @@ def async_setup_ai_assist(hass: HomeAssistant) -> None:
         msg: dict[str, Any],
     ) -> None:
         entities = sorted(hass.states.async_entity_ids("ai_task"))
+        stt_entities = sorted(hass.states.async_entity_ids("stt"))
         connection.send_result(
             msg["id"],
-            {"available": bool(entities), "entities": entities},
+            {
+                "available": bool(entities),
+                "entities": entities,
+                "stt_available": bool(stt_entities),
+                "stt_entities": stt_entities,
+            },
         )
 
     @websocket_api.websocket_command(
         {
             vol.Required("type"): _AI_ANALYZE_COMMAND,
-            vol.Required("upload_id"): _required_text,
+            vol.Optional("upload_id"): _required_text,
+            vol.Optional("upload_ids"): vol.All(
+                [_required_text], vol.Length(min=1, max=_MAX_AI_DOCUMENTS)
+            ),
             vol.Optional("entity_id"): _required_text,
+            vol.Optional("context", default=""): _optional_context,
         }
     )
     @websocket_api.async_response
@@ -284,10 +365,26 @@ def async_setup_ai_assist(hass: HomeAssistant) -> None:
         connection: websocket_api.ActiveConnection,
         msg: dict[str, Any],
     ) -> None:
-        record = get_ai_upload(hass, msg["upload_id"])
-        if record is None:
-            connection.send_error(msg["id"], "ai_upload_missing", "AI upload expired or missing")
+        upload_ids = list(msg.get("upload_ids") or [])
+        if not upload_ids and msg.get("upload_id"):
+            upload_ids = [msg["upload_id"]]
+        if not upload_ids:
+            connection.send_error(msg["id"], "ai_upload_missing", "No AI document was supplied")
             return
+        records: list[tuple[str, dict[str, Any]]] = []
+        for upload_id in upload_ids:
+            record = get_ai_upload(hass, upload_id)
+            if record is None:
+                connection.send_error(
+                    msg["id"], "ai_upload_missing", "AI upload expired or missing"
+                )
+                return
+            if record["media_type"] not in _DOCUMENT_MEDIA_TYPES:
+                connection.send_error(
+                    msg["id"], "ai_unsupported_document", "Only image and PDF uploads can be analyzed as documents"
+                )
+                return
+            records.append((upload_id, record))
         entities = sorted(hass.states.async_entity_ids("ai_task"))
         entity_id = msg.get("entity_id")
         if entity_id is None and len(entities) == 1:
@@ -297,22 +394,78 @@ def async_setup_ai_assist(hass: HomeAssistant) -> None:
                 hass,
                 task_name="animal_health_document_extraction",
                 entity_id=entity_id,
-                instructions=_instructions(hass),
+                instructions=_instructions(hass, msg.get("context", "")),
                 structure=_AI_STRUCTURE,
                 attachments=[
                     {
-                        "media_content_id": f"media-source://{DOMAIN}/{msg['upload_id']}",
+                        "media_content_id": f"media-source://{DOMAIN}/{upload_id}",
                         "media_content_type": str(record["media_type"]),
                     }
+                    for upload_id, record in records
                 ],
             )
             normalized = _normalize_result(hass, result.data)
-            normalized["source_filename"] = str(record["filename"])
+            normalized["source_filenames"] = [str(record["filename"]) for _, record in records]
+            normalized["source_filename"] = normalized["source_filenames"][0]
         except Exception as err:  # noqa: BLE001
             connection.send_error(msg["id"], "ai_analysis_failed", str(err))
             return
         connection.send_result(msg["id"], normalized)
 
+    @websocket_api.websocket_command(
+        {
+            vol.Required("type"): _AI_TRANSCRIBE_COMMAND,
+            vol.Required("upload_id"): _required_text,
+            vol.Optional("entity_id"): _required_text,
+        }
+    )
+    @websocket_api.async_response
+    async def websocket_ai_transcribe(
+        hass: HomeAssistant,
+        connection: websocket_api.ActiveConnection,
+        msg: dict[str, Any],
+    ) -> None:
+        upload_id = msg["upload_id"]
+        record = get_ai_upload(hass, upload_id)
+        if record is None:
+            connection.send_error(msg["id"], "ai_audio_missing", "Dictation upload expired or missing")
+            return
+        if record["media_type"] not in _AUDIO_MEDIA_TYPES:
+            connection.send_error(msg["id"], "ai_audio_invalid", "Dictation must be WAV audio")
+            return
+        try:
+            entity_id, entity = _stt_entity(hass, msg.get("entity_id"))
+            language = _stt_language(hass, entity)
+            metadata = stt.SpeechMetadata(
+                language=language,
+                format=stt.AudioFormats.WAV,
+                codec=stt.AudioCodecs.PCM,
+                bit_rate=stt.AudioBitRates.BITRATE_16,
+                sample_rate=stt.AudioSampleRates.SAMPLERATE_16000,
+                channel=stt.AudioChannels.CHANNEL_MONO,
+            )
+            if not entity.check_metadata(metadata):
+                raise ValueError("Selected speech-to-text entity does not support 16 kHz mono WAV")
+            audio = await hass.async_add_executor_job(Path(record["path"]).read_bytes)
+
+            async def audio_stream():
+                yield audio
+
+            result = await entity.internal_async_process_audio_stream(metadata, audio_stream())
+            if result.result != stt.SpeechResultState.SUCCESS or not result.text:
+                raise ValueError("Speech-to-text did not return a transcript")
+            transcript = str(result.text).strip()
+        except Exception as err:  # noqa: BLE001
+            connection.send_error(msg["id"], "ai_transcription_failed", str(err))
+            return
+        finally:
+            _discard_upload(hass, upload_id)
+        connection.send_result(
+            msg["id"],
+            {"text": transcript, "entity_id": entity_id, "language": language},
+        )
+
     websocket_api.async_register_command(hass, websocket_ai_upload)
     websocket_api.async_register_command(hass, websocket_ai_status)
     websocket_api.async_register_command(hass, websocket_ai_analyze)
+    websocket_api.async_register_command(hass, websocket_ai_transcribe)
