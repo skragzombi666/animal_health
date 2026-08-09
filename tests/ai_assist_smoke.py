@@ -18,8 +18,9 @@ def read(path: Path) -> str:
 def main() -> None:
     ai_source = read(INTEGRATION / "ai_assist.py")
     media_source = read(INTEGRATION / "media_source.py")
-    frontend = read(FRONTEND / "animal-health-panel.part14.js") + read(
-        FRONTEND / "animal-health-panel.part15.js"
+    frontend = "".join(
+        read(FRONTEND / f"animal-health-panel.part{index:02d}.js")
+        for index in (14, 15, 16)
     )
     init_source = read(INTEGRATION / "__init__.py")
     manifest = json.loads(read(INTEGRATION / "manifest.json"))
@@ -28,8 +29,8 @@ def main() -> None:
     ast.parse(ai_source)
     ast.parse(media_source)
 
-    assert "ai_task" in manifest["dependencies"]
-    assert "media_source" in manifest["dependencies"]
+    for dependency in ("ai_task", "media_source", "stt"):
+        assert dependency in manifest["dependencies"]
     assert "async_setup_ai_assist(hass)" in init_source
 
     for marker in (
@@ -41,6 +42,14 @@ def main() -> None:
         "return an empty string",
         "matched_animal_id",
         "AI upload expired or missing",
+        "upload_ids",
+        "_MAX_AI_DOCUMENTS = 10",
+        "supplemental context",
+        "_AI_TRANSCRIBE_COMMAND",
+        "stt.async_get_speech_to_text_entity",
+        "internal_async_process_audio_stream",
+        "AudioFormats.WAV",
+        "SAMPLERATE_16000",
     ):
         assert marker in ai_source, marker
 
@@ -57,8 +66,16 @@ def main() -> None:
         "/ai/status",
         "/ai/upload",
         "/ai/analyze",
+        "/ai/transcribe",
         "image/jpeg,image/png,image/webp,application/pdf",
         "Aufgabe mit diesen Angaben vorbereiten",
+        "multiple accept",
+        "aiMoreInfo",
+        "ai-start-dictation",
+        "ai-stop-dictation",
+        "audio/wav",
+        "upload_ids",
+        "aiFiles",
     ):
         assert marker in frontend, marker
 
@@ -70,6 +87,8 @@ def main() -> None:
     assert "Home Assistants `AI Task`-Schnittstelle" in docs
     assert "keine automatische Speicherung" in docs
     assert "keine autonome medizinische Entscheidung" in docs
+    assert "mehrere Fotos" in docs
+    assert "Speech-to-Text" in docs
 
     print("Animal Health 0.8.0 AI assistant validation passed")
 
