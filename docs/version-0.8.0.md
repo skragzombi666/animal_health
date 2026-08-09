@@ -46,18 +46,21 @@
 
 0.8.0 enthält ein bewusst einfach gehaltenes KI-MVP für die Dateneingabe:
 
-- In der Animal-Health-Oberfläche kann ein Foto aufgenommen oder eine JPEG-, PNG-, WebP- oder PDF-Datei ausgewählt werden.
+- In der Animal-Health-Oberfläche können bis zu zehn Fotos oder Dateien gemeinsam ausgewählt werden. Unterstützt werden JPEG, PNG, WebP und PDF.
+- Mehrere Fotos können nacheinander aufgenommen und gesammelt werden, z. B. Vorderseite, Rückseite und Etikett eines Medikaments oder mehrere Seiten eines Dokuments.
 - Die Analyse verwendet Home Assistants `AI Task`-Schnittstelle. Animal Health enthält keinen fest verdrahteten Cloud-Anbieter und keinen eigenen API-Schlüssel.
 - Damit kann derselbe Workflow mit einer vom Benutzer gewählten AI-Task-Entität verwendet werden; ob die Verarbeitung lokal oder extern erfolgt, hängt vom in Home Assistant konfigurierten Provider ab.
-- Extrahiert werden ausschliesslich Angaben, die im Dokument sichtbar sind, z. B. Dokumentart, Tiername, Medikament/Impfstoff, Dosis und Einheit, Applikationsweg, Praxis/Behandler, Behandlungstext, Terminangaben und Notizen.
+- Ein zusätzliches Freitextfeld erlaubt Kontext, der auf den Dateien nicht sichtbar ist, z. B. welches Tier gemeint ist oder ergänzende sachliche Angaben.
+- Dieses Freitextfeld kann über `Diktieren (KI → Text)` befüllt werden. Dafür verwendet Animal Health eine in Home Assistant konfigurierte Speech-to-Text-Entität; bei Google Gemini erfolgt die Transkription über dessen STT-Entität. Die Aufnahme wird als 16-kHz-Mono-WAV an Home Assistant übergeben und nach der Transkription wieder verworfen.
+- Extrahiert werden ausschliesslich Angaben, die in den Dateien sichtbar oder vom Benutzer im Zusatztext ausdrücklich genannt sind, z. B. Dokumentart, Tiername, Medikament/Impfstoff, Dosis und Einheit, Applikationsweg, Praxis/Behandler, Behandlungstext, Terminangaben und Notizen.
 - Die KI darf keine Diagnose stellen, keine Dosis berechnen, nichts verschreiben und fehlende medizinische Angaben nicht ergänzen.
-- Unsichere oder nicht vorhandene Angaben sollen leer bleiben und als Unsicherheit kenntlich gemacht werden.
+- Unsichere, widersprüchliche oder nicht vorhandene Angaben sollen leer bleiben und als Unsicherheit kenntlich gemacht werden.
 - Erkannte Angaben werden zunächst nur als Vorschau angezeigt.
 - Mit `Aufgabe mit diesen Angaben vorbereiten` werden passende Felder im normalen Aufgabenformular vorausgefüllt. Erst dort kontrolliert der Benutzer alle Angaben und löst den Speichervorgang selbst aus.
 - Es gibt keine automatische Speicherung und keine autonome medizinische Entscheidung.
 - Temporäre KI-Uploads werden getrennt von der Tierchronik gespeichert und verfallen automatisch; ein Dokument wird nur dann dauerhaft Animal Health zugeordnet, wenn der Benutzer es über die reguläre Dokumentfunktion speichert.
 
-Weitergehende mehrseitige Dokumentanalyse, robuste Evaluationsfälle und zusätzliche direkte Chronik-Workflows bleiben Folgeausbau.
+Weitergehende komplexe Dokumentanalyse, robuste Evaluationsfälle und zusätzliche direkte Chronik-Workflows bleiben Folgeausbau.
 
 ## Datenmodell und Rückwärtskompatibilität
 
@@ -87,7 +90,7 @@ Die CI prüft zusätzlich zu den bestehenden 0.7.x-Smoke-Tests:
 - klickbare Dashboard-Kennzahlen,
 - Serien-Pause/Fortsetzen,
 - strukturierte Behandlungsaufgaben,
-- KI-Sicherheitsvorgaben, temporären Uploadpfad und Entwurfs-/Bestätigungsworkflow.
+- KI-Sicherheitsvorgaben, mehrere gemeinsame Dokumente, Zusatzkontext, Speech-to-Text-Diktat, temporären Uploadpfad und Entwurfs-/Bestätigungsworkflow.
 
 ## Release-Ablauf
 
