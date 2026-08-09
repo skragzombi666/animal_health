@@ -8,6 +8,7 @@
     "frontend",
     "http",
     "media_source",
+    "stt",
     "websocket_api"
   ],
   "documentation": "https://github.com/skragzombi666/animal_health",
