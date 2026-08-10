@@ -6,6 +6,7 @@ const AH081STBase={
  eventRow:AH081Base.eventRow,
  syncGroupEvent081:AH081ST.syncGroupEvent081,
  groupEventPayload081:AH081ST.groupEventPayload081,
+ handleSubmit:AH081ST.handleSubmit,
  render:AH081ST.render
 };
 AH081ST.decorateV081=function(){
@@ -46,6 +47,6 @@ AH081ST.handleSubmit=async function(event){
   event.preventDefault();const values=data(form);this.busy=true;this.render();
   try{await this.ws(`${D}/v081/group_event/create_safe`,this.groupEventPayload081(form,values));this.busy=false;this.modal=null;await this.load();this.notify(this.t("done"))}catch(error){this.busy=false;this.notify(`${this.t("failed")}: ${error?.message||error}`,true);this.render()}return
  }
- return AH081.handleSubmit.call(this,event)
+ return AH081STBase.handleSubmit.call(this,event)
 };
 AH081ST.render=function(){AH081STBase.render.call(this);this.shadowRoot.innerHTML+=`<style>.operationalHeading{display:flex;align-items:center;justify-content:space-between;margin:2px 0 12px}.operationalHeading h1{margin:0}.correctionBadge{display:inline-flex!important;align-items:center;gap:4px;color:var(--primary-color);font-size:.78rem}.correctionBadge ha-icon{width:15px;height:15px}</style>`};
