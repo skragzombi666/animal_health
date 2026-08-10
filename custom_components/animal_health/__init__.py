@@ -32,6 +32,7 @@ from .v080_features import async_initialize_v080_features, async_setup_v080_feat
 from .v080_task_policy import async_setup_v080_task_policy
 from .v080_weight import async_setup_v080_weight_api
 from .v081_features import async_initialize_v081_features, async_setup_v081_features
+from .v081_stt import async_setup_v081_stt
 
 PLATFORMS = [
     Platform.SENSOR,
@@ -58,6 +59,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_v080_features(hass)
     async_setup_v080_weight_api(hass)
     async_setup_v081_features(hass)
+    async_setup_v081_stt(hass)
     async_setup_ai_assist(hass)
     return True
 
