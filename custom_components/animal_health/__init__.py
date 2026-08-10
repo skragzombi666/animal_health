@@ -31,6 +31,7 @@ from .task_stabilization import apply_task_stabilization
 from .v080_features import async_initialize_v080_features, async_setup_v080_features
 from .v080_task_policy import async_setup_v080_task_policy
 from .v080_weight import async_setup_v080_weight_api
+from .v081_features import async_initialize_v081_features, async_setup_v081_features
 
 PLATFORMS = [
     Platform.SENSOR,
@@ -56,6 +57,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_group_lifecycle_api(hass)
     async_setup_v080_features(hass)
     async_setup_v080_weight_api(hass)
+    async_setup_v081_features(hass)
     async_setup_ai_assist(hass)
     return True
 
@@ -85,6 +87,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
         coordinator=coordinator,
         feature_store=feature_store,
     )
+    await async_initialize_v081_features(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await async_register_panel(hass)
     return True
