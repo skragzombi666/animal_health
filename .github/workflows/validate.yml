@@ -18,6 +18,12 @@ jobs:
         run: python tests/dashboard_frontend_smoke.py
       - name: Validate AI document assistant
         run: python tests/ai_assist_smoke.py
+      - name: Validate 0.8.1 operational workflows
+        run: python tests/v081_workflow_smoke.py
+      - name: Validate assembled frontend syntax
+        run: |
+          cat custom_components/animal_health/frontend/animal-health-panel.part*.js > /tmp/animal-health-panel.js
+          node --check /tmp/animal-health-panel.js
       - name: Validate groups, attachments and exports
         run: python tests/feature_export_smoke.py
       - name: Validate 0.8 tags, photos and primary-group migration
