@@ -35,12 +35,14 @@ def main() -> None:
     assert manifest["version"] == "0.8.1"
     assert 'const V="0.8.1"' in read(FRONTEND / "animal-health-panel.part01.js")
     for marker in (
-        "async_initialize_v081_features",
+        "_initialize_sync",
         "async_setup_v081_features",
         "async_setup_v081_fixes",
         "async_setup_v081_stt",
+        "await hass.async_add_executor_job(_initialize_sync, database_path)",
     ):
         assert marker in init_source, marker
+    assert "await async_initialize_v081_features(hass)" not in init_source
 
     for table in (
         "v081_settings",
