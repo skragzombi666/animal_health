@@ -32,8 +32,8 @@ def main() -> None:
     for source in (features, fixes, stt_source):
         ast.parse(source)
 
-    assert manifest["version"] == "0.8.1"
-    assert 'const V="0.8.1"' in read(FRONTEND / "animal-health-panel.part01.js")
+    assert tuple(int(part) for part in manifest["version"].split(".")) >= (0, 8, 1)
+    assert f'const V="{manifest["version"]}"' in read(FRONTEND / "animal-health-panel.part01.js")
     for marker in (
         "_initialize_sync",
         "async_setup_v081_features",
@@ -125,7 +125,7 @@ def main() -> None:
     ):
         assert phrase in docs, phrase
 
-    print("Animal Health 0.8.1 workflow validation passed")
+    print("Animal Health 0.8.1 workflow regression validation passed")
 
 
 if __name__ == "__main__":
