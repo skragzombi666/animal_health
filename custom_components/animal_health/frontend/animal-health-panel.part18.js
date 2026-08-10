@@ -16,7 +16,7 @@ AH081ST.decorateV081=function(){
  for(const occurrence of this.d?.occurrences||[]){const config=configs.get(String(occurrence.task_id));if(!config)continue;occurrence.animal_name=config.group_name}
 };
 AH081ST.overview=function(){
- const pending=this.pendingSorted(),now=Date.now(),limit=now+24*60*60*1000,urgent=pending.filter(item=>item.is_overdue||new Date(item.scheduled_local||item.scheduled_for).getTime()<=limit),basis=urgent.length?urgent:pending,shown=basis.slice(0,3),remaining=Math.max(0,basis.length-shown.length),urgentClass=urgent.length?"hasUrgent":"";
+ const pending=this.pendingSorted(),now=Date.now(),limit=now+24*60*60*1000,urgent=pending.filter(item=>item.is_overdue||new Date(item.scheduled_local||item.scheduled_for).getTime()<=limit),urgentIds=new Set(urgent.map(item=>String(item.id))),later=pending.filter(item=>!urgentIds.has(String(item.id))),shown=[...urgent.slice(0,3),...later.slice(0,Math.max(0,3-Math.min(3,urgent.length)))],remaining=Math.max(0,pending.length-shown.length),urgentClass=urgent.length?"hasUrgent":"";
  return`<div class="operationalHeading"><h1>${this.t("overview")}</h1></div><section class="actionNow ${urgentClass}"><div class="actionNowHead"><div><small>${urgent.length?this.t("within24h"):this.t("nextTasks")}</small><h2>${this.t("actionNow")}</h2></div>${urgent.length?`<strong>${urgent.length}</strong>`:""}</div>${shown.length?shown.map(item=>this.taskCompact(item)).join(""):`<div class="nothingDue"><ha-icon icon="mdi:check-circle-outline"></ha-icon><span>${this.t("nothingDue")}</span></div>`}${remaining?`<button class="moreTasks" data-view="tasks">+${remaining} ${this.t("moreTasks")}</button>`:""}</section><section class="quickCaptureCard"><h2>${this.t("quickCapture")}</h2><div class="quickCaptureGrid"><button data-action="record-weight"><ha-icon icon="mdi:scale"></ha-icon><span>${this.t("recordWeight")}</span></button><button data-action="record-symptom"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><span>${this.t("recordSymptom")}</span></button><button data-action="record-product"><ha-icon icon="mdi:pill"></ha-icon><span>${this.t("recordProduct")}</span></button><button data-action="record-event"><ha-icon icon="mdi:note-plus-outline"></ha-icon><span>${this.t("recordGeneral")}</span></button><button data-action="create-task"><ha-icon icon="mdi:clipboard-plus-outline"></ha-icon><span>${this.t("createTask")}</span></button><button data-action="ai-assist"><ha-icon icon="mdi:creation-outline"></ha-icon><span>${this.t("aiAssist")}</span></button></div></section>`
 };
 AH081ST.eventRow=function(event){
@@ -33,8 +33,8 @@ AH081ST.syncGroupEvent081=function(form){
 };
 AH081ST.groupEventPayload081=function(form,values){return AH081STBase.groupEventPayload081.call(this,form,values)};
 AH081ST.aiUploadForm=function(){
- const original=this.aiStatus||{},settings=this.v081?.settings||{},aiChosen=settings.ai_task_entity_id||"",sttChosen=settings.stt_entity_id||"";
- this.aiStatus={...original,entities:aiChosen?[aiChosen]:(original.entities||[]).slice(0,1),stt_entities:sttChosen?[sttChosen]:(original.stt_entities||[]).slice(0,1)};
+ const original=this.aiStatus||{},settings=this.v081?.settings||{},availableAI=original.entities||[],availableStt=original.stt_entities||[],aiChosen=availableAI.includes(settings.ai_task_entity_id)?settings.ai_task_entity_id:"",sttChosen=availableStt.includes(settings.stt_entity_id)?settings.stt_entity_id:"";
+ this.aiStatus={...original,entities:aiChosen?[aiChosen]:availableAI.slice(0,1),stt_entities:sttChosen?[sttChosen]:availableStt.slice(0,1)};
  let html;try{html=AH081STBase.aiUploadForm.call(this)}finally{this.aiStatus=original}
  const hidden=`<input type="hidden" name="ai_entity_id" value="${esc(aiChosen)}"><input type="hidden" name="ai_stt_entity_id" value="${esc(sttChosen)}">`;
  html=html.replace('<form data-form="ai-upload">',`<form data-form="ai-upload">${hidden}`);
