@@ -4,6 +4,7 @@ const AH081STBase={
  decorateV081:AH081ST.decorateV081,
  overview:AH081ST.overview,
  eventRow:AH081Base.eventRow,
+ quick:AH081ST.quick,
  syncGroupEvent081:AH081ST.syncGroupEvent081,
  groupEventPayload081:AH081ST.groupEventPayload081,
  handleSubmit:AH081ST.handleSubmit,
@@ -19,6 +20,9 @@ AH081ST.overview=function(){
  const pending=this.pendingSorted(),now=Date.now(),limit=now+24*60*60*1000,urgent=pending.filter(item=>item.is_overdue||new Date(item.scheduled_local||item.scheduled_for).getTime()<=limit),urgentIds=new Set(urgent.map(item=>String(item.id))),later=pending.filter(item=>!urgentIds.has(String(item.id))),shown=[...urgent.slice(0,3),...later.slice(0,Math.max(0,3-Math.min(3,urgent.length)))],remaining=Math.max(0,pending.length-shown.length),urgentClass=urgent.length?"hasUrgent":"";
  return`<div class="operationalHeading"><h1>${this.t("overview")}</h1></div><section class="actionNow ${urgentClass}"><div class="actionNowHead"><div><small>${urgent.length?this.t("within24h"):this.t("nextTasks")}</small><h2>${this.t("actionNow")}</h2></div>${urgent.length?`<strong>${urgent.length}</strong>`:""}</div>${shown.length?shown.map(item=>this.taskCompact(item)).join(""):`<div class="nothingDue"><ha-icon icon="mdi:check-circle-outline"></ha-icon><span>${this.t("nothingDue")}</span></div>`}${remaining?`<button class="moreTasks" data-view="tasks">+${remaining} ${this.t("moreTasks")}</button>`:""}</section><section class="quickCaptureCard"><h2>${this.t("quickCapture")}</h2><div class="quickCaptureGrid"><button data-action="record-weight"><ha-icon icon="mdi:scale"></ha-icon><span>${this.t("recordWeight")}</span></button><button data-action="record-symptom"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><span>${this.t("recordSymptom")}</span></button><button data-action="record-product"><ha-icon icon="mdi:pill"></ha-icon><span>${this.t("recordProduct")}</span></button><button data-action="record-event"><ha-icon icon="mdi:note-plus-outline"></ha-icon><span>${this.t("recordGeneral")}</span></button><button data-action="create-task"><ha-icon icon="mdi:clipboard-plus-outline"></ha-icon><span>${this.t("createTask")}</span></button><button data-action="ai-assist"><ha-icon icon="mdi:creation-outline"></ha-icon><span>${this.t("aiAssist")}</span></button></div></section>`
 };
+AH081ST.quick=function(id=""){
+ let html=AH081STBase.quick.call(this,id);if(!id)return html;const additions=`<button data-action="record-product" data-id="${esc(id)}"><ha-icon icon="mdi:pill"></ha-icon>${this.t("recordProduct")}</button><button data-action="record-event" data-id="${esc(id)}"><ha-icon icon="mdi:note-plus-outline"></ha-icon>${this.t("recordGeneral")}</button>`;const index=html.lastIndexOf("</div>");return index>=0?html.slice(0,index)+additions+html.slice(index):html+additions
+};
 AH081ST.eventRow=function(event){
  if(event?.group_id)return AH081STBase.eventRow.call(this,event);
  let html=AH081STBase.eventRow.call(this,event),badge="";
@@ -27,6 +31,8 @@ AH081ST.eventRow=function(event){
  else if(event?.correction_of_event_id)badge=`<small class="correctionBadge"><ha-icon icon="mdi:pencil-outline"></ha-icon>${this.t("correctionEntry")}</small>`;
  if(!badge)return html;const index=html.lastIndexOf("</div>");return index>=0?html.slice(0,index)+badge+html.slice(index):html+badge
 };
+AH081ST.localDateTime081=function(value){const parsed=value?new Date(value):null;if(!parsed||Number.isNaN(parsed.getTime()))return"";const pad=n=>String(n).padStart(2,"0");return`${parsed.getFullYear()}-${pad(parsed.getMonth()+1)}-${pad(parsed.getDate())}T${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`};
+AH081ST.weightCorrectionForm081=function(modal){const event=this.eventById?.(modal.eventId)||{},animal=this.animal(event.animal_id),value=event.value??"",unit=event.unit||"kg",occurred=this.localDateTime081(event.occurred_at);return`<h2><ha-icon icon="mdi:scale"></ha-icon>${this.t("correctWeight")}</h2><form data-form="correct-weight-081"><input type="hidden" name="event_id" value="${esc(event.id||modal.eventId)}"><p class="wide correctionNotice"><b>${esc(animal?.name||"")}</b> · ${this.t("oldValue")}: ${esc(value)} ${esc(unit)}</p><label class="wide"><span>${this.t("weight")}</span><div class="weightStepper080"><button type="button" data-action="weight-correction-step" data-delta="-0.10">−0,10 kg</button><button type="button" data-action="weight-correction-step" data-delta="-0.01">−0,01 kg</button><input name="weight" type="number" value="${esc(value)}" required min="0.000001" step="any"><button type="button" data-action="weight-correction-step" data-delta="0.01">+0,01 kg</button><button type="button" data-action="weight-correction-step" data-delta="0.10">+0,10 kg</button></div></label>${this.sel("dose_unit","weight_unit",this.c.weight_units,unit,"required")}${this.field("occurred_at","occurred_at","datetime-local",occurred)}${this.area("notes","notes",event.notes||"")}${this.buttons()}</form>`};
 AH081ST.syncGroupEvent081=function(form){
  AH081STBase.syncGroupEvent081.call(this,form);const kind=form?.elements?.event_type?.value||"observation",defaultBlock=form?.querySelector?.("[data-group-event-default]"),hide=["medication","weight","vaccination","veterinary_visit","treatment","care"].includes(kind);
  if(defaultBlock){defaultBlock.hidden=hide;for(const field of defaultBlock.querySelectorAll("input,select,textarea"))field.disabled=hide}
@@ -46,6 +52,10 @@ AH081ST.handleSubmit=async function(event){
  if(form?.dataset.form==="group-event-081"){
   event.preventDefault();const values=data(form);this.busy=true;this.render();
   try{await this.ws(`${D}/v081/group_event/create_safe`,this.groupEventPayload081(form,values));this.busy=false;this.modal=null;await this.load();this.notify(this.t("done"))}catch(error){this.busy=false;this.notify(`${this.t("failed")}: ${error?.message||error}`,true);this.render()}return
+ }
+ if(form?.dataset.form==="correct-weight-081"){
+  event.preventDefault();const values=data(form);this.busy=true;this.render();
+  try{await this.ws(`${D}/v081/weight/correct`,{event_id:values.event_id,weight:Number(values.weight),weight_unit:values.weight_unit,...(values.occurred_at?{occurred_at:values.occurred_at}:{}),...(values.notes?{notes:values.notes}:{})});this.busy=false;this.modal=null;await this.load();this.notify(this.t("done"))}catch(error){this.busy=false;this.notify(`${this.t("failed")}: ${error?.message||error}`,true);this.render()}return
  }
  return AH081STBase.handleSubmit.call(this,event)
 };
