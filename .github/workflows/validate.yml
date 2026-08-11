@@ -16,8 +16,12 @@ jobs:
         run: python -m compileall custom_components tests
       - name: Validate dashboard integration
         run: python tests/dashboard_frontend_smoke.py
+      - name: Validate AI document assistant
+        run: python tests/ai_assist_smoke.py
       - name: Validate groups, attachments and exports
         run: python tests/feature_export_smoke.py
+      - name: Validate 0.8 tags, photos and primary-group migration
+        run: python tests/v080_feature_smoke.py
       - name: Validate breed catalogue coverage
         run: python tests/breed_catalog_smoke.py
       - name: Validate retry-safe downloads

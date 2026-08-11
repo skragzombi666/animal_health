@@ -4,8 +4,11 @@
   "codeowners": [],
   "config_flow": true,
   "dependencies": [
+    "ai_task",
     "frontend",
     "http",
+    "media_source",
+    "stt",
     "websocket_api"
   ],
   "documentation": "https://github.com/skragzombi666/animal_health",
@@ -13,5 +16,5 @@
   "iot_class": "local_push",
   "requirements": [],
   "single_config_entry": true,
-  "version": "0.7.5"
+  "version": "0.8.0"
 }
