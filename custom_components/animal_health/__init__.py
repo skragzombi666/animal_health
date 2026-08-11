@@ -34,6 +34,7 @@ from .v080_weight import async_setup_v080_weight_api
 from .v081_features import _initialize_sync, async_setup_v081_features
 from .v081_fixes import async_setup_v081_fixes
 from .v081_stt import async_setup_v081_stt
+from .v082_features import apply_v082_patches, async_setup_v082_features
 
 PLATFORMS = [
     Platform.SENSOR,
@@ -46,6 +47,7 @@ type AnimalHealthConfigEntry = ConfigEntry[AnimalHealthRuntimeData]
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
+    apply_v082_patches()
     apply_task_stabilization()
     apply_download_stabilization()
     async_setup_services(hass)
@@ -62,11 +64,13 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_v081_features(hass)
     async_setup_v081_fixes(hass)
     async_setup_v081_stt(hass)
+    async_setup_v082_features(hass)
     async_setup_ai_assist(hass)
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry) -> bool:
+    apply_v082_patches()
     apply_task_stabilization()
     apply_download_stabilization()
     database_path = Path(hass.config.path(DATABASE_NAME))
