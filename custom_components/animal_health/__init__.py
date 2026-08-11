@@ -35,6 +35,7 @@ from .v081_features import _initialize_sync, async_setup_v081_features
 from .v081_fixes import async_setup_v081_fixes
 from .v081_stt import async_setup_v081_stt
 from .v082_features import apply_v082_patches, async_setup_v082_features
+from .v083_features import async_initialize_v083_features, async_setup_v083_features
 
 PLATFORMS = [
     Platform.SENSOR,
@@ -65,6 +66,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_v081_fixes(hass)
     async_setup_v081_stt(hass)
     async_setup_v082_features(hass)
+    async_setup_v083_features(hass)
     async_setup_ai_assist(hass)
     return True
 
@@ -87,6 +89,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
     await async_initialize_group_lifecycle_store(feature_store)
     await async_initialize_v080_features(feature_store)
     await hass.async_add_executor_job(_initialize_sync, database_path)
+    await async_initialize_v083_features(feature_store)
 
     coordinator = AnimalHealthCoordinator(hass, database)
     await coordinator.async_config_entry_first_refresh()
