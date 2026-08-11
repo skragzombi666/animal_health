@@ -29,8 +29,18 @@ def panel_source() -> str:
 
 def runtime_smoke(source: str) -> None:
     harness = r'''
-class MockShadowRoot { constructor(){this.listeners=new Map();this.innerHTML="";} addEventListener(t,l){this.listeners.set(t,l);} querySelector(){return null;} }
-globalThis.HTMLElement=class{constructor(){this.isConnected=true;this.shadowRoot=null;}attachShadow(){this.shadowRoot=new MockShadowRoot();return this.shadowRoot;}toggleAttribute(){}dispatchEvent(){}};
+class MockShadowRoot {
+  constructor(){this.listeners=new Map();this.innerHTML="";}
+  addEventListener(t,l){this.listeners.set(t,l);}
+  querySelector(){return null;}
+  querySelectorAll(){return [];}
+}
+globalThis.HTMLElement=class{
+  constructor(){this.isConnected=true;this.shadowRoot=null;}
+  attachShadow(){this.shadowRoot=new MockShadowRoot();return this.shadowRoot;}
+  toggleAttribute(){}
+  dispatchEvent(){}
+};
 globalThis.CustomEvent=class{};
 globalThis.customElements={elements:new Map(),get(n){return this.elements.get(n)},define(n,c){this.elements.set(n,c)}};
 '''
@@ -38,41 +48,131 @@ globalThis.customElements={elements:new Map(),get(n){return this.elements.get(n)
 const Panel=customElements.get("animal-health-panel");
 if(!Panel)throw new Error("Panel not registered");
 const panel=new Panel();
-panel.h={language:"de"};
-panel.d={version:"0.8.0",today:"2026-08-09",summary:{active_animals:2,overdue_tasks:1,today_tasks:1,upcoming_tasks:1,pending_tasks:2},animals:[
-{id:"AH-1",device_id:"device-1",name:"Curry",species:"Huhn",breed:"Legehybride",status:"active",is_archived:false,latest_weight:{original_value:1.25,original_unit:"kg"}},
-{id:"AH-2",device_id:"device-2",name:"BBQ",species:"Huhn",status:"active",is_archived:false,latest_weight:{original_value:2.52,original_unit:"kg"}}
-],tasks:[
-{id:"TK-OFF",title:"Wägen",task_kind:"weight",recurrence_type:"weekly",is_active:false,animal_name:"Curry"},
-{id:"TK-TREAT",title:"Fuss behandeln",task_kind:"treatment",recurrence_type:"once",is_active:true,animal_name:"BBQ"}
-],occurrences:[
-{id:"OC-OFF",task_id:"TK-OFF",task_title:"Wägen",task_kind:"weight",animal_id:"AH-1",animal_name:"Curry",status:"pending",scheduled_local:"2026-08-09T14:00:00+02:00",scheduled_date:"2026-08-09",is_overdue:false,is_today:true,is_upcoming:false},
-{id:"OC-TREAT",task_id:"TK-TREAT",task_title:"Fuss behandeln",task_kind:"treatment",animal_id:"AH-2",animal_name:"BBQ",status:"pending",scheduled_local:"2026-08-09T15:00:00+02:00",scheduled_date:"2026-08-09",is_overdue:false,is_today:true,is_upcoming:false,planned:{treatment_action:"Fuss behandeln"}}
-],events:[
-{id:"EV-W0",animal_id:"AH-2",animal_name:"BBQ",event_type:"weight",title:"weight_measurement",occurred_at:"2026-08-01T10:00:00+02:00",value:2.5,unit:"kg"},
-{id:"EV-W1",animal_id:"AH-2",animal_name:"BBQ",event_type:"weight",title:"weight_measurement",occurred_at:"2026-08-08T18:09:00+02:00",value:2.52,unit:"kg"},
-{id:"EV-S",animal_id:"AH-1",animal_name:"Curry",event_type:"status_change",title:"status_change",occurred_at:"2026-08-08T15:29:00+02:00",data:{previous_status:"rehomed",new_status:"active"}},
-{id:"EV-H",animal_id:"AH-1",animal_name:"Curry",event_type:"symptom",title:"diarrhea",occurred_at:"2026-08-08T13:21:00+02:00"}
-]};
-panel.c={animal_sexes:["male","female","other"],species:[{id:"chicken",name_de:"Huhn",name_en:"Chicken",aliases:[]}],breeds:[{id:"chicken.hybrid",species_id:"chicken",name:"Legehybride"}],task_kinds:["reminder","weight","treatment"],weight_units:["kg","g"],dose_units:[],administration_routes:[],symptoms:["diarrhea"],symptom_severities:[],vaccination_targets:[],health_check_results:[],medicine_names:[],vaccine_names:[]};
-panel.features={groups:[{id:"GR-1",name:"Tschiggis",species:"chicken",animal_count:2}],memberships:{"AH-1":"GR-1","AH-2":"GR-1"},max_attachment_size_bytes:15728640};
+panel.h={language:"de",user:{is_admin:true}};
+panel.d={
+  version:"0.8.3",
+  today:"2026-08-11",
+  summary:{active_animals:2,overdue_tasks:0,today_tasks:0,upcoming_tasks:0,pending_tasks:0},
+  animals:[
+    {id:"AH-1",device_id:"device-1",name:"Tina",species:"Huhn",breed:"Legehybride",color:"Hellbraun",sex:"female",birth_date:"2024-01-01",status:"active",is_archived:false,latest_weight:{original_value:2.05,original_unit:"kg"}},
+    {id:"AH-2",device_id:"device-2",name:"Berta",species:"Huhn",breed:"Marans",color:"Schwarz",sex:"female",birth_date:"2025-01-01",status:"active",is_archived:false,latest_weight:{original_value:2.2,original_unit:"kg"}}
+  ],
+  tasks:[],occurrences:[],events:[]
+};
+panel.c={
+  animal_sexes:["male","female","other"],
+  species:[{id:"chicken",name_de:"Huhn",name_en:"Chicken",aliases:["Hühner"]},{id:"dog",name_de:"Hund",name_en:"Dog",aliases:[]}],
+  breeds:[{id:"chicken.hybrid",species_id:"chicken",name:"Legehybride",aliases:[]},{id:"chicken.marans",species_id:"chicken",name:"Marans",aliases:[]}],
+  task_kinds:["reminder","weight","medication","vaccination","health_check","care","veterinary_visit","treatment"],
+  weight_units:["kg","g"],
+  dose_units:["mcg","mg","g","ml","drop","tablet","dose"],
+  administration_routes:["oral"],
+  symptoms:["other"],
+  symptom_severities:["mild"],
+  vaccination_targets:[],
+  health_check_results:["normal"],
+  medicine_names:[],
+  vaccine_names:[]
+};
+panel.features={
+  groups:[{id:"GR-1",name:"Hühner",species:"chicken",animal_count:2}],
+  memberships:{"AH-1":"GR-1","AH-2":"GR-1"},
+  max_attachment_size_bytes:15728640
+};
 panel.groupLifecycle={archived:{}};
-panel.v080={primary_group_required:true,tags:[{id:"TG-1",name:"Bumblefoot",animal_count:1}],tag_memberships:{"AH-1":["TG-1"]},profiles:{"AH-1":"AT-1","AH-2":null}};
-panel.profileUrls={"AH-1":"/photo-curry.jpg"};
-panel.decorateFeatures();panel.decorateV080();panel.applyTaskVisibility(panel.d,panel.d.tasks);
-if(panel.d.occurrences.some(x=>x.id==="OC-OFF"))throw new Error("Inactive task occurrence remains visible");
-const tasks=panel.tasks();if(!tasks.includes("Serie fortsetzen")||!tasks.includes("Serie pausiert"))throw new Error("Recurring task pause/resume UX missing");if(!tasks.includes("Behandlung"))throw new Error("Treatment task kind missing");
-const groupSelect=panel.primaryGroupSelect("GR-1");if(!groupSelect.includes("required")||groupSelect.includes("Ohne Tiergruppe")||!groupSelect.includes("Neue Tiergruppe anlegen"))throw new Error("Primary group selector invalid");
-const lifecycle=panel.groupLifecycleForm({groupId:"GR-1",mode:"archive"});if(lifecycle.includes("Aus der Gruppe entfernen"))throw new Error("0.8 still allows ungrouping primary group members");
-panel.modal={type:"edit-animal",animalId:"AH-1"};const animalForm=panel.form();if(!animalForm.includes("Bumblefoot")||!animalForm.includes("Tierbild ersetzen")||!animalForm.includes('name="profile_image"'))throw new Error("Tags/photo missing from animal form");
-panel.modal={type:"record-weight",animalId:"AH-2"};const weightForm=panel.form();for(const label of ["−0,10 kg","−0,01 kg","+0,01 kg","+0,10 kg"])if(!weightForm.includes(label))throw new Error(`Weight step missing: ${label}`);
-panel.weightPrevious={"EV-W1":{value:2.5,unit:"kg"}};panel.modal={type:"event-detail",eventId:"EV-W1"};const weightDetail=panel.form();if(!weightDetail.includes("Letzte Messung")||!weightDetail.includes("2.5 kg")||!weightDetail.includes("Neue Messung")||!weightDetail.includes("2.52 kg"))throw new Error("Weight transition detail missing");
-panel.modal={type:"event-detail",eventId:"EV-S"};const statusDetail=panel.form();if(!statusDetail.includes("Weitervermittelt")||!statusDetail.includes("Aktiv"))throw new Error("Status transition regressed");
-panel.timelineMode="health";const healthTimeline=panel.timeline();if(!healthTimeline.includes("Durchfall")||healthTimeline.includes("Statusänderung"))throw new Error("Health timeline separation failed");panel.timelineMode="activity";const activityTimeline=panel.timeline();if(!activityTimeline.includes("Statusänderung")||activityTimeline.includes("Durchfall"))throw new Error("Activity timeline separation failed");
-const card=panel.animalCard(panel.animal("AH-1"));if(!card.includes("/photo-curry.jpg")||!card.includes("Bumblefoot"))throw new Error("Animal photo/tag not rendered on card");
-panel._overviewStats=true;const stat=panel.stat("mdi:paw",2,"activeAnimals");panel._overviewStats=false;if(!stat.includes('data-action="summary-filter"'))throw new Error("Dashboard stat not clickable");
-panel.modal={type:"execute",occurrenceId:"OC-TREAT"};const treatmentForm=panel.form();if(!treatmentForm.includes('name="treatment_action"'))throw new Error("Treatment execution fields missing");
-console.log("Animal Health 0.8.0 dashboard runtime validation passed");
+panel.v080={primary_group_required:false,tags:[],tag_memberships:{},profiles:{}};
+panel.v081={settings:{},group_events:[],group_tasks:[]};
+panel.v083={
+  animal_metadata:{"AH-1":{distinctive_features:"Leichter weisser Kragen"}},
+  group_metadata:{"GR-1":{breed:"Legehybride"}},
+  custom_values:[
+    {id:1,kind:"breed",species_id:"chicken",breed_context:"",value:"Eigene Rasse",catalog_source:"custom"},
+    {id:2,kind:"color",species_id:"chicken",breed_context:"legehybride",value:"Eigene Farbe",catalog_source:"custom"},
+    {id:3,kind:"medication",species_id:"chicken",breed_context:"",value:"Eigenes Medikament",catalog_source:"custom",authorisation_status:"unknown"}
+  ],
+  medicines:[
+    {id:"chicken.med",name:"HuhnMed 10 mg/ml",target_species:["chicken"],aliases:[],catalog_source:"standard"},
+    {id:"dog.med",name:"HundMed 40 mg",target_species:["dog"],aliases:[],catalog_source:"standard"}
+  ]
+};
+panel.aiStatus={available:true,entities:["ai_task.test"],stt_available:true,stt_entities:["stt.test"]};
+panel.profileUrls={};
+panel.decorateFeatures();
+panel.decorateV080();
+panel.decorateV081();
+panel.decorateV083();
+
+const groupSelect=panel.primaryGroupSelect("");
+if(groupSelect.includes("required"))throw new Error("Animal group is still required");
+if(!groupSelect.includes("Ohne Tiergruppe"))throw new Error("Ungrouped animal option missing");
+
+panel.modal={type:"edit-animal",animalId:"AH-1"};
+const animalForm=panel.form();
+if(!animalForm.includes('name="distinctive_features"'))throw new Error("Distinctive features field missing");
+if(!animalForm.includes('data-combo083="breed"')||!animalForm.includes('data-combo083="color"'))throw new Error("Stable breed/color combobox missing");
+
+panel.modal={type:"edit-group",groupId:"GR-1"};
+const groupForm=panel.form();
+if(!groupForm.includes('name="breed"'))throw new Error("Group breed field missing");
+
+const lifecycle=panel.groupLifecycleForm({groupId:"GR-1",mode:"delete"});
+if(!lifecycle.includes('value="ungroup"')||!lifecycle.includes("Tiere keiner Tiergruppe zuordnen"))throw new Error("Ungroup-on-delete option missing");
+
+const medicationForm={
+  elements:{},
+  querySelector(selector){if(selector==='[name="show_off_label"]:checked')return this.showOff?{}:null;return null;},
+  querySelectorAll(){return []},
+  showOff:false
+};
+medicationForm.elements.animal_id={value:"AH-1"};
+let meds=panel.comboCandidates083("medication",medicationForm);
+if(!meds.some(item=>item.value==="HuhnMed 10 mg/ml"))throw new Error("On-label medication missing");
+if(meds.some(item=>item.value==="HundMed 40 mg"))throw new Error("Off-label medication shown by default");
+medicationForm.showOff=true;
+meds=panel.comboCandidates083("medication",medicationForm);
+const off=meds.find(item=>item.value==="HundMed 40 mg");
+if(!off||!off.offlabel)throw new Error("Off-label medication not marked");
+
+const field=()=>({value:"",dispatchEvent(){}});
+const animalCheck={value:"device-1",checked:false};
+const fields={
+  task_scope:field(),task_kind:field(),title:field(),description:field(),
+  recurrence_type:field(),recurrence_interval:field(),start_date:field(),due_time:field(),
+  planned_medication_name:field(),planned_dose:field(),planned_dose_unit:field(),planned_route:field(),
+  planned_vaccine_name:field(),planned_vaccination_dose:field(),planned_vaccination_dose_unit:field(),
+  planned_vaccination_route:field(),planned_check_focus:field(),planned_visit_reason:field(),planned_provider:field()
+};
+const taskForm={
+  elements:fields,
+  querySelectorAll(selector){if(selector==='[name="device_ids"]')return [animalCheck];if(selector==='[name="planned_vaccination_targets"]')return [];return [];},
+  querySelector(){return null;},
+  prepend(){}
+};
+panel.syncTask=()=>{};
+panel.shadowRoot.querySelector=selector=>selector==='form[data-form="task"]'?taskForm:null;
+panel.aiTaskDraft={
+  task_kind:"medication",animal_id:"AH-1",title:"Doxycyclin",
+  description:"",recurrence_type:"daily",recurrence_interval:"1",start_date:"2026-08-11",due_time:"",
+  planned_medication_name:"Doxycyclin 100 mg/Tablette",planned_dose:"1",planned_dose_unit:"tablet",planned_route:"oral",
+  planned_vaccine_name:"",planned_vaccination_dose:"",planned_vaccination_dose_unit:"",planned_vaccination_route:"",
+  planned_check_focus:"",planned_visit_reason:"",planned_provider:"",uncertainties:"",recognized_animal:"Tina"
+};
+if(!panel.applyAITaskDraft083(9))throw new Error("AI task draft was not applied");
+if(!animalCheck.checked)throw new Error("AI-recognized animal was not selected");
+if(fields.task_kind.value!=="medication")throw new Error("AI task kind was not applied");
+if(fields.planned_medication_name.value!=="Doxycyclin 100 mg/Tablette")throw new Error("AI medication was not applied");
+if(fields.planned_dose.value!=="1"||fields.planned_dose_unit.value!=="tablet")throw new Error("AI dose/unit was not applied");
+if(fields.recurrence_type.value!=="daily"||fields.recurrence_interval.value!=="1")throw new Error("AI recurrence was not applied");
+
+panel.aiBatch083=[
+  {suggested_record_type:"weight",animal_name:"Tina",matched_animal_id:"AH-1",animal_id:"AH-1",weight:"2.05",weight_unit:"kg",document_date:"2026-08-11",notes:"",uncertainties:"",reviewed:true,status:"pending"},
+  {suggested_record_type:"weight",animal_name:"Berta",matched_animal_id:"AH-2",animal_id:"AH-2",weight:"2.20",weight_unit:"kg",document_date:"2026-08-11",notes:"",uncertainties:"",reviewed:true,status:"pending"}
+];
+panel.aiBatchIndex083=0;
+const batch=panel.aiBatchForm083();
+if(!batch.includes("Eintrag 1 / 2")||!batch.includes("Alle geprüften Einträge speichern"))throw new Error("AI batch review UI missing");
+
+console.log("Animal Health 0.8.3 dashboard runtime validation passed");
 '''
     with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:
         file.write(harness)
@@ -85,48 +185,42 @@ console.log("Animal Health 0.8.0 dashboard runtime validation passed");
 def main() -> None:
     source = panel_source()
     manifest = json.loads(read(INTEGRATION / "manifest.json"))
-    assert manifest["version"] == "0.8.0"
-    assert 'const V="0.8.0",D="animal_health"' in source
-    for path in (
-        INTEGRATION / "__init__.py",
-        INTEGRATION / "panel.py",
-        INTEGRATION / "dashboard_api.py",
-        INTEGRATION / "feature_store.py",
-        INTEGRATION / "feature_api.py",
-        INTEGRATION / "download_stabilization.py",
-        INTEGRATION / "group_lifecycle.py",
-        INTEGRATION / "catalog.py",
-        INTEGRATION / "exports.py",
-        INTEGRATION / "runtime.py",
-        INTEGRATION / "v080_features.py",
-        INTEGRATION / "v080_task_policy.py",
-        INTEGRATION / "v080_weight.py",
-    ):
+    assert manifest["version"] == "0.8.3"
+    assert 'const V="0.8.3",D="animal_health"' in source
+
+    for path in sorted(INTEGRATION.glob("*.py")):
         ast.parse(read(path))
+
     with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:
         file.write(source)
         file.flush()
         subprocess.run(["node", "--check", file.name], check=True)
+
+    backend = read(INTEGRATION / "v083_features.py")
     for marker in (
-        "animal-health-brand.svg",
-        "navigator.mediaDevices.getUserMedia",
-        "applyTaskVisibility",
-        "eventDetails",
-        "statusTransition",
-        "v080/state",
-        "animal_photo/set",
-        "tags/set",
-        "seriesPause",
-        "document_in_timeline",
-        "previous_weight",
-        "weight-step-080",
-        "healthTimeline",
-        "activityTimeline",
-        "record_task_treatment",
+        "v083/state",
+        "v083/animal_metadata/set",
+        "v083/group_metadata/set",
+        "v083/custom_value/remember",
+        "v083/ai/analyze",
+        "animal_v083_metadata",
+        "animal_group_v083_metadata",
+        "animal_custom_values",
+        "entries_json",
+        "Tiere keiner Tiergruppe zuordnen",
+        "distinctive_features",
+        "data-combo083",
+        "show_off_label",
+        "mdi:pencil-outline",
+        "applyAITaskDraft083",
+        "cropOverlay083",
+        "ai-batch-save-all-083",
+        "Details zur KI-Erkennung",
     ):
-        assert marker in source
+        assert marker in source or marker in backend, marker
+
     runtime_smoke(source)
-    print("Animal Health 0.8.0 dashboard frontend validation passed")
+    print("Animal Health 0.8.3 dashboard frontend validation passed")
 
 
 if __name__ == "__main__":

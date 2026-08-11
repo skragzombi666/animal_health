@@ -31,6 +31,11 @@ from .task_stabilization import apply_task_stabilization
 from .v080_features import async_initialize_v080_features, async_setup_v080_features
 from .v080_task_policy import async_setup_v080_task_policy
 from .v080_weight import async_setup_v080_weight_api
+from .v081_features import _initialize_sync, async_setup_v081_features
+from .v081_fixes import async_setup_v081_fixes
+from .v081_stt import async_setup_v081_stt
+from .v082_features import apply_v082_patches, async_setup_v082_features
+from .v083_features import async_initialize_v083_features, async_setup_v083_features
 
 PLATFORMS = [
     Platform.SENSOR,
@@ -43,6 +48,7 @@ type AnimalHealthConfigEntry = ConfigEntry[AnimalHealthRuntimeData]
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
+    apply_v082_patches()
     apply_task_stabilization()
     apply_download_stabilization()
     async_setup_services(hass)
@@ -56,11 +62,17 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_group_lifecycle_api(hass)
     async_setup_v080_features(hass)
     async_setup_v080_weight_api(hass)
+    async_setup_v081_features(hass)
+    async_setup_v081_fixes(hass)
+    async_setup_v081_stt(hass)
+    async_setup_v082_features(hass)
+    async_setup_v083_features(hass)
     async_setup_ai_assist(hass)
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry) -> bool:
+    apply_v082_patches()
     apply_task_stabilization()
     apply_download_stabilization()
     database_path = Path(hass.config.path(DATABASE_NAME))
@@ -76,6 +88,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
     await feature_store.initialize()
     await async_initialize_group_lifecycle_store(feature_store)
     await async_initialize_v080_features(feature_store)
+    await hass.async_add_executor_job(_initialize_sync, database_path)
+    await async_initialize_v083_features(feature_store)
 
     coordinator = AnimalHealthCoordinator(hass, database)
     await coordinator.async_config_entry_first_refresh()
