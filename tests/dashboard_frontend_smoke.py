@@ -50,7 +50,7 @@ if(!Panel)throw new Error("Panel not registered");
 const panel=new Panel();
 panel.h={language:"de",user:{is_admin:true}};
 panel.d={
-  version:"0.8.5",
+  version:"0.8.6",
   today:"2026-08-11",
   summary:{active_animals:2,overdue_tasks:0,today_tasks:0,upcoming_tasks:0,pending_tasks:0},
   animals:[
@@ -170,14 +170,22 @@ if(fields.planned_dose.value!=="1"||fields.planned_dose_unit.value!=="tablet")th
 if(fields.recurrence_type.value!=="daily"||fields.recurrence_interval.value!=="1")throw new Error("AI recurrence was not applied");
 
 panel.aiBatch083=[
-  {suggested_record_type:"weight",animal_name:"Tina",matched_animal_id:"AH-1",animal_id:"AH-1",weight:"2.05",weight_unit:"kg",document_date:"2026-08-11",notes:"",uncertainties:"",reviewed:true,status:"pending"},
-  {suggested_record_type:"weight",animal_name:"Berta",matched_animal_id:"AH-2",animal_id:"AH-2",weight:"2.20",weight_unit:"kg",document_date:"2026-08-11",notes:"",uncertainties:"",reviewed:true,status:"pending"}
+  {suggested_record_type:"weight",animal_name:"Tina",matched_animal_id:"AH-1",animal_id:"AH-1",weight:"2.05",weight_unit:"kg",document_date:"2026-08-11",notes:"",uncertainties:"",reviewed:false,status:"pending"},
+  {suggested_record_type:"weight",animal_name:"Berta",matched_animal_id:"AH-2",animal_id:"AH-2",weight:"2.20",weight_unit:"kg",document_date:"2026-08-11",notes:"",uncertainties:"",reviewed:false,status:"pending"}
 ];
 panel.aiBatchIndex083=0;
-const batch=panel.aiBatchForm083();
+let batch=panel.aiBatchForm083();
 if(!batch.includes("Eintrag 1 / 2")||!batch.includes("Alle geprüften Einträge speichern"))throw new Error("AI batch review UI missing");
+if(!batch.includes("Als geprüft markieren")||!batch.includes('aria-pressed="false"'))throw new Error("AI batch review is not explicit before confirmation");
+if(panel.aiBatchReady083(panel.aiBatch083[0]))throw new Error("Unreviewed AI batch entry is save-ready");
+panel.aiBatch083[0].reviewed=true;
+if(!panel.aiBatchReady083(panel.aiBatch083[0]))throw new Error("Reviewed complete AI batch entry is not save-ready");
+batch=panel.aiBatchForm083();
+if(!batch.includes("Prüfung zurücknehmen")||!batch.includes('aria-pressed="true"')||!batch.includes("reviewed086"))throw new Error("Reviewed AI batch entry has no visible selected state");
+panel.updateBatchField083({dataset:{batchField083:"weight"},value:"2.10"});
+if(panel.aiBatch083[0].reviewed)throw new Error("Editing an AI batch entry did not invalidate the review");
 
-console.log("Animal Health 0.8.5 dashboard runtime validation passed");
+console.log("Animal Health 0.8.6 dashboard runtime validation passed");
 '''
     with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:
         file.write(harness)
@@ -190,8 +198,8 @@ console.log("Animal Health 0.8.5 dashboard runtime validation passed");
 def main() -> None:
     source = panel_source()
     manifest = json.loads(read(INTEGRATION / "manifest.json"))
-    assert manifest["version"] == "0.8.5"
-    assert 'const V="0.8.5",D="animal_health"' in source
+    assert manifest["version"] == "0.8.6"
+    assert 'const V="0.8.6",D="animal_health"' in source
 
     for path in sorted(INTEGRATION.glob("*.py")):
         ast.parse(read(path))
@@ -230,11 +238,14 @@ def main() -> None:
         "open-updates-084",
         "Verlaufs- und Aufgabendaten zurücksetzen",
         "animal-health-brand.png",
+        "aiReviewRequired086",
+        "aria-pressed",
+        "reviewed086",
     ):
         assert marker in source or marker in backend or marker in backend084 or marker in panel_backend, marker
 
     runtime_smoke(source)
-    print("Animal Health 0.8.5 dashboard frontend validation passed")
+    print("Animal Health 0.8.6 dashboard frontend validation passed")
 
 
 if __name__ == "__main__":
