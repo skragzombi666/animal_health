@@ -26,6 +26,11 @@ _FRONTEND_DIR = Path(__file__).parent / "frontend"
 _FRONTEND_PARTS = tuple(sorted(_FRONTEND_DIR.glob("animal-health-panel.part*.js")))
 _BRAND_ICON_PATH = Path(__file__).parent / "brand" / "icon.png"
 _LEGACY_BRAND_ICON_PATH = _FRONTEND_DIR / "animal-health-brand.svg"
+_NO_STORE_HEADERS = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
 
 
 def _integration_version() -> str:
@@ -62,7 +67,7 @@ class AnimalHealthPanelView(HomeAssistantView):
         return web.Response(
             text=source,
             content_type="application/javascript",
-            headers={"Cache-Control": "no-cache"},
+            headers=_NO_STORE_HEADERS,
         )
 
 
@@ -80,7 +85,7 @@ class AnimalHealthBrandView(HomeAssistantView):
         return web.Response(
             body=source,
             content_type="image/png",
-            headers={"Cache-Control": "no-cache"},
+            headers=_NO_STORE_HEADERS,
         )
 
 
@@ -99,7 +104,7 @@ class AnimalHealthLegacyBrandView(HomeAssistantView):
         return web.Response(
             text=source,
             content_type="image/svg+xml",
-            headers={"Cache-Control": "no-cache"},
+            headers=_NO_STORE_HEADERS,
         )
 
 
