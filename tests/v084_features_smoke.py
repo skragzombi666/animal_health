@@ -20,6 +20,7 @@ def _namespace() -> dict[str, Any]:
         "_walk_history_values",
         "_history_sync",
         "_diagnostics_sync",
+        "_reset_activity_sync",
     }
     body: list[ast.stmt] = []
     for node in tree.body:
@@ -149,6 +150,7 @@ def test_diagnostics(namespace: dict[str, Any], root: Path) -> None:
     (attachment_root / "present.bin").write_bytes(b"ok")
     (attachment_root / "orphan.bin").write_bytes(b"orphan")
     report = namespace["_diagnostics_sync"](database_path, attachment_root)
+    assert report["errors"] == []
     assert report["integrity_check"] == ["ok"]
     assert report["foreign_key_violations"] == []
     assert report["missing_tables"] == []
@@ -158,13 +160,139 @@ def test_diagnostics(namespace: dict[str, Any], root: Path) -> None:
     assert report["ok"] is False
 
 
+def _activity_database(path: Path) -> None:
+    with sqlite3.connect(path) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.executescript(
+            """
+            CREATE TABLE animals (id TEXT PRIMARY KEY, name TEXT);
+            CREATE TABLE animal_groups (id TEXT PRIMARY KEY, name TEXT);
+            CREATE TABLE animal_group_memberships (
+                animal_id TEXT PRIMARY KEY REFERENCES animals(id) ON DELETE CASCADE,
+                group_id TEXT NOT NULL REFERENCES animal_groups(id) ON DELETE CASCADE
+            );
+            CREATE TABLE tasks (
+                id TEXT PRIMARY KEY,
+                animal_id TEXT REFERENCES animals(id) ON DELETE CASCADE
+            );
+            CREATE TABLE task_occurrences (
+                id TEXT PRIMARY KEY,
+                task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE
+            );
+            CREATE TABLE task_record_configs (
+                task_id TEXT PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE
+            );
+            CREATE TABLE task_occurrence_plans (
+                occurrence_id TEXT PRIMARY KEY REFERENCES task_occurrences(id) ON DELETE CASCADE
+            );
+            CREATE TABLE task_group_targets (
+                task_id TEXT PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+                group_id TEXT REFERENCES animal_groups(id) ON DELETE CASCADE
+            );
+            CREATE TABLE group_task_configs (
+                task_id TEXT PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE
+            );
+            CREATE TABLE events (
+                id TEXT PRIMARY KEY,
+                animal_id TEXT REFERENCES animals(id) ON DELETE RESTRICT,
+                correction_of_event_id TEXT REFERENCES events(id) ON DELETE RESTRICT,
+                task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+                task_occurrence_id TEXT REFERENCES task_occurrences(id) ON DELETE SET NULL
+            );
+            CREATE TABLE group_events (
+                id TEXT PRIMARY KEY,
+                group_id TEXT REFERENCES animal_groups(id) ON DELETE CASCADE,
+                correction_of_event_id TEXT REFERENCES group_events(id) ON DELETE RESTRICT,
+                task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+                task_occurrence_id TEXT REFERENCES task_occurrences(id) ON DELETE SET NULL
+            );
+            CREATE TABLE attachments (
+                id TEXT PRIMARY KEY,
+                animal_id TEXT REFERENCES animals(id) ON DELETE CASCADE,
+                event_id TEXT REFERENCES events(id) ON DELETE SET NULL,
+                filename TEXT,
+                storage_name TEXT,
+                created_at TEXT
+            );
+            CREATE TABLE animal_profiles (
+                animal_id TEXT PRIMARY KEY REFERENCES animals(id) ON DELETE CASCADE,
+                image_attachment_id TEXT REFERENCES attachments(id) ON DELETE SET NULL
+            );
+            INSERT INTO animals VALUES ('A1', 'Tina');
+            INSERT INTO animal_groups VALUES ('G1', 'Hühner');
+            INSERT INTO animal_group_memberships VALUES ('A1', 'G1');
+            INSERT INTO tasks VALUES ('T1', 'A1');
+            INSERT INTO task_occurrences VALUES ('O1', 'T1');
+            INSERT INTO task_record_configs VALUES ('T1');
+            INSERT INTO task_occurrence_plans VALUES ('O1');
+            INSERT INTO task_group_targets VALUES ('T1', 'G1');
+            INSERT INTO group_task_configs VALUES ('T1');
+            INSERT INTO events VALUES ('E1', 'A1', NULL, 'T1', 'O1');
+            INSERT INTO events VALUES ('E2', 'A1', 'E1', 'T1', 'O1');
+            INSERT INTO group_events VALUES ('GE1', 'G1', NULL, 'T1', 'O1');
+            INSERT INTO group_events VALUES ('GE2', 'G1', 'GE1', 'T1', 'O1');
+            INSERT INTO attachments VALUES ('AP', 'A1', NULL, 'profile.png', 'profile.bin', '2026-08-12');
+            INSERT INTO attachments VALUES ('AE', 'A1', 'E2', 'event.pdf', 'event.bin', '2026-08-12');
+            INSERT INTO animal_profiles VALUES ('A1', 'AP');
+            """
+        )
+
+
+def test_activity_reset(namespace: dict[str, Any], root: Path) -> None:
+    database_path = root / "activity.db"
+    attachment_root = root / "activity_attachments"
+    attachment_root.mkdir()
+    _activity_database(database_path)
+    (attachment_root / "profile.bin").write_bytes(b"profile")
+    (attachment_root / "event.bin").write_bytes(b"event")
+
+    result = namespace["_reset_activity_sync"](database_path, attachment_root)
+    assert result["counts"] == {
+        "events": 2,
+        "group_events": 2,
+        "tasks": 1,
+        "attachments": 1,
+    }
+    assert result["file_errors"] == []
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        assert connection.execute("SELECT COUNT(*) FROM animals").fetchone() == (1,)
+        assert connection.execute("SELECT COUNT(*) FROM animal_groups").fetchone() == (1,)
+        assert connection.execute(
+            "SELECT animal_id, group_id FROM animal_group_memberships"
+        ).fetchone() == ("A1", "G1")
+        assert connection.execute("SELECT COUNT(*) FROM events").fetchone() == (0,)
+        assert connection.execute("SELECT COUNT(*) FROM group_events").fetchone() == (0,)
+        assert connection.execute("SELECT COUNT(*) FROM tasks").fetchone() == (0,)
+        assert connection.execute("SELECT COUNT(*) FROM task_occurrences").fetchone() == (0,)
+        assert connection.execute(
+            "SELECT id FROM attachments ORDER BY id"
+        ).fetchall() == [("AP",)]
+        assert connection.execute(
+            "SELECT animal_id, image_attachment_id FROM animal_profiles"
+        ).fetchone() == ("A1", "AP")
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+
+    assert (attachment_root / "profile.bin").is_file()
+    assert not (attachment_root / "event.bin").exists()
+
+
+def test_current_websocket_admin_pattern() -> None:
+    source = MODULE.read_text(encoding="utf-8")
+    assert "connection.require_admin()" not in source
+    assert source.count("@websocket_api.require_admin") >= 2
+
+
 def main() -> None:
     namespace = _namespace()
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
         test_history(namespace, root)
         test_diagnostics(namespace, root)
-    print("0.8.4 history suggestions and diagnostics smoke test passed")
+        test_activity_reset(namespace, root)
+    test_current_websocket_admin_pattern()
+    print("0.8.5 history, diagnostics and activity-reset smoke test passed")
 
 
 if __name__ == "__main__":
