@@ -9,7 +9,7 @@ const AH088Base={
  aiBatchForm083:AH088.aiBatchForm083
 };
 AH088.ws=function(type,p={}){
- const routed=type===`${D}/v086/ai/analyze`&&p?.mode==="weight"?`${D}/v088/ai/analyze`:type;
+ const routed=type===`${D}/v086/ai/analyze`&&p?.mode==="weight"?`${D}/v083/ai/analyze`:type;
  return AH088Base.ws.call(this,routed,p)
 };
 AH088.batchActualDateLabel088=function(type){return type==="weight"?"aiBatchWeightDate088":"performed_at"};
