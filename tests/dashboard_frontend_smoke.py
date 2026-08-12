@@ -50,7 +50,7 @@ if(!Panel)throw new Error("Panel not registered");
 const panel=new Panel();
 panel.h={language:"de",user:{is_admin:true}};
 panel.d={
-  version:"0.8.7",
+  version:"0.8.8",
   today:"2026-08-11",
   summary:{active_animals:2,overdue_tasks:0,today_tasks:0,upcoming_tasks:0,pending_tasks:0},
   animals:[
@@ -176,6 +176,7 @@ panel.aiBatch083=[
 panel.aiBatchExpanded086=new Set([0]);
 let batch=panel.aiBatchForm083();
 if(!batch.includes("aiBatchSummary086")||!batch.includes("Für alle Einträge"))throw new Error("Compact AI batch summary/global controls missing");
+if(!batch.includes("Gewogen am")||!batch.includes("Uhrzeit"))throw new Error("Weight batch uses task-planning timing labels");
 if(!batch.includes("status certain")||!batch.includes("status uncertain"))throw new Error("AI confidence status icons missing");
 if(!batch.includes("mdi:delete-outline")||!batch.includes("mdi:content-save-outline"))throw new Error("Compact trash/save controls missing");
 if(panel.aiBatchReady083(panel.aiBatch083[0]))throw new Error("Unreviewed AI batch entry is save-ready");
@@ -193,7 +194,7 @@ panel.modal={type:"record-symptom",animalId:"AH-1"};
 const symptomForm=panel.form();
 if(!symptomForm.includes('data-action="ai-symptom-086"'))throw new Error("Symptom form AI shortcut missing");
 
-console.log("Animal Health 0.8.7 dashboard runtime validation passed");
+console.log("Animal Health 0.8.8 dashboard runtime validation passed");
 '''
     with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:
         file.write(harness)
@@ -206,8 +207,8 @@ console.log("Animal Health 0.8.7 dashboard runtime validation passed");
 def main() -> None:
     source = panel_source()
     manifest = json.loads(read(INTEGRATION / "manifest.json"))
-    assert manifest["version"] == "0.8.7"
-    assert 'const V="0.8.7",D="animal_health"' in source
+    assert manifest["version"] == "0.8.8"
+    assert 'const V="0.8.8",D="animal_health"' in source
 
     for path in sorted(INTEGRATION.glob("*.py")):
         ast.parse(read(path))
@@ -220,6 +221,7 @@ def main() -> None:
     backend = read(INTEGRATION / "v083_features.py")
     backend084 = read(INTEGRATION / "v084_features.py")
     backend086 = read(INTEGRATION / "v086_features.py")
+    backend088 = read(INTEGRATION / "v088_features.py")
     panel_backend = read(INTEGRATION / "panel.py")
     for marker in (
         "v083/state",
@@ -228,6 +230,8 @@ def main() -> None:
         "v083/custom_value/remember",
         "v083/ai/analyze",
         "v086/ai/analyze",
+        "v088/ai/analyze",
+        "WEIGHT-LIST COMPLETENESS RULES",
         "animal_v083_metadata",
         "animal_group_v083_metadata",
         "animal_custom_values",
@@ -254,17 +258,19 @@ def main() -> None:
         "detailLoading086",
         'size:"thumb"',
         "aria-pressed",
+        "aiBatchWeightDate088",
     ):
         assert (
             marker in source
             or marker in backend
             or marker in backend084
             or marker in backend086
+            or marker in backend088
             or marker in panel_backend
         ), marker
 
     runtime_smoke(source)
-    print("Animal Health 0.8.7 dashboard frontend validation passed")
+    print("Animal Health 0.8.8 dashboard frontend validation passed")
 
 
 if __name__ == "__main__":
