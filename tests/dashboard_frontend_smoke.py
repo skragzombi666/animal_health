@@ -50,7 +50,7 @@ if(!Panel)throw new Error("Panel not registered");
 const panel=new Panel();
 panel.h={language:"de",user:{is_admin:true}};
 panel.d={
-  version:"0.8.4",
+  version:"0.8.5",
   today:"2026-08-11",
   summary:{active_animals:2,overdue_tasks:0,today_tasks:0,upcoming_tasks:0,pending_tasks:0},
   animals:[
@@ -177,7 +177,7 @@ panel.aiBatchIndex083=0;
 const batch=panel.aiBatchForm083();
 if(!batch.includes("Eintrag 1 / 2")||!batch.includes("Alle geprüften Einträge speichern"))throw new Error("AI batch review UI missing");
 
-console.log("Animal Health 0.8.4 dashboard runtime validation passed");
+console.log("Animal Health 0.8.5 dashboard runtime validation passed");
 '''
     with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:
         file.write(harness)
@@ -190,8 +190,8 @@ console.log("Animal Health 0.8.4 dashboard runtime validation passed");
 def main() -> None:
     source = panel_source()
     manifest = json.loads(read(INTEGRATION / "manifest.json"))
-    assert manifest["version"] == "0.8.4"
-    assert 'const V="0.8.4",D="animal_health"' in source
+    assert manifest["version"] == "0.8.5"
+    assert 'const V="0.8.5",D="animal_health"' in source
 
     for path in sorted(INTEGRATION.glob("*.py")):
         ast.parse(read(path))
@@ -203,6 +203,7 @@ def main() -> None:
 
     backend = read(INTEGRATION / "v083_features.py")
     backend084 = read(INTEGRATION / "v084_features.py")
+    panel_backend = read(INTEGRATION / "panel.py")
     for marker in (
         "v083/state",
         "v083/animal_metadata/set",
@@ -224,13 +225,16 @@ def main() -> None:
         "Details zur KI-Erkennung",
         "v084/history_suggestions",
         "v084/diagnostics",
+        "v084/reset_activity",
         "Datenbankdiagnose",
         "open-updates-084",
+        "Verlaufs- und Aufgabendaten zurücksetzen",
+        "animal-health-brand.png",
     ):
-        assert marker in source or marker in backend or marker in backend084, marker
+        assert marker in source or marker in backend or marker in backend084 or marker in panel_backend, marker
 
     runtime_smoke(source)
-    print("Animal Health 0.8.4 dashboard frontend validation passed")
+    print("Animal Health 0.8.5 dashboard frontend validation passed")
 
 
 if __name__ == "__main__":
