@@ -43,15 +43,15 @@ AH087.prefillInput087=function(html,name,value){
  const textarea=new RegExp(`(<textarea\\b[^>]*\\bname="${n}"[^>]*>)[\\s\\S]*?(<\\/textarea>)`);
  if(textarea.test(html))return html.replace(textarea,`$1${safe}$2`);
  const input=new RegExp(`<input\\b[^>]*\\bname="${n}"[^>]*>`);
- return html.replace(input,tag=>{const cleaned=tag.replace(/\\svalue="[^"]*"/g,"");return cleaned.replace(/>$/,` value="${safe}">`)})
+ return html.replace(input,tag=>{const cleaned=tag.replace(/\svalue="[^"]*"/g,"");return cleaned.replace(/>$/,` value="${safe}">`)})
 };
 AH087.prefillSelect087=function(html,name,value){
  if(value===undefined||value===null||value==="")return html;const n=this.regexEscape087(name),v=this.regexEscape087(esc(value)),select=new RegExp(`(<select\\b[^>]*\\bname="${n}"[^>]*>)([\\s\\S]*?)(<\\/select>)`);
- return html.replace(select,(_all,open,options,close)=>{const cleared=options.replace(/\\sselected(?=[\\s>])/g,"");const option=new RegExp(`(<option\\b[^>]*\\bvalue="${v}"[^>]*)(>)`);return open+cleared.replace(option,"$1 selected$2")+close})
+ return html.replace(select,(_all,open,options,close)=>{const cleared=options.replace(/\sselected(?=[\s>])/g,"");const option=new RegExp(`(<option\\b[^>]*\\bvalue="${v}"[^>]*)(>)`);return open+cleared.replace(option,"$1 selected$2")+close})
 };
 AH087.prefillAnimal087=function(html,animalId){
  const animal=this.animal(animalId);if(!animal?.device_id)return html;const value=this.regexEscape087(esc(animal.device_id)),input=new RegExp(`<input\\b[^>]*\\bname="device_ids"[^>]*\\bvalue="${value}"[^>]*>`);
- return html.replace(input,tag=>/\\schecked(?=[\\s>])/.test(tag)?tag:tag.replace(/>$/," checked>"))
+ return html.replace(input,tag=>/\schecked(?=[\s>])/.test(tag)?tag:tag.replace(/>$/," checked>"))
 };
 AH087.taskForm=function(){
  let html=AH087Base.taskForm.call(this),draft=this.aiTaskDraft;if(!draft)return html;
@@ -76,6 +76,6 @@ AH087.taskForm=function(){
  html=this.prefillInput087(html,"planned_provider",draft.planned_provider||"");
  html=this.prefillInput087(html,"planned_treatment_action",draft.planned_treatment_action||"");
  html=this.prefillAnimal087(html,draft.animal_id);
- if(draft.planned_vaccination_target){const value=this.regexEscape087(esc(draft.planned_vaccination_target)),target=new RegExp(`<input\\b[^>]*\\bname="planned_vaccination_targets"[^>]*\\bvalue="${value}"[^>]*>`);html=html.replace(target,tag=>/\\schecked(?=[\\s>])/.test(tag)?tag:tag.replace(/>$/," checked>"))}
+ if(draft.planned_vaccination_target){const value=this.regexEscape087(esc(draft.planned_vaccination_target)),target=new RegExp(`<input\\b[^>]*\\bname="planned_vaccination_targets"[^>]*\\bvalue="${value}"[^>]*>`);html=html.replace(target,tag=>/\schecked(?=[\s>])/.test(tag)?tag:tag.replace(/>$/," checked>"))}
  return html
 };
