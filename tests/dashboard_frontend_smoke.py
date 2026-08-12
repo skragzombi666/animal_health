@@ -50,7 +50,7 @@ if(!Panel)throw new Error("Panel not registered");
 const panel=new Panel();
 panel.h={language:"de",user:{is_admin:true}};
 panel.d={
-  version:"0.8.3",
+  version:"0.8.4",
   today:"2026-08-11",
   summary:{active_animals:2,overdue_tasks:0,today_tasks:0,upcoming_tasks:0,pending_tasks:0},
   animals:[
@@ -95,6 +95,10 @@ panel.v083={
     {id:"dog.med",name:"HundMed 40 mg",target_species:["dog"],aliases:[],catalog_source:"standard"}
   ]
 };
+panel.v084={suggestions:{
+  medication_name:[{value:"HuhnMed Verlauf",species_id:"chicken",count:2,last_used:"2026-08-11T10:00:00+00:00"}],
+  provider:[{value:"Tierarztpraxis Verlauf",species_id:"chicken",count:1,last_used:"2026-08-10T10:00:00+00:00"}]
+}};
 panel.aiStatus={available:true,entities:["ai_task.test"],stt_available:true,stt_entities:["stt.test"]};
 panel.profileUrls={};
 panel.decorateFeatures();
@@ -126,6 +130,7 @@ const medicationForm={
 };
 medicationForm.elements.animal_id={value:"AH-1"};
 let meds=panel.comboCandidates083("medication",medicationForm);
+if(!meds.some(item=>item.value==="HuhnMed Verlauf"))throw new Error("Local-history medication missing");
 if(!meds.some(item=>item.value==="HuhnMed 10 mg/ml"))throw new Error("On-label medication missing");
 if(meds.some(item=>item.value==="HundMed 40 mg"))throw new Error("Off-label medication shown by default");
 medicationForm.showOff=true;
@@ -172,7 +177,7 @@ panel.aiBatchIndex083=0;
 const batch=panel.aiBatchForm083();
 if(!batch.includes("Eintrag 1 / 2")||!batch.includes("Alle geprüften Einträge speichern"))throw new Error("AI batch review UI missing");
 
-console.log("Animal Health 0.8.3 dashboard runtime validation passed");
+console.log("Animal Health 0.8.4 dashboard runtime validation passed");
 '''
     with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:
         file.write(harness)
@@ -185,8 +190,8 @@ console.log("Animal Health 0.8.3 dashboard runtime validation passed");
 def main() -> None:
     source = panel_source()
     manifest = json.loads(read(INTEGRATION / "manifest.json"))
-    assert manifest["version"] == "0.8.3"
-    assert 'const V="0.8.3",D="animal_health"' in source
+    assert manifest["version"] == "0.8.4"
+    assert 'const V="0.8.4",D="animal_health"' in source
 
     for path in sorted(INTEGRATION.glob("*.py")):
         ast.parse(read(path))
@@ -197,6 +202,7 @@ def main() -> None:
         subprocess.run(["node", "--check", file.name], check=True)
 
     backend = read(INTEGRATION / "v083_features.py")
+    backend084 = read(INTEGRATION / "v084_features.py")
     for marker in (
         "v083/state",
         "v083/animal_metadata/set",
@@ -216,11 +222,15 @@ def main() -> None:
         "cropOverlay083",
         "ai-batch-save-all-083",
         "Details zur KI-Erkennung",
+        "v084/history_suggestions",
+        "v084/diagnostics",
+        "Datenbankdiagnose",
+        "open-updates-084",
     ):
-        assert marker in source or marker in backend, marker
+        assert marker in source or marker in backend or marker in backend084, marker
 
     runtime_smoke(source)
-    print("Animal Health 0.8.3 dashboard frontend validation passed")
+    print("Animal Health 0.8.4 dashboard frontend validation passed")
 
 
 if __name__ == "__main__":
