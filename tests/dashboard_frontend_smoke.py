@@ -50,7 +50,7 @@ if(!Panel)throw new Error("Panel not registered");
 const panel=new Panel();
 panel.h={language:"de",user:{is_admin:true}};
 panel.d={
-  version:"0.8.5",
+  version:"0.8.6",
   today:"2026-08-11",
   summary:{active_animals:2,overdue_tasks:0,today_tasks:0,upcoming_tasks:0,pending_tasks:0},
   animals:[
@@ -68,7 +68,7 @@ panel.c={
   dose_units:["mcg","mg","g","ml","drop","tablet","dose"],
   administration_routes:["oral"],
   symptoms:["other"],
-  symptom_severities:["mild"],
+  symptom_severities:["mild","moderate","severe","critical"],
   vaccination_targets:[],
   health_check_results:["normal"],
   medicine_names:[],
@@ -170,14 +170,30 @@ if(fields.planned_dose.value!=="1"||fields.planned_dose_unit.value!=="tablet")th
 if(fields.recurrence_type.value!=="daily"||fields.recurrence_interval.value!=="1")throw new Error("AI recurrence was not applied");
 
 panel.aiBatch083=[
-  {suggested_record_type:"weight",animal_name:"Tina",matched_animal_id:"AH-1",animal_id:"AH-1",weight:"2.05",weight_unit:"kg",document_date:"2026-08-11",notes:"",uncertainties:"",reviewed:true,status:"pending"},
-  {suggested_record_type:"weight",animal_name:"Berta",matched_animal_id:"AH-2",animal_id:"AH-2",weight:"2.20",weight_unit:"kg",document_date:"2026-08-11",notes:"",uncertainties:"",reviewed:true,status:"pending"}
+  {suggested_record_type:"weight",animal_name:"Tina",matched_animal_id:"AH-1",animal_id:"AH-1",weight:"2.05",weight_unit:"kg",document_date:"2026-08-11",due_time:"20:00",notes:"",confidence:"high",uncertainties:"",reviewed:false,status:"pending"},
+  {suggested_record_type:"weight",animal_name:"Berta",matched_animal_id:"AH-2",animal_id:"AH-2",weight:"2.20",weight_unit:"kg",document_date:"2026-08-11",due_time:"20:00",notes:"",confidence:"low",uncertainties:"Handschrift unsicher",reviewed:false,status:"pending"}
 ];
-panel.aiBatchIndex083=0;
-const batch=panel.aiBatchForm083();
-if(!batch.includes("Eintrag 1 / 2")||!batch.includes("Alle geprüften Einträge speichern"))throw new Error("AI batch review UI missing");
+panel.aiBatchExpanded086=new Set([0]);
+let batch=panel.aiBatchForm083();
+if(!batch.includes("aiBatchSummary086")||!batch.includes("Für alle Einträge"))throw new Error("Compact AI batch summary/global controls missing");
+if(!batch.includes("status certain")||!batch.includes("status uncertain"))throw new Error("AI confidence status icons missing");
+if(!batch.includes("mdi:delete-outline")||!batch.includes("mdi:content-save-outline"))throw new Error("Compact trash/save controls missing");
+if(panel.aiBatchReady083(panel.aiBatch083[0]))throw new Error("Unreviewed AI batch entry is save-ready");
+panel.aiBatch083[0].reviewed=true;
+if(!panel.aiBatchReady083(panel.aiBatch083[0]))throw new Error("Reviewed complete AI batch entry is not save-ready");
+batch=panel.aiBatchForm083();
+if(!batch.includes("status manual")||!batch.includes('aria-pressed="true"'))throw new Error("Manual review has no visible green status");
+panel.updateBatchField083({dataset:{batchField083:"weight",batchIndex086:"0"},value:"2.10"});
+if(panel.aiBatch083[0].reviewed)throw new Error("Editing an AI batch entry did not invalidate manual review");
 
-console.log("Animal Health 0.8.5 dashboard runtime validation passed");
+panel.modal={type:"record-product-081",animalId:"AH-1"};
+const productForm=panel.form();
+if(!productForm.includes('data-action="ai-product-086"'))throw new Error("Medication form AI shortcut missing");
+panel.modal={type:"record-symptom",animalId:"AH-1"};
+const symptomForm=panel.form();
+if(!symptomForm.includes('data-action="ai-symptom-086"'))throw new Error("Symptom form AI shortcut missing");
+
+console.log("Animal Health 0.8.6 dashboard runtime validation passed");
 '''
     with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:
         file.write(harness)
@@ -190,8 +206,8 @@ console.log("Animal Health 0.8.5 dashboard runtime validation passed");
 def main() -> None:
     source = panel_source()
     manifest = json.loads(read(INTEGRATION / "manifest.json"))
-    assert manifest["version"] == "0.8.5"
-    assert 'const V="0.8.5",D="animal_health"' in source
+    assert manifest["version"] == "0.8.6"
+    assert 'const V="0.8.6",D="animal_health"' in source
 
     for path in sorted(INTEGRATION.glob("*.py")):
         ast.parse(read(path))
@@ -203,6 +219,7 @@ def main() -> None:
 
     backend = read(INTEGRATION / "v083_features.py")
     backend084 = read(INTEGRATION / "v084_features.py")
+    backend086 = read(INTEGRATION / "v086_features.py")
     panel_backend = read(INTEGRATION / "panel.py")
     for marker in (
         "v083/state",
@@ -210,6 +227,7 @@ def main() -> None:
         "v083/group_metadata/set",
         "v083/custom_value/remember",
         "v083/ai/analyze",
+        "v086/ai/analyze",
         "animal_v083_metadata",
         "animal_group_v083_metadata",
         "animal_custom_values",
@@ -221,7 +239,6 @@ def main() -> None:
         "mdi:pencil-outline",
         "applyAITaskDraft083",
         "cropOverlay083",
-        "ai-batch-save-all-083",
         "Details zur KI-Erkennung",
         "v084/history_suggestions",
         "v084/diagnostics",
@@ -230,11 +247,24 @@ def main() -> None:
         "open-updates-084",
         "Verlaufs- und Aufgabendaten zurücksetzen",
         "animal-health-brand.png",
+        "aiBatchSummary086",
+        "aiBatchCommon086",
+        "ai-product-086",
+        "ai-symptom-086",
+        "detailLoading086",
+        'size:"thumb"',
+        "aria-pressed",
     ):
-        assert marker in source or marker in backend or marker in backend084 or marker in panel_backend, marker
+        assert (
+            marker in source
+            or marker in backend
+            or marker in backend084
+            or marker in backend086
+            or marker in panel_backend
+        ), marker
 
     runtime_smoke(source)
-    print("Animal Health 0.8.5 dashboard frontend validation passed")
+    print("Animal Health 0.8.6 dashboard frontend validation passed")
 
 
 if __name__ == "__main__":
