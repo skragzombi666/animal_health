@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Read integration version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(python - <<'PY'
+          import json
+          from pathlib import Path
+          print(json.loads(Path('custom_components/animal_health/manifest.json').read_text())['version'])
+          PY
+          )
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Create release when missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          TAG="v${VERSION}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists."
+            exit 0
+          fi
+          NOTES="docs/version-${VERSION}.md"
+          if [ -f "$NOTES" ]; then
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "Animal Health ${VERSION}" --notes-file "$NOTES"
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "Animal Health ${VERSION}" --generate-notes
+          fi
