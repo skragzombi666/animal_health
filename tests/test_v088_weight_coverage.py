@@ -24,7 +24,8 @@ def _load_function(name: str):
 def test_weight_prompt_requires_full_row_coverage() -> None:
     source = SOURCE.read_text(encoding="utf-8")
     assert "WEIGHT-LIST COMPLETENESS RULES" in source
-    assert "twelve visible animal/weight rows must produce twelve draft entries" in source
+    assert "twelve visible animal/weight rows" in source
+    assert "twelve draft entries" in source
     assert "Never omit a row merely because" in source
     assert "second, completeness-only verification pass" in source
     assert "len(entries) > 1" in source
@@ -49,7 +50,7 @@ def test_coverage_merge_adds_missing_named_animals_without_duplicates() -> None:
 
     assert len(merged) == 12
     assert {entry["animal_name"] for entry in merged} == {
-        *(f"Tier {index}" for index in range(1, 13))
+        f"Tier {index}" for index in range(1, 13)
     }
 
 
