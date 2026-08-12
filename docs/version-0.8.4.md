@@ -33,7 +33,7 @@ Animal Health erhält keinen eigenen Selbst-Updater, der seine Integrationsdatei
 
 Stattdessen wird HACS als Update-Transport verwendet:
 
-- das Repository wird als HACS-Integration validiert,
+- das Repository wird als HACS-Integration und zusätzlich mit `hassfest` validiert,
 - eine bestehende Installation kann als HACS Custom Repository verwaltet werden,
 - eine Aufnahme in die HACS-Standardliste ist für diesen Weg nicht erforderlich,
 - HACS stellt für das Repository eine normale Home-Assistant-Update-Entität bereit,
@@ -41,6 +41,22 @@ Stattdessen wird HACS als Update-Transport verwendet:
 - reguläre Versionen sollen versioniert veröffentlicht werden; `main` bleibt ein bewusster Entwicklungsweg.
 
 Details: `docs/installation-hacs.md`.
+
+## CI- und Migrationstests
+
+Die bisherige Platzhalterprüfung der Datenbank wurde durch Tests gegen die tatsächliche `AnimalHealthDatabase` und die Task-Record-Schemamigration ersetzt.
+
+Geprüft werden nun unter anderem:
+
+- vollständiger `pytest`-Lauf,
+- Neuinitialisierung einer leeren Datenbank,
+- repräsentative Upgrades von Schema v1 und v2 auf v3,
+- Erhalt bestehender Tier-, Aufgaben-, Vorkommnis- und Ereignisdaten,
+- erwartete Tabellen, Spalten, Indizes und Trigger,
+- `PRAGMA user_version`, `integrity_check` und `foreign_key_check`,
+- Backfill der Task-Record-Konfigurationen und Vorkommnispläne.
+
+Die bestehenden fokussierten Smoke-Tests bleiben zusätzlich aktiv.
 
 ## KI-Evaluation
 
@@ -58,6 +74,7 @@ Als bereits in 0.8.1–0.8.3 umgesetzt wurden geschlossen:
 
 Zusätzlich werden mit 0.8.4 abgeschlossen:
 
+- #22 CI-/Migrations-Hardening,
 - #35 lokale Vorschläge aus Tier-/Chronikhistorie,
 - #38 Datenbankdiagnose,
 - #41 README-/Roadmap-Neuordnung,
@@ -73,4 +90,4 @@ Nicht in 0.8.4 vermischt werden grössere oder risikoreichere Themen:
 - #40 optionaler mobiler Gewichtspicker nach echter UX-Evaluation,
 - #43 vollständige Restore-/Upgrade-Pfade für 0.9.x.
 
-#22 und #23 bleiben technische Hardening-Themen, falls sie nicht separat vor dem 0.8.4-Merge vollständig und regressionstestbar abgeschlossen werden können. Praxistest-Issues bleiben offen, bis die jeweiligen Abläufe auf der realen Home-Assistant-Testinstallation tatsächlich geprüft wurden.
+#23 bleibt als technischer Refactor zur direkten Integration der Stabilisierung in `TaskStore` offen. Praxistest-Issues bleiben offen, bis die jeweiligen Abläufe auf der realen Home-Assistant-Testinstallation tatsächlich geprüft wurden.
