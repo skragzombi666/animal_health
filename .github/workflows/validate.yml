@@ -12,14 +12,20 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+      - name: Install test runner
+        run: python -m pip install pytest
       - name: Compile Python files
         run: python -m compileall custom_components tests
+      - name: Run pytest suite
+        run: python -m pytest -q
       - name: Validate dashboard integration
         run: python tests/dashboard_frontend_smoke.py
       - name: Validate AI document assistant
         run: python tests/ai_assist_smoke.py
       - name: Validate 0.8.1 operational workflows
         run: python tests/v081_workflow_smoke.py
+      - name: Validate 0.8.4 history and diagnostics
+        run: python tests/v084_features_smoke.py
       - name: Validate assembled frontend syntax
         run: |
           cat custom_components/animal_health/frontend/animal-health-panel.part*.js > /tmp/animal-health-panel.js
