@@ -50,7 +50,7 @@ if(!Panel)throw new Error("Panel not registered");
 const panel=new Panel();
 panel.h={language:"de",user:{is_admin:true}};
 panel.d={
-  version:"0.8.9",
+  version:"0.8.10",
   today:"2026-08-11",
   summary:{active_animals:2,overdue_tasks:0,today_tasks:0,upcoming_tasks:0,pending_tasks:0},
   animals:[
@@ -176,6 +176,7 @@ panel.aiBatch083=[
 panel.aiBatchExpanded086=new Set([0]);
 let batch=panel.aiBatchForm083();
 if(!batch.includes("aiBatchSummary086")||!batch.includes("Für alle Einträge"))throw new Error("Compact AI batch summary/global controls missing");
+if(!batch.includes("aiBatchDetails086")||!batch.includes('data-batch-index086="0"'))throw new Error("Expanded AI batch card does not render detail fields");
 if(!batch.includes("Gewogen am")||!batch.includes("Uhrzeit"))throw new Error("Weight batch uses task-planning timing labels");
 if(!batch.includes("status certain")||!batch.includes("status uncertain"))throw new Error("AI confidence status icons missing");
 if(!batch.includes("mdi:delete-outline")||!batch.includes("mdi:content-save-outline"))throw new Error("Compact trash/save controls missing");
@@ -194,7 +195,7 @@ panel.modal={type:"record-symptom",animalId:"AH-1"};
 const symptomForm=panel.form();
 if(!symptomForm.includes('data-action="ai-symptom-086"'))throw new Error("Symptom form AI shortcut missing");
 
-console.log("Animal Health 0.8.9 dashboard runtime validation passed");
+console.log("Animal Health 0.8.10 dashboard runtime validation passed");
 '''
     with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:
         file.write(harness)
@@ -207,8 +208,8 @@ console.log("Animal Health 0.8.9 dashboard runtime validation passed");
 def main() -> None:
     source = panel_source()
     manifest = json.loads(read(INTEGRATION / "manifest.json"))
-    assert manifest["version"] == "0.8.9"
-    assert 'const V="0.8.9",D="animal_health"' in source
+    assert manifest["version"] == "0.8.10"
+    assert 'const V="0.8.10",D="animal_health"' in source
 
     for path in sorted(INTEGRATION.glob("*.py")):
         ast.parse(read(path))
@@ -232,6 +233,8 @@ def main() -> None:
         "v086/ai/analyze",
         "v088/ai/analyze",
         "WEIGHT-LIST COMPLETENESS RULES",
+        "FULL TRANSCRIPTION",
+        "coverage_transcribed_count",
         "animal_v083_metadata",
         "animal_group_v083_metadata",
         "animal_custom_values",
@@ -259,6 +262,7 @@ def main() -> None:
         'size:"thumb"',
         "aria-pressed",
         "aiBatchWeightDate088",
+        "aiBatchCard086.expanded>.aiBatchDetails086",
     ):
         assert (
             marker in source
@@ -270,7 +274,7 @@ def main() -> None:
         ), marker
 
     runtime_smoke(source)
-    print("Animal Health 0.8.9 dashboard frontend validation passed")
+    print("Animal Health 0.8.10 dashboard frontend validation passed")
 
 
 if __name__ == "__main__":
