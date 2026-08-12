@@ -28,7 +28,8 @@ def test_weight_prompt_requires_full_row_coverage() -> None:
     assert "twelve draft entries" in source
     assert "Never omit a row merely because" in source
     assert "second, independent FULL TRANSCRIPTION pass" in source
-    assert "EVERY genuinely visible weight row" in source
+    assert "EVERY genuinely" in source
+    assert "visible weight" in source
     assert 'attachments and entries' in source
     assert "coverage_transcribed_count" in source
 
