@@ -27,31 +27,63 @@ def test_weight_prompt_requires_full_row_coverage() -> None:
     assert "twelve visible animal/weight rows" in source
     assert "twelve draft entries" in source
     assert "Never omit a row merely because" in source
-    assert "second, completeness-only verification pass" in source
-    assert "len(entries) > 1" in source
-    assert "coverage_added_count" in source
+    assert "second, independent FULL TRANSCRIPTION pass" in source
+    assert "EVERY genuinely visible weight row" in source
+    assert 'attachments and entries' in source
+    assert "coverage_transcribed_count" in source
 
 
 def test_coverage_merge_adds_missing_named_animals_without_duplicates() -> None:
     merge = _load_function("_merge_weight_entries")
     primary = [
-        {"animal_name": f"Tier {index}", "weight": str(1000 + index), "weight_unit": "g"}
-        for index in range(1, 7)
+        {
+            "animal_name": f"Tier {index}",
+            "matched_animal_id": f"AH-{index}",
+            "weight": str(1000 + index),
+            "weight_unit": "g",
+        }
+        for index in range(1, 12)
     ]
-    additions = [
-        {"animal_name": "Tier 1", "weight": "1001", "weight_unit": "g"},
-        *[
-            {"animal_name": f"Tier {index}", "weight": str(1000 + index), "weight_unit": "g"}
-            for index in range(7, 13)
-        ],
+    retranscription = [
+        {
+            "animal_name": f"Tier {index}",
+            "matched_animal_id": f"AH-{index}",
+            "weight": str(1000 + index),
+            "weight_unit": "g",
+        }
+        for index in range(1, 13)
     ]
 
-    merged = merge(primary, additions)
+    merged = merge(primary, retranscription)
 
     assert len(merged) == 12
-    assert {entry["animal_name"] for entry in merged} == {
-        f"Tier {index}" for index in range(1, 13)
+    assert {entry["matched_animal_id"] for entry in merged} == {
+        f"AH-{index}" for index in range(1, 13)
     }
+
+
+def test_coverage_merge_uses_matched_id_when_handwriting_name_differs() -> None:
+    merge = _load_function("_merge_weight_entries")
+    primary = [
+        {
+            "animal_name": "Chluempli",
+            "matched_animal_id": "AH-1",
+            "weight": "2400",
+            "weight_unit": "g",
+        }
+    ]
+    retranscription = [
+        {
+            "animal_name": "Chlümpli",
+            "matched_animal_id": "AH-1",
+            "weight": "2400",
+            "weight_unit": "g",
+        }
+    ]
+
+    merged = merge(primary, retranscription)
+
+    assert len(merged) == 1
 
 
 def test_coverage_merge_fills_missing_fields_in_existing_row() -> None:
@@ -59,15 +91,17 @@ def test_coverage_merge_fills_missing_fields_in_existing_row() -> None:
     primary = [
         {
             "animal_name": "Tina",
+            "matched_animal_id": "AH-1",
             "weight": "",
             "weight_unit": "",
             "document_date": "",
             "due_time": "",
         }
     ]
-    additions = [
+    retranscription = [
         {
             "animal_name": "Tina",
+            "matched_animal_id": "AH-1",
             "weight": "2040",
             "weight_unit": "g",
             "document_date": "2026-08-12",
@@ -75,7 +109,7 @@ def test_coverage_merge_fills_missing_fields_in_existing_row() -> None:
         }
     ]
 
-    merged = merge(primary, additions)
+    merged = merge(primary, retranscription)
 
     assert len(merged) == 1
     assert merged[0]["weight"] == "2040"
