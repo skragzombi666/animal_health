@@ -1,1 +1,0 @@
-.calendarIcons0815{display:flex;flex-wrap:wrap;gap:3px}.calendarIcon0815{padding:3px;border-radius:5px;background:var(--secondary-background-color)}

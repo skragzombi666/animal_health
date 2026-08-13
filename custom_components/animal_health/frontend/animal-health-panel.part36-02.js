@@ -1,1 +1,0 @@
-dStart=this.addDays0815(monthStart,-offset),locale=this.lang()?"en-GB":"de-CH",monthLabel=new Intl.D

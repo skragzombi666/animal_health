@@ -1,1 +1,0 @@
-.filter(task=>this.taskOccurs0815(task,key)),icons=items.slice(0,6).map(task=>`<span class="calendar

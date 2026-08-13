@@ -1,1 +1,0 @@
-Icon0815" title="${esc(task.title)}"><ha-icon icon="${I[task.task_kind]||I.reminder}"></ha-icon></sp

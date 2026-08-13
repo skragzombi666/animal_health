@@ -1,1 +1,0 @@
-{items.length-6}</small>`:""}</div></div>`}).join(
