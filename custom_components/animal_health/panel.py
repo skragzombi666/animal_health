@@ -24,12 +24,15 @@ PANEL_LEGACY_BRAND_URL = f"/api/{DOMAIN}/frontend/animal-health-brand.svg"
 _PANEL_STATE_KEY = f"{DOMAIN}_panel"
 _FRONTEND_DIR = Path(__file__).parent / "frontend"
 _FRONTEND_PARTS = tuple(sorted(_FRONTEND_DIR.glob("animal-health-panel.part*.js")))
-_BRAND_ICON_PATH = Path(__file__).parent / "brand" / "icon.png"
-_LEGACY_BRAND_ICON_PATH = _FRONTEND_DIR / "animal-health-brand.svg"
+_BRAND_MASTER_PATH = Path(__file__).parent / "brand" / "icon.png"
+_BRAND_UI_PATH = _FRONTEND_DIR / "animal-health-brand.svg"
 _NO_STORE_HEADERS = {
     "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
     "Pragma": "no-cache",
     "Expires": "0",
+}
+_BRAND_CACHE_HEADERS = {
+    "Cache-Control": "public, max-age=31536000, immutable",
 }
 
 
@@ -50,8 +53,13 @@ def _frontend_revision() -> str:
     return hashlib.sha256(source).hexdigest()[:12]
 
 
+def _brand_revision() -> str:
+    return hashlib.sha256(_BRAND_UI_PATH.read_bytes()).hexdigest()[:12]
+
+
 INTEGRATION_VERSION = _integration_version()
 FRONTEND_REVISION = _frontend_revision()
+BRAND_REVISION = _brand_revision()
 
 
 class AnimalHealthPanelView(HomeAssistantView):
@@ -72,7 +80,7 @@ class AnimalHealthPanelView(HomeAssistantView):
 
 
 class AnimalHealthBrandView(HomeAssistantView):
-    """Serve the same PNG brand icon that is bundled for HACS/Home Assistant."""
+    """Serve the lightweight derivative of the canonical Animal Health logo."""
 
     url = PANEL_BRAND_URL
     name = "api:animal_health:brand"
@@ -80,12 +88,13 @@ class AnimalHealthBrandView(HomeAssistantView):
 
     async def get(self, request: web.Request) -> web.Response:
         source = await request.app[KEY_HASS].async_add_executor_job(
-            _BRAND_ICON_PATH.read_bytes
+            _BRAND_UI_PATH.read_text,
+            "utf-8",
         )
         return web.Response(
-            body=source,
-            content_type="image/png",
-            headers=_NO_STORE_HEADERS,
+            text=source,
+            content_type="image/svg+xml",
+            headers=_BRAND_CACHE_HEADERS,
         )
 
 
@@ -98,13 +107,13 @@ class AnimalHealthLegacyBrandView(HomeAssistantView):
 
     async def get(self, request: web.Request) -> web.Response:
         source = await request.app[KEY_HASS].async_add_executor_job(
-            _LEGACY_BRAND_ICON_PATH.read_text,
+            _BRAND_UI_PATH.read_text,
             "utf-8",
         )
         return web.Response(
             text=source,
             content_type="image/svg+xml",
-            headers=_NO_STORE_HEADERS,
+            headers=_BRAND_CACHE_HEADERS,
         )
 
 
@@ -117,6 +126,7 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         hass.http.register_view(AnimalHealthLegacyBrandView())
         state["frontend_view_registered"] = True
 
+    brand_url = f"{PANEL_BRAND_URL}?v={INTEGRATION_VERSION}-{BRAND_REVISION}"
     async_register_built_in_panel(
         hass,
         component_name="custom",
@@ -125,7 +135,7 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         frontend_url_path=PANEL_URL_PATH,
         config={
             "version": INTEGRATION_VERSION,
-            "brand_url": PANEL_BRAND_URL,
+            "brand_url": brand_url,
             "_panel_custom": {
                 "name": PANEL_ELEMENT_NAME,
                 "module_url": (
