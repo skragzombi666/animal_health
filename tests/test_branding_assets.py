@@ -1,48 +1,45 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
-
-from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "custom_components" / "animal_health"
+FRONTEND = INTEGRATION / "frontend"
 
 
-def test_branding_uses_one_high_resolution_master_with_small_delivery_assets() -> None:
-    master = INTEGRATION / "assets" / "animal-health-logo-master.png"
-    brand = INTEGRATION / "brand" / "icon.png"
-    ui = INTEGRATION / "brand" / "icon-ui.png"
+def test_branding_keeps_full_resolution_master_and_small_runtime_asset() -> None:
+    master = INTEGRATION / "brand" / "icon.png"
+    ui = FRONTEND / "animal-health-brand.svg"
     root_icon = ROOT / "icon.png"
 
     assert master.is_file()
-    assert brand.is_file()
     assert ui.is_file()
-    assert root_icon.read_bytes() == brand.read_bytes()
+    assert root_icon.is_file()
+    assert root_icon.read_bytes() == master.read_bytes()
+    assert master.stat().st_size > 100_000
+    assert ui.stat().st_size < 50_000
 
-    with Image.open(master) as image:
-        master_size = image.size
-    with Image.open(brand) as image:
-        assert max(image.size) <= 256
-    with Image.open(ui) as image:
-        assert max(image.size) <= 128
-
-    assert max(master_size) > 256
-    assert brand.stat().st_size < master.stat().st_size / 2
-    assert ui.stat().st_size < master.stat().st_size / 4
+    source = ui.read_text(encoding="utf-8")
+    assert 'aria-label="Animal Health"' in source
+    assert "data:image/png;base64," in source
 
 
-def test_frontend_brand_endpoint_serves_small_ui_asset() -> None:
+def test_frontend_brand_endpoint_serves_lightweight_versioned_asset() -> None:
     panel = (INTEGRATION / "panel.py").read_text(encoding="utf-8")
     frontend = "".join(
         path.read_text(encoding="utf-8")
-        for path in sorted((INTEGRATION / "frontend").glob("animal-health-panel.part*.js"))
+        for path in sorted(FRONTEND.glob("animal-health-panel.part*.js"))
     )
+    manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
 
-    assert '_BRAND_MASTER_PATH = Path(__file__).parent / "assets" / "animal-health-logo-master.png"' in panel
-    assert '_BRAND_ICON_PATH = Path(__file__).parent / "brand" / "icon-ui.png"' in panel
+    assert '_BRAND_MASTER_PATH = Path(__file__).parent / "brand" / "icon.png"' in panel
+    assert '_BRAND_UI_PATH = _FRONTEND_DIR / "animal-health-brand.svg"' in panel
     assert "_BRAND_CACHE_HEADERS" in panel
+    assert "BRAND_REVISION" in panel
+    assert "brand_url = f" in panel
     assert "brandUrl0814" in frontend
     assert "brandLogo0814" in frontend
     assert "brandLoading0814" in frontend
-    assert "animal-health-brand.svg" not in frontend
-    assert not (INTEGRATION / "frontend" / "animal-health-brand.svg").exists()
+    assert manifest["version"] == "0.8.14"
+    assert 'const V="0.8.14",D="animal_health"' in frontend
