@@ -208,7 +208,7 @@ console.log("Animal Health 0.8.14 dashboard runtime validation passed");
 def main() -> None:
     source = panel_source()
     manifest = json.loads(read(INTEGRATION / "manifest.json"))
-    assert manifest["version"] == "0.8.14"
+    assert manifest["version"] == "0.8.15"
     assert 'const V="0.8.14",D="animal_health"' in source
     assert 'p?.mode==="weight"?`${D}/v083/ai/analyze`:type' in source
     assert 'p?.mode==="weight"?`${D}/v088/ai/analyze`:type' not in source
