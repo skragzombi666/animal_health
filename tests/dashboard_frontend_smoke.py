@@ -50,7 +50,7 @@ if(!Panel)throw new Error("Panel not registered");
 const panel=new Panel();
 panel.h={language:"de",user:{is_admin:true}};
 panel.d={
-  version:"0.8.14",
+  version:"0.8.15",
   today:"2026-08-11",
   summary:{active_animals:2,overdue_tasks:0,today_tasks:0,upcoming_tasks:0,pending_tasks:0},
   animals:[
@@ -195,7 +195,7 @@ panel.modal={type:"record-symptom",animalId:"AH-1"};
 const symptomForm=panel.form();
 if(!symptomForm.includes('data-action="ai-symptom-086"'))throw new Error("Symptom form AI shortcut missing");
 
-console.log("Animal Health 0.8.14 dashboard runtime validation passed");
+console.log("Animal Health 0.8.15 dashboard runtime validation passed");
 '''
     with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:
         file.write(harness)
@@ -208,8 +208,8 @@ console.log("Animal Health 0.8.14 dashboard runtime validation passed");
 def main() -> None:
     source = panel_source()
     manifest = json.loads(read(INTEGRATION / "manifest.json"))
-    assert manifest["version"] == "0.8.14"
-    assert 'const V="0.8.14",D="animal_health"' in source
+    assert manifest["version"] == "0.8.15"
+    assert 'const V="0.8.15",D="animal_health"' in source
     assert 'p?.mode==="weight"?`${D}/v083/ai/analyze`:type' in source
     assert 'p?.mode==="weight"?`${D}/v088/ai/analyze`:type' not in source
 
@@ -280,7 +280,7 @@ def main() -> None:
         ), marker
 
     runtime_smoke(source)
-    print("Animal Health 0.8.14 dashboard frontend validation passed")
+    print("Animal Health 0.8.15 dashboard frontend validation passed")
 
 
 if __name__ == "__main__":
