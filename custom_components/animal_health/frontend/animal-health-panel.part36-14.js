@@ -1,0 +1,1 @@
+</div><style>.calendarGrid0815{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}

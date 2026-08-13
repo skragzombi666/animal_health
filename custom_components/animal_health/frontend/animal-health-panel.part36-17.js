@@ -1,0 +1,1 @@
+@media(max-width:700px){.calendarCell0815{min-height:54px;padding:3px}}</style>

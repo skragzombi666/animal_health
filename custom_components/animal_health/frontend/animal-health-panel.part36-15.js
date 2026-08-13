@@ -1,0 +1,1 @@
+.calendarCell0815{min-height:72px;padding:6px;border:1px solid var(--divider-color);display:flex;flex-direction:column;gap:5px}
