@@ -36,6 +36,9 @@ from .v081_fixes import async_setup_v081_fixes
 from .v081_stt import async_setup_v081_stt
 from .v0815_features import apply_v0815_patches, async_initialize_v0815_features
 from .v0816_features import apply_v0816_patches
+from .v0817_features import _initialize_sync as _initialize_v0817_sync
+from .v0817_features import async_setup_v0817_features
+from .v0817_patches import apply_v0817_patches
 from .v082_features import apply_v082_patches, async_setup_v082_features
 from .v083_features import async_initialize_v083_features, async_setup_v083_features
 from .v084_features import async_setup_v084_features
@@ -56,6 +59,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     apply_v082_patches()
     apply_v0815_patches()
     apply_v0816_patches()
+    apply_v0817_patches()
     apply_task_stabilization()
     apply_download_stabilization()
     async_setup_services(hass)
@@ -72,6 +76,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_v081_features(hass)
     async_setup_v081_fixes(hass)
     async_setup_v081_stt(hass)
+    async_setup_v0817_features(hass)
     async_setup_v082_features(hass)
     async_setup_v083_features(hass)
     async_setup_v084_features(hass)
@@ -85,6 +90,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
     apply_v082_patches()
     apply_v0815_patches()
     apply_v0816_patches()
+    apply_v0817_patches()
     apply_task_stabilization()
     apply_download_stabilization()
     database_path = Path(hass.config.path(DATABASE_NAME))
@@ -103,6 +109,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
     await async_initialize_v080_features(feature_store)
     await hass.async_add_executor_job(_initialize_sync, database_path)
     await async_initialize_v083_features(feature_store)
+    await hass.async_add_executor_job(_initialize_v0817_sync, database_path)
 
     coordinator = AnimalHealthCoordinator(hass, database)
     await coordinator.async_config_entry_first_refresh()
