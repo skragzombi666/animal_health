@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 ANDROID = ROOT / "android"
@@ -19,10 +21,8 @@ def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> No
     backend = (APP / "src/main/java/ch/animalhealth/app/StandaloneBackend.java").read_text(encoding="utf-8")
     bridge = (APP / "src/main/assets/android-shared-ui.js").read_text(encoding="utf-8")
     index = (APP / "src/main/assets/index.html").read_text(encoding="utf-8")
-    frontend = "".join(
-        path.read_text(encoding="utf-8")
-        for path in sorted((INTEGRATION / "frontend").glob("animal-health-panel.part*.js"))
-    )
+    frontend_parts = sorted((INTEGRATION / "frontend").glob("animal-health-panel.part*.js"))
+    frontend = "".join(path.read_text(encoding="utf-8") for path in frontend_parts)
 
     assert f'versionName = "{version}"' in gradle
     assert 'versionCode = 900003' in gradle
@@ -46,13 +46,18 @@ def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> No
     assert 'callWS:request=>nativeCall(request)' in bridge
     assert 'callService:' in bridge
 
-    # The source parts deliberately split a single JS class/module across files.
-    # They must never again be loaded as independent <script> resources on Android.
-    part01 = (INTEGRATION / "frontend" / "animal-health-panel.part01.js").read_text(encoding="utf-8")
-    part02 = (INTEGRATION / "frontend" / "animal-health-panel.part02.js").read_text(encoding="utf-8")
-    assert "class AnimalHealthPanel extends HTMLElement{" in part01
-    assert part01.rstrip().endswith("}") is False
-    assert part02.lstrip().startswith("connectedCallback()")
+    # The source files are chunks of one JavaScript program, not standalone scripts.
+    # part01 alone is intentionally syntactically incomplete; the concatenated source is valid.
+    assert len(frontend_parts) == 40
+    part01 = frontend_parts[0].read_text(encoding="utf-8")
+    with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:
+        file.write(part01)
+        file.flush()
+        assert subprocess.run(["node", "--check", file.name], check=False).returncode != 0
+    with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:
+        file.write(frontend)
+        file.flush()
+        subprocess.run(["node", "--check", file.name], check=True)
 
     for marker in (
         "animal_health/dashboard",
