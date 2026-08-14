@@ -1,21 +1,18 @@
-name: Apply alpha6 Android mobile shell patch
+name: Apply alpha6 shell
 on:
   push:
-    branches:
-      - agent/animal-health-0.9.0-alpha.6-mobile-shell
+    branches: [agent/animal-health-0.9.0-alpha.6-mobile-shell]
 permissions:
   contents: write
 jobs:
   patch:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Patch Android shell
-        shell: python
+      - name: Patch files
         run: |
+          python - <<'PY'
           from pathlib import Path
-
           p=Path('android/app/src/main/java/ch/animalhealth/app/MainActivity.java')
           s=p.read_text()
           if 'import android.widget.FrameLayout;' not in s:
@@ -70,8 +67,7 @@ jobs:
         target.requestApplyInsets();
     }
 '''
-          s=s[:start]+method+s[end:]
-          p.write_text(s)
+          p.write_text(s[:start]+method+s[end:])
 
           p=Path('android/app/src/main/assets/index.html')
           s=p.read_text()
@@ -79,49 +75,30 @@ jobs:
           p.write_text(s)
 
           p=Path('android/app/src/main/assets/android-shared-ui.js')
-          s=p.read_text()
-          s=s.replace('if(name.includes("info"))return"info";return"dot"', 'if(name.includes("info"))return"info";return"info"')
+          s=p.read_text().replace('if(name.includes("info"))return"info";return"dot"','if(name.includes("info"))return"info";return"info"')
           marker='const oldNotify=p.notify;'
-          css='''const standaloneStyle=`
-          ha-icon svg{display:block!important;width:100%!important;height:100%!important;overflow:visible!important}
-          @media(max-width:850px){
-            header{display:flex!important;align-items:center!important;gap:2px!important;min-height:64px!important;padding:8px 8px!important;overflow:visible!important}
-            header .menuButton,header>button[data-action="refresh"]{display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 44px!important;width:44px!important;height:44px!important;min-width:44px!important;padding:10px!important;visibility:visible!important;opacity:1!important}
-            header .brand,header .brand0814,header .brandOriginal085{display:flex!important;flex:0 0 34px!important;width:34px!important;min-width:34px!important;margin:0 2px!important;overflow:visible!important}
-            header .brandLogo0814,header .brandOriginal085 img{width:34px!important;height:34px!important;max-width:34px!important}
-            header nav{display:flex!important;align-items:stretch!important;justify-content:space-evenly!important;flex:1 1 auto!important;min-width:0!important;gap:0!important;overflow:visible!important}
-            header nav button{display:flex!important;position:relative!important;align-items:center!important;justify-content:center!important;flex:1 1 0!important;min-width:34px!important;max-width:54px!important;width:auto!important;height:48px!important;padding:10px 4px!important;visibility:visible!important;opacity:1!important;color:var(--primary-text-color,#212121)!important}
-            header nav button ha-icon,header .menuButton ha-icon,header>button[data-action="refresh"] ha-icon{display:inline-grid!important;width:24px!important;height:24px!important;min-width:24px!important;visibility:visible!important;opacity:1!important;color:currentColor!important}
-            header nav button span{display:none!important}
-            .heading .search ha-icon,.heading button ha-icon{display:inline-grid!important;width:24px!important;height:24px!important;visibility:visible!important;opacity:1!important;color:currentColor!important}
-          }`;
-          const installStandaloneStyle=panel=>{if(!panel?.shadowRoot)return;let style=panel.shadowRoot.querySelector('style[data-android-shell]');if(!style){style=document.createElement('style');style.dataset.androidShell='1';panel.shadowRoot.appendChild(style)}style.textContent=standaloneStyle};
-          '''
+          css='''const standaloneStyle=`ha-icon svg{display:block!important;width:100%!important;height:100%!important;overflow:visible!important}@media(max-width:850px){header{display:flex!important;align-items:center!important;gap:2px!important;min-height:64px!important;padding:8px!important;overflow:visible!important}header .menuButton,header>button[data-action="refresh"]{display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 44px!important;width:44px!important;height:44px!important;min-width:44px!important;padding:10px!important;visibility:visible!important;opacity:1!important}header .brand,header .brand0814,header .brandOriginal085{display:flex!important;flex:0 0 34px!important;width:34px!important;min-width:34px!important;margin:0 2px!important;overflow:visible!important}header .brandLogo0814,header .brandOriginal085 img{width:34px!important;height:34px!important;max-width:34px!important}header nav{display:flex!important;align-items:stretch!important;justify-content:space-evenly!important;flex:1 1 auto!important;min-width:0!important;gap:0!important;overflow:visible!important}header nav button{display:flex!important;position:relative!important;align-items:center!important;justify-content:center!important;flex:1 1 0!important;min-width:34px!important;max-width:54px!important;width:auto!important;height:48px!important;padding:10px 4px!important;visibility:visible!important;opacity:1!important;color:var(--primary-text-color,#212121)!important}header nav button ha-icon,header .menuButton ha-icon,header>button[data-action="refresh"] ha-icon{display:inline-grid!important;width:24px!important;height:24px!important;min-width:24px!important;visibility:visible!important;opacity:1!important;color:currentColor!important}header nav button span{display:none!important}.heading .search ha-icon,.heading button ha-icon{display:inline-grid!important;width:24px!important;height:24px!important;visibility:visible!important;opacity:1!important;color:currentColor!important}}`;const installStandaloneStyle=panel=>{if(!panel?.shadowRoot)return;let style=panel.shadowRoot.querySelector('style[data-android-shell]');if(!style){style=document.createElement('style');style.dataset.androidShell='1';panel.shadowRoot.appendChild(style)}style.textContent=standaloneStyle};
+'''
           if 'const standaloneStyle=`' not in s:
               s=s.replace(marker,css+marker)
           s=s.replace('const sharedRender=p.render;p.render=function(){const result=sharedRender.call(this);removeStandaloneHaWarning(this);return result};','const sharedRender=p.render;p.render=function(){const result=sharedRender.call(this);removeStandaloneHaWarning(this);installStandaloneStyle(this);return result};')
           p.write_text(s)
 
-          p=Path('custom_components/animal_health/manifest.json')
-          p.write_text(p.read_text().replace('"version": "0.9.0-alpha.5"','"version": "0.9.0-alpha.6"'))
-          p=Path('custom_components/animal_health/frontend/animal-health-panel.part01.js')
-          p.write_text(p.read_text().replace('const V="0.9.0-alpha.5"','const V="0.9.0-alpha.6"'))
-          p=Path('android/app/build.gradle.kts')
-          p.write_text(p.read_text().replace('versionCode = 900005','versionCode = 900006').replace('versionName = "0.9.0-alpha.5"','versionName = "0.9.0-alpha.6"'))
-
+          p=Path('custom_components/animal_health/manifest.json');p.write_text(p.read_text().replace('"version": "0.9.0-alpha.5"','"version": "0.9.0-alpha.6"'))
+          p=Path('custom_components/animal_health/frontend/animal-health-panel.part01.js');p.write_text(p.read_text().replace('const V="0.9.0-alpha.5"','const V="0.9.0-alpha.6"'))
+          p=Path('android/app/build.gradle.kts');p.write_text(p.read_text().replace('versionCode = 900005','versionCode = 900006').replace('versionName = "0.9.0-alpha.5"','versionName = "0.9.0-alpha.6"'))
           p=Path('tests/test_android_alpha.py')
           s=p.read_text().replace('assert version == "0.9.0-alpha.5"','assert version == "0.9.0-alpha.6"').replace("assert 'versionCode = 900005' in gradle", "assert 'versionCode = 900006' in gradle")
-          extra='''\n\ndef test_android_alpha6_mobile_shell_handles_android15_insets_and_icons() -> None:\n    activity = (APP / "src/main/java/ch/animalhealth/app/MainActivity.java").read_text(encoding="utf-8")\n    bridge = (APP / "src/main/assets/android-shared-ui.js").read_text(encoding="utf-8")\n    index = (APP / "src/main/assets/index.html").read_text(encoding="utf-8")\n    assert "FrameLayout root" in activity\n    assert "applySystemWindowInsets(root)" in activity\n    assert "WindowInsets.Type.statusBars()" in activity\n    assert "WindowInsets.Type.navigationBars()" in activity\n    assert "WindowInsets.Type.displayCutout()" in activity\n    assert "style[data-android-shell]" in bridge\n    assert "header nav button ha-icon" in bridge\n    assert ".heading .search ha-icon" in bridge\n    assert 'return"info"' in bridge\n    assert "ha-icon svg{display:block;width:100%;height:100%" in index\n'''
           if 'test_android_alpha6_mobile_shell_handles_android15_insets_and_icons' not in s:
-              s += extra
+              s+='''\n\ndef test_android_alpha6_mobile_shell_handles_android15_insets_and_icons() -> None:\n    activity = (APP / "src/main/java/ch/animalhealth/app/MainActivity.java").read_text(encoding="utf-8")\n    bridge = (APP / "src/main/assets/android-shared-ui.js").read_text(encoding="utf-8")\n    index = (APP / "src/main/assets/index.html").read_text(encoding="utf-8")\n    assert "FrameLayout root" in activity\n    assert "applySystemWindowInsets(root)" in activity\n    assert "WindowInsets.Type.statusBars()" in activity\n    assert "WindowInsets.Type.navigationBars()" in activity\n    assert "WindowInsets.Type.displayCutout()" in activity\n    assert "style[data-android-shell]" in bridge\n    assert "header nav button ha-icon" in bridge\n    assert ".heading .search ha-icon" in bridge\n    assert 'return"info"' in bridge\n    assert "ha-icon svg{display:block;width:100%;height:100%" in index\n'''
           p.write_text(s)
-
-          Path('docs/version-0.9.0-alpha.6.md').write_text('''# Animal Health 0.9.0-alpha.6\n\n0.9.0-alpha.6 korrigiert die verbleibenden Darstellungsprobleme der Standalone-Android-App.\n\n## Android 15/16 Safe Area\n\n- System-Inset-Ermittlung verwendet auf API 30+ die typisierten Insets für Statusleiste, Navigationsleiste und Display-Cutout.\n- Ein nativer Root-Container erhält die Insets; der WebView wird vollständig innerhalb des sicheren Inhaltsbereichs angeordnet.\n- Dadurch liegen App-Header, Logo und Bedienelemente nicht mehr unter Uhrzeit, Kameraloch/Notch oder Systemnavigation.\n\n## Mobile Navigation und Icons\n\n- Die Standalone-App erzwingt auf kleinen Displays eine kompakte, sichtbare Icon-Navigation.\n- Menü, fünf Hauptnavigationseinträge, Aktualisieren und Suchsymbol bleiben sichtbar.\n- SVGs erhalten explizite Breite/Höhe; unbekannte MDI-Symbole bekommen einen gut sichtbaren Informations-Fallback statt eines kaum sichtbaren Punkts.\n- Diese Android-spezifischen Regeln verändern die Home-Assistant-Darstellung nicht.\n''')
-      - name: Remove temporary workflow and commit
+          Path('docs/version-0.9.0-alpha.6.md').write_text('''# Animal Health 0.9.0-alpha.6\n\n- Android 15/16: typisierte Statusleisten-, Navigationsleisten- und Display-Cutout-Insets.\n- Der WebView liegt in einem nativen, inset-geschützten Root-Container.\n- Mobile Standalone-Navigation erzwingt sichtbare Menü-, Hauptnavigation-, Refresh- und Such-Icons.\n- SVG-Icons erhalten explizite Abmessungen; unbekannte MDI-Symbole erhalten einen sichtbaren Fallback.\n''')
+          PY
+      - name: Commit patch
         run: |
           rm .github/workflows/apply-alpha6-mobile-shell.yml
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
           git commit -m "Animal Health 0.9.0-alpha.6 Android mobile shell fixes"
-          git push origin HEAD:agent/animal-health-0.9.0-alpha.6-mobile-shell
+          git push
