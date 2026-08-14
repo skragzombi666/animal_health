@@ -6,59 +6,77 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ANDROID = ROOT / "android"
 APP = ANDROID / "app"
+INTEGRATION = ROOT / "custom_components" / "animal_health"
 
 
-def test_android_alpha_project_is_version_aligned_and_standalone() -> None:
-    manifest = json.loads(
-        (ROOT / "custom_components" / "animal_health" / "manifest.json").read_text(
-            encoding="utf-8"
-        )
-    )
+def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> None:
+    manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
     version = manifest["version"]
-    assert version == "0.9.0-alpha.1"
+    assert version == "0.9.0-alpha.2"
 
     gradle = (APP / "build.gradle.kts").read_text(encoding="utf-8")
-    android_manifest = (APP / "src" / "main" / "AndroidManifest.xml").read_text(
-        encoding="utf-8"
+    activity = (APP / "src/main/java/ch/animalhealth/app/MainActivity.java").read_text(encoding="utf-8")
+    backend = (APP / "src/main/java/ch/animalhealth/app/StandaloneBackend.java").read_text(encoding="utf-8")
+    bridge = (APP / "src/main/assets/android-shared-ui.js").read_text(encoding="utf-8")
+    index = (APP / "src/main/assets/index.html").read_text(encoding="utf-8")
+    frontend = "".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted((INTEGRATION / "frontend").glob("animal-health-panel.part*.js"))
     )
-    activity = (
-        APP / "src" / "main" / "java" / "ch" / "animalhealth" / "app" / "MainActivity.java"
-    ).read_text(encoding="utf-8")
-    database = (
-        APP
-        / "src"
-        / "main"
-        / "java"
-        / "ch"
-        / "animalhealth"
-        / "app"
-        / "AnimalHealthDatabase.java"
-    ).read_text(encoding="utf-8")
 
     assert f'versionName = "{version}"' in gradle
     assert 'applicationId = "ch.animalhealth.app"' in gradle
-    assert "android.intent.action.MAIN" in android_manifest
-    assert "Home Assistant" in activity
-    assert "Medikationen dieses Tages erneut vorbereiten" in activity
-    assert "Nochmals verabreichen" in activity
-    assert "Kopieren" in activity
-    assert "Bearbeiten" in activity
-    assert "+ Weiteres Medikament" in activity
-    assert "CREATE TABLE animals" in database
-    assert "CREATE TABLE events" in database
-    assert "CREATE TABLE tasks" in database
-    assert "CREATE TABLE medications" in database
-    assert "addMedicationBatch" in database
-    assert "exportJson" in database
+    assert '../../custom_components/animal_health/frontend' in gradle
+    assert '../../custom_components/animal_health/catalogs' in gradle
+    assert 'file:///android_asset/index.html' in activity
+    assert 'addJavascriptInterface' in activity
+    assert 'WebView' in activity
+    assert 'animal-health-panel' in index
+    assert 'animal-health-panel.part${String(i).padStart(2,"0")}.js' in bridge
+    assert 'for(let i=1;i<=40;i++)' in bridge
+    assert 'callWS:request=>nativeCall(request)' in bridge
+    assert 'callService:' in bridge
+
+    for marker in (
+        "animal_health/dashboard",
+        "animal_health/catalog",
+        "animal_health/features",
+        "animal_health/animal_detail",
+        "animal_health/groups/create",
+        "animal_health/animal_group/set",
+        "animal_health/tags/create",
+        "animal_health/tags/set",
+        "animal_health/animal_photo/set",
+        "animal_health/v081/state",
+        "animal_health/v081/group_event/create",
+        "animal_health/v081/group_task/create",
+        "animal_health/v083/state",
+        "animal_health/v083/animal_metadata/set",
+        "animal_health/v0817/state",
+        "animal_health/v0817/medications/batch_record",
+        "CREATE TABLE groups",
+        "CREATE TABLE tags",
+        "CREATE TABLE occurrences",
+        "CREATE TABLE attachments",
+        "recurrence_type",
+        "exportJson",
+    ):
+        assert marker in backend, marker
+
+    for visible_marker in (
+        "Tiergruppen",
+        "Tags",
+        "Kalender",
+        "Medikamente verwalten",
+        "Gesundheitschronik",
+        "day-repeat-0817",
+    ):
+        assert visible_marker in frontend, visible_marker
 
 
 def test_android_release_workflow_builds_and_attaches_apk() -> None:
-    release = (ROOT / ".github" / "workflows" / "release.yml").read_text(
-        encoding="utf-8"
-    )
-    android_workflow = (ROOT / ".github" / "workflows" / "android.yml").read_text(
-        encoding="utf-8"
-    )
+    release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    android_workflow = (ROOT / ".github/workflows/android.yml").read_text(encoding="utf-8")
     assert "gradle -p android :app:assembleDebug" in release
     assert "Standalone Android APK" in release
     assert "--prerelease" in release
