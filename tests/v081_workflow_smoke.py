@@ -32,7 +32,8 @@ def main() -> None:
     for source in (features, fixes, stt_source):
         ast.parse(source)
 
-    assert tuple(int(part) for part in manifest["version"].split(".")) >= (0, 8, 1)
+    numeric_version = manifest["version"].split("-", 1)[0]
+    assert tuple(int(part) for part in numeric_version.split(".")) >= (0, 8, 1)
     assert f'const V="{manifest["version"]}"' in read(FRONTEND / "animal-health-panel.part01.js")
     for marker in (
         "_initialize_sync",
