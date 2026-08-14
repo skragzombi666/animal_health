@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
 }
@@ -21,6 +23,19 @@ val bundleSharedFrontend by tasks.registering {
     }
 }
 
+val alphaSigningSource = file("../alpha-signing-keystore.b64")
+val generatedAlphaSigningFile = layout.buildDirectory.file("generated/alpha-signing/animal-health-alpha.jks")
+val prepareAlphaSigning by tasks.registering {
+    inputs.file(alphaSigningSource)
+    outputs.file(generatedAlphaSigningFile)
+    doLast {
+        val target = generatedAlphaSigningFile.get().asFile
+        target.parentFile.mkdirs()
+        val encoded = alphaSigningSource.readText().filterNot(Char::isWhitespace)
+        target.writeBytes(Base64.getDecoder().decode(encoded))
+    }
+}
+
 android {
     namespace = "ch.animalhealth.app"
     compileSdk = 35
@@ -29,8 +44,8 @@ android {
         applicationId = "ch.animalhealth.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 900003
-        versionName = "0.9.0-alpha.3"
+        versionCode = 900004
+        versionName = "0.9.0-alpha.4"
     }
 
     sourceSets {
@@ -42,10 +57,20 @@ android {
         getByName("main").assets.srcDir(generatedSharedUiAssets)
     }
 
+    signingConfigs {
+        create("alpha") {
+            storeFile = generatedAlphaSigningFile.get().asFile
+            storePassword = "animalhealthalpha"
+            keyAlias = "animal-health-alpha"
+            keyPassword = "animalhealthalpha"
+        }
+    }
+
     buildTypes {
         getByName("debug") {
             applicationIdSuffix = ".alpha"
             versionNameSuffix = "-debug"
+            signingConfig = signingConfigs.getByName("alpha")
         }
         getByName("release") {
             isMinifyEnabled = false
@@ -60,7 +85,7 @@ android {
 }
 
 tasks.named("preBuild").configure {
-    dependsOn(bundleSharedFrontend)
+    dependsOn(bundleSharedFrontend, prepareAlphaSigning)
 }
 
 dependencies {

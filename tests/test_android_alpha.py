@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -14,7 +16,7 @@ INTEGRATION = ROOT / "custom_components" / "animal_health"
 def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
     version = manifest["version"]
-    assert version == "0.9.0-alpha.3"
+    assert version == "0.9.0-alpha.4"
 
     gradle = (APP / "build.gradle.kts").read_text(encoding="utf-8")
     activity = (APP / "src/main/java/ch/animalhealth/app/MainActivity.java").read_text(encoding="utf-8")
@@ -25,7 +27,7 @@ def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> No
     frontend = "".join(path.read_text(encoding="utf-8") for path in frontend_parts)
 
     assert f'versionName = "{version}"' in gradle
-    assert 'versionCode = 900003' in gradle
+    assert 'versionCode = 900004' in gradle
     assert 'applicationId = "ch.animalhealth.app"' in gradle
     assert '../../custom_components/animal_health/frontend' in gradle
     assert '../../custom_components/animal_health/catalogs' in gradle
@@ -34,7 +36,7 @@ def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> No
     assert 'animal-health-panel.js' in gradle
     assert 'ordered.joinToString(separator = "")' in gradle
     assert 'Expected 40 Animal Health frontend parts' in gradle
-    assert 'dependsOn(bundleSharedFrontend)' in gradle
+    assert 'dependsOn(bundleSharedFrontend, prepareAlphaSigning)' in gradle
     assert 'file:///android_asset/index.html' in activity
     assert 'addJavascriptInterface' in activity
     assert 'WebView' in activity
@@ -94,6 +96,20 @@ def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> No
         "day-repeat-0817",
     ):
         assert visible_marker in frontend, visible_marker
+
+
+def test_android_alpha_uses_stable_test_signing_key() -> None:
+    gradle = (APP / "build.gradle.kts").read_text(encoding="utf-8")
+    encoded = (ANDROID / "alpha-signing-keystore.b64").read_text(encoding="utf-8")
+    decoded = base64.b64decode("".join(encoded.split()))
+
+    # Public test key: stable on purpose so alpha APKs can update in place.
+    assert hashlib.sha256(decoded).hexdigest() == "e954d951ad42420648ad1c463ad10596db9446a2a4f03cb7107fe91aba257ac3"
+    assert 'create("alpha")' in gradle
+    assert 'keyAlias = "animal-health-alpha"' in gradle
+    assert 'signingConfig = signingConfigs.getByName("alpha")' in gradle
+    assert 'alpha-signing-keystore.b64' in gradle
+    assert 'Base64.getDecoder().decode(encoded)' in gradle
 
 
 def test_android_release_workflow_builds_and_attaches_apk() -> None:
