@@ -14,7 +14,7 @@ INTEGRATION = ROOT / "custom_components" / "animal_health"
 def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
     version = manifest["version"]
-    assert version == "0.9.0-alpha.3"
+    assert version == "0.9.0-alpha.4"
 
     gradle = (APP / "build.gradle.kts").read_text(encoding="utf-8")
     activity = (APP / "src/main/java/ch/animalhealth/app/MainActivity.java").read_text(encoding="utf-8")
