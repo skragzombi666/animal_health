@@ -13,7 +13,11 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.pdf.PdfDocument;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.view.DisplayCutout;
+import android.view.View;
+import android.view.WindowInsets;
 import android.provider.MediaStore;
 import android.webkit.JavascriptInterface;
 import android.webkit.MimeTypeMap;
@@ -58,7 +62,10 @@ public final class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         backend = new StandaloneBackend(this);
         getWindow().setStatusBarColor(Color.WHITE);
-        getWindow().getDecorView().setSystemUiVisibility(android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+        getWindow().setNavigationBarColor(Color.WHITE);
+        getWindow().getDecorView().setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+        );
 
         webView = new WebView(this);
         WebSettings settings = webView.getSettings();
@@ -75,7 +82,32 @@ public final class MainActivity extends Activity {
         webView.setWebChromeClient(new SharedUiChromeClient());
         webView.setWebViewClient(new SharedUiWebViewClient());
         setContentView(webView);
+        applySystemWindowInsets(webView);
         webView.loadUrl("file:///android_asset/index.html");
+    }
+
+    private void applySystemWindowInsets(View target) {
+        target.setOnApplyWindowInsetsListener((view, insets) -> {
+            int left = insets.getSystemWindowInsetLeft();
+            int top = insets.getSystemWindowInsetTop();
+            int right = insets.getSystemWindowInsetRight();
+            int bottom = insets.getSystemWindowInsetBottom();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                DisplayCutout cutout = insets.getDisplayCutout();
+                if (cutout != null) {
+                    left = Math.max(left, cutout.getSafeInsetLeft());
+                    top = Math.max(top, cutout.getSafeInsetTop());
+                    right = Math.max(right, cutout.getSafeInsetRight());
+                    bottom = Math.max(bottom, cutout.getSafeInsetBottom());
+                }
+            }
+            if (view.getPaddingLeft() != left || view.getPaddingTop() != top ||
+                view.getPaddingRight() != right || view.getPaddingBottom() != bottom) {
+                view.setPadding(left, top, right, bottom);
+            }
+            return insets;
+        });
+        target.requestApplyInsets();
     }
 
     @Override
