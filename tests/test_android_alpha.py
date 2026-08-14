@@ -12,7 +12,7 @@ INTEGRATION = ROOT / "custom_components" / "animal_health"
 def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
     version = manifest["version"]
-    assert version == "0.9.0-alpha.2"
+    assert version == "0.9.0-alpha.3"
 
     gradle = (APP / "build.gradle.kts").read_text(encoding="utf-8")
     activity = (APP / "src/main/java/ch/animalhealth/app/MainActivity.java").read_text(encoding="utf-8")
@@ -25,17 +25,34 @@ def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> No
     )
 
     assert f'versionName = "{version}"' in gradle
+    assert 'versionCode = 900003' in gradle
     assert 'applicationId = "ch.animalhealth.app"' in gradle
     assert '../../custom_components/animal_health/frontend' in gradle
     assert '../../custom_components/animal_health/catalogs' in gradle
+    assert 'bundleSharedFrontend' in gradle
+    assert 'animal-health-panel.part*.js' in gradle
+    assert 'animal-health-panel.js' in gradle
+    assert 'ordered.joinToString(separator = "")' in gradle
+    assert 'Expected 40 Animal Health frontend parts' in gradle
+    assert 'dependsOn(bundleSharedFrontend)' in gradle
     assert 'file:///android_asset/index.html' in activity
     assert 'addJavascriptInterface' in activity
     assert 'WebView' in activity
     assert 'animal-health-panel' in index
-    assert 'animal-health-panel.part${String(i).padStart(2,"0")}.js' in bridge
-    assert 'for(let i=1;i<=40;i++)' in bridge
+    assert 'await loadScript("animal-health-panel.js")' in bridge
+    assert 'for(let i=1;i<=40;i++)' not in bridge
+    assert 'animal-health-panel.part${String(i).padStart(2,"0")}.js' not in bridge
+    assert 'frontendErrors' in bridge
     assert 'callWS:request=>nativeCall(request)' in bridge
     assert 'callService:' in bridge
+
+    # The source parts deliberately split a single JS class/module across files.
+    # They must never again be loaded as independent <script> resources on Android.
+    part01 = (INTEGRATION / "frontend" / "animal-health-panel.part01.js").read_text(encoding="utf-8")
+    part02 = (INTEGRATION / "frontend" / "animal-health-panel.part02.js").read_text(encoding="utf-8")
+    assert "class AnimalHealthPanel extends HTMLElement{" in part01
+    assert part01.rstrip().endswith("}") is False
+    assert part02.lstrip().startswith("connectedCallback()")
 
     for marker in (
         "animal_health/dashboard",
