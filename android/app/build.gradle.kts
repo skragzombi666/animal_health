@@ -4,7 +4,7 @@ plugins {
     id("com.android.application")
 }
 
-val animalHealthVersion = "0.9.0-alpha.5"
+val animalHealthVersion = "0.9.0-alpha.6"
 val sharedFrontendSource = file("../../custom_components/animal_health/frontend")
 val generatedSharedUiAssets = layout.buildDirectory.dir("generated/animalHealthSharedUi")
 val bundleSharedFrontend by tasks.registering {
@@ -45,7 +45,7 @@ android {
         applicationId = "ch.animalhealth.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 900005
+        versionCode = 900006
         versionName = animalHealthVersion
         buildConfigField("String", "ANIMAL_HEALTH_VERSION", "\"$animalHealthVersion\"")
     }

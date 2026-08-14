@@ -16,7 +16,7 @@ INTEGRATION = ROOT / "custom_components" / "animal_health"
 def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
     version = manifest["version"]
-    assert version == "0.9.0-alpha.5"
+    assert version == "0.9.0-alpha.6"
 
     gradle = (APP / "build.gradle.kts").read_text(encoding="utf-8")
     activity = (APP / "src/main/java/ch/animalhealth/app/MainActivity.java").read_text(encoding="utf-8")
@@ -28,7 +28,7 @@ def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> No
 
     assert f'val animalHealthVersion = "{version}"' in gradle
     assert 'versionName = animalHealthVersion' in gradle
-    assert 'versionCode = 900005' in gradle
+    assert 'versionCode = 900006' in gradle
     assert 'buildConfigField("String", "ANIMAL_HEALTH_VERSION"' in gradle
     assert 'applicationId = "ch.animalhealth.app"' in gradle
     assert '../../custom_components/animal_health/frontend' in gradle
@@ -52,8 +52,6 @@ def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> No
     assert 'callWS:request=>nativeCall(request)' in bridge
     assert 'callService:' in bridge
 
-    # The source files are chunks of one JavaScript program, not standalone scripts.
-    # part01 alone is intentionally syntactically incomplete; the concatenated source is valid.
     assert len(frontend_parts) == 40
     part01 = frontend_parts[0].read_text(encoding="utf-8")
     with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:
@@ -116,11 +114,15 @@ def test_android_shell_respects_system_bars_and_cutouts() -> None:
     assert 'view.setPadding(left, top, right, bottom)' in activity
     assert 'target.requestApplyInsets()' in activity
     assert 'viewport-fit=cover' in index
+    assert 'padding-top:max(32px,env(safe-area-inset-top,0px))' in index
+    assert 'padding-left:env(safe-area-inset-left,0px)' in index
+    assert 'padding-right:env(safe-area-inset-right,0px)' in index
 
 
-def test_android_uses_local_vector_icons_and_no_ha_only_banner() -> None:
+def test_android_uses_local_vector_icons_and_mobile_overrides() -> None:
     bridge = (APP / "src/main/assets/android-shared-ui.js").read_text(encoding="utf-8")
     index = (APP / "src/main/assets/index.html").read_text(encoding="utf-8")
+    overrides = (APP / "src/main/assets/android-shell-overrides.js").read_text(encoding="utf-8")
 
     assert 'class HaIcon extends HTMLElement' in bridge
     assert 'resolveIcon(icon)' in bridge
@@ -134,6 +136,12 @@ def test_android_uses_local_vector_icons_and_no_ha_only_banner() -> None:
     assert 'reloadForFrontendMismatch089=function(){return false}' in bridge
     assert 'standalone:true' in bridge
     assert 'ha-icon svg' in index
+    assert '<script src="android-shell-overrides.js" defer></script>' in index
+    assert 'header nav button ha-icon' in overrides
+    assert '.heading .search ha-icon' in overrides
+    assert 'style[data-android-shell="alpha6"]' in overrides
+    assert 'MutationObserver' in overrides
+    subprocess.run(["node", "--check", str(APP / "src/main/assets/android-shell-overrides.js")], check=True)
 
 
 def test_android_alpha_uses_stable_test_signing_key() -> None:
@@ -141,7 +149,6 @@ def test_android_alpha_uses_stable_test_signing_key() -> None:
     encoded = (ANDROID / "alpha-signing-keystore.b64").read_text(encoding="utf-8")
     decoded = base64.b64decode("".join(encoded.split()))
 
-    # Public test key: stable on purpose so alpha APKs can update in place.
     assert hashlib.sha256(decoded).hexdigest() == "e954d951ad42420648ad1c463ad10596db9446a2a4f03cb7107fe91aba257ac3"
     assert 'create("alpha")' in gradle
     assert 'keyAlias = "animal-health-alpha"' in gradle
