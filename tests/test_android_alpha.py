@@ -16,7 +16,7 @@ INTEGRATION = ROOT / "custom_components" / "animal_health"
 def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
     version = manifest["version"]
-    assert version == "0.9.0-alpha.4"
+    assert version == "0.9.0-alpha.5"
 
     gradle = (APP / "build.gradle.kts").read_text(encoding="utf-8")
     activity = (APP / "src/main/java/ch/animalhealth/app/MainActivity.java").read_text(encoding="utf-8")
@@ -26,8 +26,10 @@ def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> No
     frontend_parts = sorted((INTEGRATION / "frontend").glob("animal-health-panel.part*.js"))
     frontend = "".join(path.read_text(encoding="utf-8") for path in frontend_parts)
 
-    assert f'versionName = "{version}"' in gradle
-    assert 'versionCode = 900004' in gradle
+    assert f'val animalHealthVersion = "{version}"' in gradle
+    assert 'versionName = animalHealthVersion' in gradle
+    assert 'versionCode = 900005' in gradle
+    assert 'buildConfigField("String", "ANIMAL_HEALTH_VERSION"' in gradle
     assert 'applicationId = "ch.animalhealth.app"' in gradle
     assert '../../custom_components/animal_health/frontend' in gradle
     assert '../../custom_components/animal_health/catalogs' in gradle
@@ -37,6 +39,8 @@ def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> No
     assert 'ordered.joinToString(separator = "")' in gradle
     assert 'Expected 40 Animal Health frontend parts' in gradle
     assert 'dependsOn(bundleSharedFrontend, prepareAlphaSigning)' in gradle
+    assert 'public static final String VERSION = BuildConfig.ANIMAL_HEALTH_VERSION;' in backend
+    assert 'public static final String VERSION = "0.9.0-alpha.2";' not in backend
     assert 'file:///android_asset/index.html' in activity
     assert 'addJavascriptInterface' in activity
     assert 'WebView' in activity
@@ -96,6 +100,40 @@ def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> No
         "day-repeat-0817",
     ):
         assert visible_marker in frontend, visible_marker
+
+
+def test_android_shell_respects_system_bars_and_cutouts() -> None:
+    activity = (APP / "src/main/java/ch/animalhealth/app/MainActivity.java").read_text(encoding="utf-8")
+    index = (APP / "src/main/assets/index.html").read_text(encoding="utf-8")
+
+    assert 'getWindow().setNavigationBarColor(Color.WHITE)' in activity
+    assert 'View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR' in activity
+    assert 'applySystemWindowInsets(webView)' in activity
+    assert 'setOnApplyWindowInsetsListener' in activity
+    assert 'getSystemWindowInsetTop()' in activity
+    assert 'getDisplayCutout()' in activity
+    assert 'getSafeInsetTop()' in activity
+    assert 'view.setPadding(left, top, right, bottom)' in activity
+    assert 'target.requestApplyInsets()' in activity
+    assert 'viewport-fit=cover' in index
+
+
+def test_android_uses_local_vector_icons_and_no_ha_only_banner() -> None:
+    bridge = (APP / "src/main/assets/android-shared-ui.js").read_text(encoding="utf-8")
+    index = (APP / "src/main/assets/index.html").read_text(encoding="utf-8")
+
+    assert 'class HaIcon extends HTMLElement' in bridge
+    assert 'resolveIcon(icon)' in bridge
+    assert '<svg viewBox="0 0 24 24"' in bridge
+    assert '"mdi:account-group-outline":"users"' in bridge
+    assert '"mdi:view-dashboard":"dashboard"' in bridge
+    assert '"mdi:pill":"pill"' in bridge
+    assert '👥' not in bridge
+    assert '"mdi:pill":"◆"' not in bridge
+    assert 'removeStandaloneHaWarning' in bridge
+    assert 'reloadForFrontendMismatch089=function(){return false}' in bridge
+    assert 'standalone:true' in bridge
+    assert 'ha-icon svg' in index
 
 
 def test_android_alpha_uses_stable_test_signing_key() -> None:
