@@ -36,6 +36,7 @@ from .v081_fixes import async_setup_v081_fixes
 from .v081_stt import async_setup_v081_stt
 from .v0815_features import apply_v0815_patches, async_initialize_v0815_features
 from .v0816_features import apply_v0816_patches
+from .v0817_features import async_initialize_v0817_features, async_setup_v0817_features
 from .v082_features import apply_v082_patches, async_setup_v082_features
 from .v083_features import async_initialize_v083_features, async_setup_v083_features
 from .v084_features import async_setup_v084_features
@@ -72,6 +73,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_v081_features(hass)
     async_setup_v081_fixes(hass)
     async_setup_v081_stt(hass)
+    async_setup_v0817_features(hass)
     async_setup_v082_features(hass)
     async_setup_v083_features(hass)
     async_setup_v084_features(hass)
@@ -112,6 +114,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
         coordinator=coordinator,
         feature_store=feature_store,
     )
+    await async_initialize_v0817_features(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await async_register_panel(hass)
     return True
