@@ -50,7 +50,7 @@ if(!Panel)throw new Error("Panel not registered");
 const panel=new Panel();
 panel.h={language:"de",user:{is_admin:true}};
 panel.d={
-  version:"0.8.17",
+  version:"0.9.0-alpha.1",
   today:"2026-08-14",
   summary:{active_animals:2,overdue_tasks:0,today_tasks:0,upcoming_tasks:1,pending_tasks:1},
   animals:[
@@ -120,7 +120,7 @@ if(detail.includes('data-action="animal-detail"'))throw new Error("Redundant ope
 panel.modal={type:"day-detail-0817",day:"2026-08-14",animalId:"AH-1"};
 const day=panel.dayDetail0817();
 if(!day.includes('data-action="day-repeat-0817"')||!day.includes("Doxycare Tabletten")||!day.includes("Eigene Tropfen"))throw new Error("Daily summary/repeat workflow missing");
-console.log("Animal Health 0.8.17 dashboard runtime validation passed");
+console.log("Animal Health 0.9.0-alpha.1 dashboard runtime validation passed");
 '''
     with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:
         file.write(harness)
@@ -133,8 +133,8 @@ console.log("Animal Health 0.8.17 dashboard runtime validation passed");
 def main() -> None:
     source = panel_source()
     manifest = json.loads(read(INTEGRATION / "manifest.json"))
-    assert manifest["version"] == "0.8.17"
-    assert 'const V="0.8.17",D="animal_health"' in source
+    assert manifest["version"] == "0.9.0-alpha.1"
+    assert 'const V="0.9.0-alpha.1",D="animal_health"' in source
     assert 'p?.mode==="weight"?`${D}/v083/ai/analyze`:type' in source
     assert 'p?.mode==="weight"?`${D}/v088/ai/analyze`:type' not in source
 
@@ -186,7 +186,7 @@ def main() -> None:
         assert marker in combined, marker
 
     runtime_smoke(source)
-    print("Animal Health 0.8.17 dashboard frontend validation passed")
+    print("Animal Health 0.9.0-alpha.1 dashboard frontend validation passed")
 
 
 if __name__ == "__main__":
