@@ -3,10 +3,18 @@ const iconMap={"mdi:paw":"●","mdi:menu":"☰","mdi:refresh":"↻","mdi:view-da
 class HaIcon extends HTMLElement{static get observedAttributes(){return["icon"]}connectedCallback(){this.draw()}attributeChangedCallback(){this.draw()}draw(){const icon=this.getAttribute("icon")||"";this.textContent=iconMap[icon]||"•";this.title=icon}}
 if(!customElements.get("ha-icon"))customElements.define("ha-icon",HaIcon);
 const nativeCall=request=>new Promise((resolve,reject)=>{try{const raw=AndroidBridge.call(JSON.stringify(request||{})),value=raw?JSON.parse(raw):null;if(value&&value.__error)reject(new Error(value.__error));else resolve(value)}catch(error){reject(error)}});
-const loadScript=src=>new Promise((resolve,reject)=>{const script=document.createElement("script");script.src=src;script.onload=resolve;script.onerror=()=>reject(new Error(`Frontend asset fehlt: ${src}`));document.head.appendChild(script)});
+const loadScript=src=>new Promise((resolve,reject)=>{const script=document.createElement("script");script.src=src;script.onload=resolve;script.onerror=()=>reject(new Error(`Frontend asset fehlt oder ist ungültig: ${src}`));document.head.appendChild(script)});
 const fileBase64=file=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||"").split(",",2)[1]||"");reader.onerror=()=>reject(reader.error||new Error("Datei konnte nicht gelesen werden"));reader.readAsDataURL(file)});
 async function uploadFiles(form,animalId,eventId=null){const files=[...form.querySelectorAll('input[type="file"]')].flatMap(input=>[...(input.files||[])]),title=form.elements.document_title?.value||null,result=[];for(const file of files){if(file.size>15728640)throw Error("Die Datei überschreitet die maximale Grösse von 15 MB.");result.push(await nativeCall({type:"animal_health/attachments/upload_direct",animal_id:animalId,event_id:eventId,filename:file.name||"document",media_type:file.type||"application/octet-stream",title,content_base64:await fileBase64(file)}))}return result}
-async function install(){for(let i=1;i<=40;i++)await loadScript(`animal-health-panel.part${String(i).padStart(2,"0")}.js`);const Panel=customElements.get("animal-health-panel");if(!Panel)throw Error("Animal-Health-Frontend konnte nicht geladen werden");const p=Panel.prototype;
+async function install(){
+ const frontendErrors=[];
+ const onFrontendError=event=>frontendErrors.push(event?.error?.message||event?.message||"Unbekannter JavaScript-Fehler");
+ window.addEventListener("error",onFrontendError);
+ await loadScript("animal-health-panel.js");
+ window.removeEventListener("error",onFrontendError);
+ const Panel=customElements.get("animal-health-panel");
+ if(!Panel)throw Error(frontendErrors.at(-1)||"Animal-Health-Frontend konnte nicht geladen werden");
+ const p=Panel.prototype;
  p.download=async function(kind,resourceId=""){AndroidBridge.exportData(String(kind||""),String(resourceId||""))};
  p.uploadFiles=uploadFiles;
  p.uploadAnimalPhoto=async function(form,animalId){const file=form.elements.profile_image?.files?.[0];if(!file)return;const item=await nativeCall({type:"animal_health/attachments/upload_direct",animal_id:animalId,filename:file.name||"animal-photo.jpg",media_type:file.type||"image/jpeg",title:this.t?this.t("animalPhoto"):"Tierbild",content_base64:await fileBase64(file)});await nativeCall({type:"animal_health/animal_photo/set",animal_id:animalId,attachment_id:item.id})};
