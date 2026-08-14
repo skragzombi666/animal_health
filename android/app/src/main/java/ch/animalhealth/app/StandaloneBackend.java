@@ -30,7 +30,7 @@ import java.util.Map;
 import java.util.Set;
 
 public final class StandaloneBackend extends SQLiteOpenHelper {
-    public static final String VERSION = "0.9.0-alpha.2";
+    public static final String VERSION = BuildConfig.ANIMAL_HEALTH_VERSION;
     private static final String DB_NAME = "animal_health_android.db";
     private static final int DB_VERSION = 2;
     private final Context context;
