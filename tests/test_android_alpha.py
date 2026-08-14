@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 ANDROID = ROOT / "android"
@@ -12,30 +14,50 @@ INTEGRATION = ROOT / "custom_components" / "animal_health"
 def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
     version = manifest["version"]
-    assert version == "0.9.0-alpha.2"
+    assert version == "0.9.0-alpha.3"
 
     gradle = (APP / "build.gradle.kts").read_text(encoding="utf-8")
     activity = (APP / "src/main/java/ch/animalhealth/app/MainActivity.java").read_text(encoding="utf-8")
     backend = (APP / "src/main/java/ch/animalhealth/app/StandaloneBackend.java").read_text(encoding="utf-8")
     bridge = (APP / "src/main/assets/android-shared-ui.js").read_text(encoding="utf-8")
     index = (APP / "src/main/assets/index.html").read_text(encoding="utf-8")
-    frontend = "".join(
-        path.read_text(encoding="utf-8")
-        for path in sorted((INTEGRATION / "frontend").glob("animal-health-panel.part*.js"))
-    )
+    frontend_parts = sorted((INTEGRATION / "frontend").glob("animal-health-panel.part*.js"))
+    frontend = "".join(path.read_text(encoding="utf-8") for path in frontend_parts)
 
     assert f'versionName = "{version}"' in gradle
+    assert 'versionCode = 900003' in gradle
     assert 'applicationId = "ch.animalhealth.app"' in gradle
     assert '../../custom_components/animal_health/frontend' in gradle
     assert '../../custom_components/animal_health/catalogs' in gradle
+    assert 'bundleSharedFrontend' in gradle
+    assert 'animal-health-panel.part*.js' in gradle
+    assert 'animal-health-panel.js' in gradle
+    assert 'ordered.joinToString(separator = "")' in gradle
+    assert 'Expected 40 Animal Health frontend parts' in gradle
+    assert 'dependsOn(bundleSharedFrontend)' in gradle
     assert 'file:///android_asset/index.html' in activity
     assert 'addJavascriptInterface' in activity
     assert 'WebView' in activity
     assert 'animal-health-panel' in index
-    assert 'animal-health-panel.part${String(i).padStart(2,"0")}.js' in bridge
-    assert 'for(let i=1;i<=40;i++)' in bridge
+    assert 'await loadScript("animal-health-panel.js")' in bridge
+    assert 'for(let i=1;i<=40;i++)' not in bridge
+    assert 'animal-health-panel.part${String(i).padStart(2,"0")}.js' not in bridge
+    assert 'frontendErrors' in bridge
     assert 'callWS:request=>nativeCall(request)' in bridge
     assert 'callService:' in bridge
+
+    # The source files are chunks of one JavaScript program, not standalone scripts.
+    # part01 alone is intentionally syntactically incomplete; the concatenated source is valid.
+    assert len(frontend_parts) == 40
+    part01 = frontend_parts[0].read_text(encoding="utf-8")
+    with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:
+        file.write(part01)
+        file.flush()
+        assert subprocess.run(["node", "--check", file.name], check=False).returncode != 0
+    with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:
+        file.write(frontend)
+        file.flush()
+        subprocess.run(["node", "--check", file.name], check=True)
 
     for marker in (
         "animal_health/dashboard",
