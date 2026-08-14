@@ -10,8 +10,16 @@ android {
         applicationId = "ch.animalhealth.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 900001
-        versionName = "0.9.0-alpha.1"
+        versionCode = 900002
+        versionName = "0.9.0-alpha.2"
+    }
+
+    sourceSets {
+        getByName("main").assets.srcDirs(
+            "src/main/assets",
+            "../../custom_components/animal_health/frontend",
+            "../../custom_components/animal_health/catalogs"
+        )
     }
 
     buildTypes {
