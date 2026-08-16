@@ -4,7 +4,7 @@ plugins {
     id("com.android.application")
 }
 
-val animalHealthVersion = "0.9.0-alpha.6"
+val animalHealthVersion = "0.9.0-alpha.7"
 val sharedFrontendSource = file("../../custom_components/animal_health/frontend")
 val generatedSharedUiAssets = layout.buildDirectory.dir("generated/animalHealthSharedUi")
 val bundleSharedFrontend by tasks.registering {
@@ -15,8 +15,8 @@ val bundleSharedFrontend by tasks.registering {
     outputs.file(generatedSharedUiAssets.map { it.file("animal-health-panel.js") })
     doLast {
         val ordered = parts.files.sortedBy { it.name }
-        require(ordered.size == 40) {
-            "Expected 40 Animal Health frontend parts, found ${ordered.size}"
+        require(ordered.size == 41) {
+            "Expected 41 Animal Health frontend parts, found ${ordered.size}"
         }
         val target = generatedSharedUiAssets.get().file("animal-health-panel.js").asFile
         target.parentFile.mkdirs()
@@ -45,7 +45,7 @@ android {
         applicationId = "ch.animalhealth.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 900006
+        versionCode = 900007
         versionName = animalHealthVersion
         buildConfigField("String", "ANIMAL_HEALTH_VERSION", "\"$animalHealthVersion\"")
     }

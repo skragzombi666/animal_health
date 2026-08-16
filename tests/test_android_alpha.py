@@ -16,7 +16,7 @@ INTEGRATION = ROOT / "custom_components" / "animal_health"
 def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
     version = manifest["version"]
-    assert version == "0.9.0-alpha.6"
+    assert version == "0.9.0-alpha.7"
 
     gradle = (APP / "build.gradle.kts").read_text(encoding="utf-8")
     activity = (APP / "src/main/java/ch/animalhealth/app/MainActivity.java").read_text(encoding="utf-8")
@@ -28,7 +28,7 @@ def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> No
 
     assert f'val animalHealthVersion = "{version}"' in gradle
     assert 'versionName = animalHealthVersion' in gradle
-    assert 'versionCode = 900006' in gradle
+    assert 'versionCode = 900007' in gradle
     assert 'buildConfigField("String", "ANIMAL_HEALTH_VERSION"' in gradle
     assert 'applicationId = "ch.animalhealth.app"' in gradle
     assert '../../custom_components/animal_health/frontend' in gradle
@@ -37,7 +37,7 @@ def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> No
     assert 'animal-health-panel.part*.js' in gradle
     assert 'animal-health-panel.js' in gradle
     assert 'ordered.joinToString(separator = "")' in gradle
-    assert 'Expected 40 Animal Health frontend parts' in gradle
+    assert 'Expected 41 Animal Health frontend parts' in gradle
     assert 'dependsOn(bundleSharedFrontend, prepareAlphaSigning)' in gradle
     assert 'public static final String VERSION = BuildConfig.ANIMAL_HEALTH_VERSION;' in backend
     assert 'public static final String VERSION = "0.9.0-alpha.2";' not in backend
@@ -52,7 +52,7 @@ def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> No
     assert 'callWS:request=>nativeCall(request)' in bridge
     assert 'callService:' in bridge
 
-    assert len(frontend_parts) == 40
+    assert len(frontend_parts) == 41
     part01 = frontend_parts[0].read_text(encoding="utf-8")
     with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:
         file.write(part01)
@@ -96,6 +96,7 @@ def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> No
         "Medikamente verwalten",
         "Gesundheitschronik",
         "day-repeat-0817",
+        "animalCaptureIcons090A7",
     ):
         assert visible_marker in frontend, visible_marker
 
