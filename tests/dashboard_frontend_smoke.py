@@ -88,13 +88,21 @@ if(!calendar.includes('data-action="calendar-prev-0816"')||!calendar.includes('d
 if(!calendar.includes('data-action="calendar-today-0816"'))throw new Error("Calendar today navigation missing");
 if(!calendar.includes('data-calendar-kind')||!calendar.includes('data-calendar-animal'))throw new Error("Calendar filters missing");
 if(!calendar.includes("Doxycyclin"))throw new Error("Virtual recurring medication is missing from calendar");
+if(panel.weekStart095()!=="monday")throw new Error("Monday must be the default first day of week");
+panel.setWeekStart095("sunday");
+if(localStorage.getItem("animal_health.week_start")!=="sunday")throw new Error("Week-start preference was not persisted");
+const sundayCalendar=panel.calendar();
+if(sundayCalendar===calendar)throw new Error("Week-start preference does not affect calendar layout");
+panel.setWeekStart095("monday");
 panel.calendarOffset0816=1;
 if(panel.calendar()===calendar)throw new Error("Calendar month navigation does not change the rendered month");
-panel.overviewScope0816="today";
+panel.calendarOffset0816=0;
 const todayView=panel.overview();
-if(!todayView.includes("Heute relevant"))throw new Error("Today relevance heading missing");
+if(!todayView.includes("Heute relevant"))throw new Error("Relevance heading missing");
 if(todayView.includes("innerhalb 24 h"))throw new Error("Legacy 24-hour relevance wording is still rendered");
-if(!todayView.includes("Heute ist nichts relevant"))throw new Error("Completed recurring dose is not suppressed for today");
+if(todayView.includes('data-overview-scope'))throw new Error("Legacy relevance-period dropdown is still rendered");
+if(!todayView.includes("Serienelemente")||!todayView.includes("Doxycyclin"))throw new Error("Recurring series summary is missing");
+if(!todayView.includes("Nächste Fälligkeit")||!todayView.includes("15.08.2026"))throw new Error("Completed recurring date was not advanced to the next due date");
 if(!todayView.includes("homeAnimalsCard091")||!todayView.includes('data-action="home-group-toggle-091"')||!todayView.includes('data-action="home-tag-toggle-091"')||!todayView.includes('data-action="home-search-toggle-091"'))throw new Error("Compact home animal overview filters missing");
 if(!todayView.includes("Berta")||!todayView.includes("Tina")||!todayView.includes("Hühner")||!todayView.includes("Ohne Tiergruppe"))throw new Error("Home animal tiles/groups missing");
 if(todayView.indexOf("Ohne Tiergruppe")>todayView.indexOf("Hühner"))throw new Error("Ungrouped animals must be listed before named groups");
@@ -105,9 +113,13 @@ const compactOverview=panel.overview();
 if(!compactOverview.includes("quickCaptureCompact091")||!compactOverview.includes('aria-label="Gewicht erfassen"'))throw new Error("Compact icon-only quick capture missing");
 delete panel.quickCaptureCompactState091;
 if(!panel.quickCaptureCompact091())throw new Error("Quick-capture preference was not restored from localStorage");
-panel.overviewScope0816="week";
-const weekView=panel.overview();
-if(!weekView.includes("Morgen relevant")||!weekView.includes("Doxycyclin"))throw new Error("Weekly virtual recurrence missing");
+panel.homeGroupFilters095=["GR-1","ungrouped"];
+panel.homeTagFilters095=["TG-1"];
+panel.persistHomeFilters095();
+const savedFilters=JSON.parse(localStorage.getItem("animal_health.home_animal_filters"));
+if(savedFilters.groups.length!==2||savedFilters.tags.length!==1)throw new Error("Multi-select animal filters were not persisted");
+const filteredOverview=panel.overview();
+if(!filteredOverview.includes("homeFilterReset093"))throw new Error("Filter reset missing for multi-select filters");
 if(panel.l("tablet")!=="Tablette"||panel.l("drop")!=="Tropfen"||panel.l("ul")!=="µl")throw new Error("Dose-unit localization missing");
 if(panel.medicationUnit0817("Doxycare Tabletten")!=="tablet")throw new Error("Tablet default unit inference missing");
 if(panel.medicationUnit0817("Eigene Tropfen")!=="drop")throw new Error("Custom medication default unit missing");
@@ -211,6 +223,11 @@ def main() -> None:
         "home-group-toggle-091",
         "home-tag-toggle-091",
         "home-search-toggle-091",
+        "seriesRelevantItems095",
+        "dynamicRelevantGroups095",
+        "homeGroupFilters095",
+        "homeTagFilters095",
+        "weekStart095",
     ):
         assert marker in combined, marker
 
