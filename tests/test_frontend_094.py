@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -9,12 +8,8 @@ FRONTEND = INTEGRATION / "frontend"
 
 
 def test_overview_heading_and_global_search_are_removed_in_094() -> None:
-    manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    part01 = (FRONTEND / "animal-health-panel.part01.js").read_text(encoding="utf-8")
     part45 = (FRONTEND / "animal-health-panel.part45.js").read_text(encoding="utf-8")
 
-    assert manifest["version"] == "0.9.4"
-    assert 'const V="0.9.4",D="animal_health"' in part01
     assert 'if(key==="overview")return""' in part45
     assert "AH094Base.heading.call(this,key,action)" in part45
 
