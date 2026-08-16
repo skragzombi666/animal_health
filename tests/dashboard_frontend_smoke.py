@@ -50,7 +50,7 @@ if(!Panel)throw new Error("Panel not registered");
 const panel=new Panel();
 panel.h={language:"de",user:{is_admin:true}};
 panel.d={
-  version:"0.9.0-alpha.6",
+  version:"0.9.0-alpha.7",
   today:"2026-08-14",
   summary:{active_animals:2,overdue_tasks:0,today_tasks:0,upcoming_tasks:1,pending_tasks:1},
   animals:[
@@ -110,6 +110,13 @@ const events=[
 ];
 panel.detail={animal:panel.d.animals[0],events,occurrences:[],attachments:[]};
 panel.view="animal-detail";
+const animalDetail=panel.animalDetail();
+if(!animalDetail.includes("animalCaptureIcons090A7"))throw new Error("Compact animal capture toolbar missing");
+if(animalDetail.includes('data-action="animal-more"'))throw new Error("Redundant animal-more control still shown");
+for(const action of ["record-weight","record-symptom","record-product","create-task","ai-assist","record-event","attach-document"]){
+ if(!animalDetail.includes(`data-action="${action}"`))throw new Error(`Capture action missing: ${action}`);
+}
+if(!animalDetail.includes('aria-label="Gewicht erfassen"'))throw new Error("Icon-only capture actions need accessible labels");
 const firstRow=panel.eventRow(events[0]);
 if(!firstRow.includes("dayHeader0817")||!firstRow.includes("1 Tablette Doxycare Tabletten"))throw new Error("Compact day-grouped medication history missing");
 const secondRow=panel.eventRow(events[1]);
@@ -120,7 +127,7 @@ if(detail.includes('data-action="animal-detail"'))throw new Error("Redundant ope
 panel.modal={type:"day-detail-0817",day:"2026-08-14",animalId:"AH-1"};
 const day=panel.dayDetail0817();
 if(!day.includes('data-action="day-repeat-0817"')||!day.includes("Doxycare Tabletten")||!day.includes("Eigene Tropfen"))throw new Error("Daily summary/repeat workflow missing");
-console.log("Animal Health 0.9.0-alpha.6 dashboard runtime validation passed");
+console.log("Animal Health 0.9.0-alpha.7 dashboard runtime validation passed");
 '''
     with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:
         file.write(harness)
@@ -133,8 +140,8 @@ console.log("Animal Health 0.9.0-alpha.6 dashboard runtime validation passed");
 def main() -> None:
     source = panel_source()
     manifest = json.loads(read(INTEGRATION / "manifest.json"))
-    assert manifest["version"] == "0.9.0-alpha.6"
-    assert 'const V="0.9.0-alpha.6",D="animal_health"' in source
+    assert manifest["version"] == "0.9.0-alpha.7"
+    assert 'const V="0.9.0-alpha.7",D="animal_health"' in source
     assert 'p?.mode==="weight"?`${D}/v083/ai/analyze`:type' in source
     assert 'p?.mode==="weight"?`${D}/v088/ai/analyze`:type' not in source
 
@@ -182,11 +189,12 @@ def main() -> None:
         'tablet:["Tablette"',
         'drop:["Tropfen"',
         '"tablet": "Tablette"',
+        "animalCaptureIcons090A7",
     ):
         assert marker in combined, marker
 
     runtime_smoke(source)
-    print("Animal Health 0.9.0-alpha.6 dashboard frontend validation passed")
+    print("Animal Health 0.9.0-alpha.7 dashboard frontend validation passed")
 
 
 if __name__ == "__main__":
