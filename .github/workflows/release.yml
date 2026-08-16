@@ -37,7 +37,7 @@ jobs:
             echo "Release $TAG already exists."
             exit 0
           fi
-          ARGS=("$TAG" --target "$GITHUB_SHA" --title "Animal Health ${VERSION}")
+          ARGS=("$TAG" --target "$GITHUB_SHA" --title "Animal Health ${VERSION}" --latest)
           if [ -f "$NOTES" ]; then
             ARGS+=(--notes-file "$NOTES")
           else
