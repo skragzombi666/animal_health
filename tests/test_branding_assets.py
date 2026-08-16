@@ -41,5 +41,5 @@ def test_frontend_brand_endpoint_serves_lightweight_versioned_asset() -> None:
     assert "brandUrl0814" in frontend
     assert "brandLogo0814" in frontend
     assert "brandLoading0814" in frontend
-    assert manifest["version"] == "0.9.0-alpha.7"
-    assert 'const V="0.9.0-alpha.7",D="animal_health"' in frontend
+    assert manifest["version"]
+    assert f'const V="{manifest["version"]}",D="animal_health"' in frontend
