@@ -40,7 +40,7 @@ AH093.homeAnimalOverview091=function(){
  if(filtered){
   const label=esc(this.t("resetHomeFilters093"));
   const reset=`<button class="homeIconTool092 homeFilterReset093" data-action="home-filter-reset-093" title="${label}" aria-label="${label}"><ha-icon icon="mdi:close-circle-outline"></ha-icon></button>`;
-  html=html.replace(/(<div class="homeAnimalTools092" role="toolbar">[\s\S]*?)(<\/div>)/,"$1"+reset+"$2")
+  html=html.replace('<div class="homeAnimalTools092" role="toolbar">','<div class="homeAnimalTools092" role="toolbar">'+reset)
  }
  return html
 };
