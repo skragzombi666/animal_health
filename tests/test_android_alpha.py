@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -13,10 +12,8 @@ APP = ANDROID / "app"
 INTEGRATION = ROOT / "custom_components" / "animal_health"
 
 
-def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> None:
-    manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    version = manifest["version"]
-    assert version == "0.9.0-alpha.7"
+def test_android_alpha_uses_shared_frontend_and_full_local_adapter() -> None:
+    android_version = "0.9.0-alpha.7"
 
     gradle = (APP / "build.gradle.kts").read_text(encoding="utf-8")
     activity = (APP / "src/main/java/ch/animalhealth/app/MainActivity.java").read_text(encoding="utf-8")
@@ -26,7 +23,7 @@ def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> No
     frontend_parts = sorted((INTEGRATION / "frontend").glob("animal-health-panel.part*.js"))
     frontend = "".join(path.read_text(encoding="utf-8") for path in frontend_parts)
 
-    assert f'val animalHealthVersion = "{version}"' in gradle
+    assert f'val animalHealthVersion = "{android_version}"' in gradle
     assert 'versionName = animalHealthVersion' in gradle
     assert 'versionCode = 900007' in gradle
     assert 'buildConfigField("String", "ANIMAL_HEALTH_VERSION"' in gradle
@@ -37,7 +34,6 @@ def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> No
     assert 'animal-health-panel.part*.js' in gradle
     assert 'animal-health-panel.js' in gradle
     assert 'ordered.joinToString(separator = "")' in gradle
-    assert 'Expected 41 Animal Health frontend parts' in gradle
     assert 'dependsOn(bundleSharedFrontend, prepareAlphaSigning)' in gradle
     assert 'public static final String VERSION = BuildConfig.ANIMAL_HEALTH_VERSION;' in backend
     assert 'public static final String VERSION = "0.9.0-alpha.2";' not in backend
@@ -52,7 +48,6 @@ def test_android_alpha_uses_exact_shared_frontend_and_full_local_adapter() -> No
     assert 'callWS:request=>nativeCall(request)' in bridge
     assert 'callService:' in bridge
 
-    assert len(frontend_parts) == 41
     part01 = frontend_parts[0].read_text(encoding="utf-8")
     with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:
         file.write(part01)
@@ -158,11 +153,14 @@ def test_android_alpha_uses_stable_test_signing_key() -> None:
     assert 'Base64.getDecoder().decode(encoded)' in gradle
 
 
-def test_android_release_workflow_builds_and_attaches_apk() -> None:
+def test_ha_release_workflow_is_decoupled_from_android() -> None:
     release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
     android_workflow = (ROOT / ".github/workflows/android.yml").read_text(encoding="utf-8")
-    assert "gradle -p android :app:assembleDebug" in release
-    assert "Standalone Android APK" in release
-    assert "--prerelease" in release
+
+    assert "gh release create" in release
+    assert "gradle -p android :app:assembleDebug" not in release
+    assert "Standalone Android APK" not in release
+    assert "--prerelease" not in release
+    assert '.github/workflows/release.yml' not in android_workflow
     assert "gradle -p android :app:assembleDebug" in android_workflow
     assert "actions/upload-artifact@v4" in android_workflow

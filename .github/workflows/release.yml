@@ -14,15 +14,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-java@v5
-        if: ${{ hashFiles('android/settings.gradle.kts') != '' }}
-        with:
-          distribution: temurin
-          java-version: "17"
-      - uses: gradle/actions/setup-gradle@v4
-        if: ${{ hashFiles('android/settings.gradle.kts') != '' }}
-        with:
-          gradle-version: "8.9"
       - name: Read integration version
         id: version
         shell: bash
@@ -34,13 +25,7 @@ jobs:
           PY
           )
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-      - name: Build standalone Android APK
-        if: ${{ hashFiles('android/settings.gradle.kts') != '' }}
-        shell: bash
-        run: |
-          gradle -p android :app:assembleDebug --stacktrace
-          cp android/app/build/outputs/apk/debug/app-debug.apk "animal-health-${{ steps.version.outputs.version }}-android.apk"
-      - name: Create or update release
+      - name: Create Home Assistant release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
@@ -48,25 +33,14 @@ jobs:
         run: |
           TAG="v${VERSION}"
           NOTES="docs/version-${VERSION}.md"
-          APK="animal-health-${VERSION}-android.apk"
-          PRERELEASE=()
-          if [[ "$VERSION" == *-* ]]; then
-            PRERELEASE=(--prerelease)
-          fi
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists; refreshing Android asset when available."
-            if [ -f "$APK" ]; then
-              gh release upload "$TAG" "$APK#Standalone Android APK" --clobber
-            fi
+            echo "Release $TAG already exists."
             exit 0
           fi
-          ARGS=("$TAG" --target "$GITHUB_SHA" --title "Animal Health ${VERSION}" "${PRERELEASE[@]}")
+          ARGS=("$TAG" --target "$GITHUB_SHA" --title "Animal Health ${VERSION}")
           if [ -f "$NOTES" ]; then
             ARGS+=(--notes-file "$NOTES")
           else
             ARGS+=(--generate-notes)
-          fi
-          if [ -f "$APK" ]; then
-            ARGS+=("$APK#Standalone Android APK")
           fi
           gh release create "${ARGS[@]}"
