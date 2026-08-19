@@ -36,7 +36,7 @@ AH099.pullMove099=function(event){
 };
 AH099.pullEnd099=function(){const ready=Number(this.pullDistance098||0)>=76;this.pullReset098?.();if(ready)void this.refreshFromPull098?.()};
 AH099.bindPullRefresh099=function(){
- if(this.pullRefreshBound099)return;
+ if(this.pullRefreshBound099||typeof this.addEventListener!=="function")return;
  this.pullRefreshBound099=true;
  this.addEventListener("touchstart",event=>this.pullStart099(event),{passive:true,capture:true});
  this.addEventListener("touchmove",event=>this.pullMove099(event),{passive:false,capture:true});
