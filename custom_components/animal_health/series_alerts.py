@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import UTC, date, datetime, timedelta, tzinfo
+from datetime import date, datetime, timedelta, tzinfo
 import logging
 from typing import Any, cast
 
@@ -10,6 +10,11 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_time_interval
 
+from .confirmation_policy import (
+    CONFIRMATION_REQUIRED,
+    async_resolve_routine_occurrences,
+    recurrence_period_bounds,
+)
 from .const import DOMAIN
 from .runtime import AnimalHealthRuntimeData
 from .task_store import (
@@ -31,25 +36,41 @@ _MAX_OCCURRENCES = 10000
 _MAX_NOTIFICATION_ROWS = 20
 
 
-def _is_recurring(task: TaskRecord) -> bool:
-    return task.is_active and task.recurrence_type != "once"
+def _is_recurring_required(
+    task: TaskRecord,
+    metadata: dict[str, Any],
+) -> bool:
+    return (
+        task.is_active
+        and task.recurrence_type != "once"
+        and metadata.get("confirmation_mode", CONFIRMATION_REQUIRED)
+        == CONFIRMATION_REQUIRED
+    )
 
 
 def _is_overdue(
     task: TaskRecord,
     occurrence: TaskOccurrenceRecord,
     *,
-    now_utc: datetime,
     today: date,
     timezone: tzinfo,
 ) -> bool:
-    scheduled_local = occurrence.scheduled_for.astimezone(timezone)
-    if task.due_time is None:
-        return scheduled_local.date() < today
-    return occurrence.scheduled_for < now_utc
+    scheduled_date = occurrence.scheduled_for.astimezone(timezone).date()
+    _, period_end = recurrence_period_bounds(
+        task.recurrence_type,
+        scheduled_date,
+    )
+    return period_end < today
 
 
-def _task_target(task: TaskRecord, *, german: bool) -> str:
+def _task_target(
+    task: TaskRecord,
+    metadata: dict[str, Any],
+    *,
+    german: bool,
+) -> str:
+    if metadata.get("group_name"):
+        return str(metadata["group_name"])
     if task.animal_name:
         return task.animal_name
     return "Allgemein" if german else "General"
@@ -63,6 +84,7 @@ def _format_local_date(value: datetime, timezone: tzinfo, *, german: bool) -> st
 def _notification_text(
     grouped: dict[str, list[TaskOccurrenceRecord]],
     tasks: dict[str, TaskRecord],
+    metadata: dict[str, dict[str, Any]],
     *,
     timezone: tzinfo,
     german: bool,
@@ -70,11 +92,17 @@ def _notification_text(
     count = sum(len(items) for items in grouped.values())
     series_count = len(grouped)
     if german:
-        title = "Animal Health: Überfällige Serienelemente"
-        intro = f"{count} nicht bestätigte Fälligkeit(en) aus {series_count} Serie(n)."
+        title = "Animal Health: Überfällige Serienbestätigungen"
+        intro = (
+            f"{count} wirklich überfällige Bestätigung(en) aus "
+            f"{series_count} Serie(n)."
+        )
     else:
-        title = "Animal Health: Overdue recurring items"
-        intro = f"{count} unconfirmed due item(s) from {series_count} recurring task(s)."
+        title = "Animal Health: Overdue recurring confirmations"
+        intro = (
+            f"{count} confirmation(s) are genuinely overdue across "
+            f"{series_count} recurring task(s)."
+        )
 
     rows: list[str] = []
     ordered = sorted(
@@ -88,15 +116,19 @@ def _notification_text(
         task = tasks[task_id]
         earliest = min(occurrence.scheduled_for for occurrence in occurrences)
         date_text = _format_local_date(earliest, timezone, german=german)
-        target = _task_target(task, german=german)
+        target = _task_target(
+            task,
+            metadata.get(task_id, {}),
+            german=german,
+        )
         if german:
             rows.append(
-                f"- **{task.title}** · {target}: {len(occurrences)} nicht bestätigt "
+                f"- **{task.title}** · {target}: {len(occurrences)} überfällig "
                 f"(seit {date_text})"
             )
         else:
             rows.append(
-                f"- **{task.title}** · {target}: {len(occurrences)} unconfirmed "
+                f"- **{task.title}** · {target}: {len(occurrences)} overdue "
                 f"(since {date_text})"
             )
     remaining = max(0, len(ordered) - _MAX_NOTIFICATION_ROWS)
@@ -121,15 +153,20 @@ async def async_check_series_alerts(
     state["running"] = True
     try:
         store = runtime.coordinator.task_store
+        await async_resolve_routine_occurrences(store)
         tasks = await store.list_tasks(
             scope=TASK_SCOPE_ALL,
             animal_id=None,
             active_state=TASK_ACTIVE_ALL,
             limit=10000,
         )
-        recurring = {task.id: task for task in tasks if _is_recurring(task)}
+        metadata = runtime.coordinator.task_metadata
+        recurring = {
+            task.id: task
+            for task in tasks
+            if _is_recurring_required(task, metadata.get(task.id, {}))
+        }
         today = store.local_today()
-        now_utc = datetime.now(UTC).replace(microsecond=0)
         grouped: dict[str, list[TaskOccurrenceRecord]] = defaultdict(list)
         if recurring:
             occurrences = await store.list_occurrences(
@@ -149,7 +186,6 @@ async def async_check_series_alerts(
                 if _is_overdue(
                     task,
                     occurrence,
-                    now_utc=now_utc,
                     today=today,
                     timezone=store.timezone,
                 ):
@@ -179,6 +215,7 @@ async def async_check_series_alerts(
                 title, message = _notification_text(
                     grouped,
                     recurring,
+                    metadata,
                     timezone=store.timezone,
                     german=german,
                 )
@@ -188,7 +225,7 @@ async def async_check_series_alerts(
                     title,
                     NOTIFICATION_ID,
                 )
-        elif previous_signature:
+        else:
             persistent_notification.async_dismiss(hass, NOTIFICATION_ID)
 
         if fire_events and state.get("initialized"):
@@ -201,6 +238,7 @@ async def async_check_series_alerts(
                     if not new_occurrences:
                         continue
                     task = recurring[task_id]
+                    item_metadata = metadata.get(task_id, {})
                     hass.bus.async_fire(
                         EVENT_SERIES_OVERDUE,
                         {
@@ -208,6 +246,9 @@ async def async_check_series_alerts(
                             "title": task.title,
                             "animal_id": task.animal_id,
                             "animal_name": task.animal_name,
+                            "group_id": item_metadata.get("group_id"),
+                            "group_name": item_metadata.get("group_name"),
+                            "confirmation_mode": CONFIRMATION_REQUIRED,
                             "occurrence_ids": [
                                 occurrence.id for occurrence in new_occurrences
                             ],

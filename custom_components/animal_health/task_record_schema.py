@@ -38,6 +38,8 @@ def _initialize_sync(database_path: Path) -> None:
                         )
                     ),
                 template_json TEXT NOT NULL DEFAULT '{}',
+                confirmation_mode TEXT NOT NULL DEFAULT 'required'
+                    CHECK (confirmation_mode IN ('required', 'routine')),
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
@@ -106,7 +108,9 @@ def _initialize_sync(database_path: Path) -> None:
 
             CREATE TRIGGER trg_task_occurrence_plan_resolve
             AFTER UPDATE OF status, completed_at, updated_at ON task_occurrences
-            WHEN NEW.status IN ('completed', 'skipped', 'cancelled')
+            WHEN NEW.status IN (
+                'completed', 'skipped', 'cancelled', 'not_documented'
+            )
             BEGIN
                 INSERT INTO task_occurrence_plans (
                     occurrence_id,
@@ -130,16 +134,37 @@ def _initialize_sync(database_path: Path) -> None:
             END;
             """
         )
+        columns = {
+            str(row[1])
+            for row in connection.execute(
+                "PRAGMA table_info(task_record_configs)"
+            ).fetchall()
+        }
+        if "confirmation_mode" not in columns:
+            connection.execute(
+                """
+                ALTER TABLE task_record_configs
+                ADD COLUMN confirmation_mode TEXT NOT NULL DEFAULT 'required'
+                    CHECK (confirmation_mode IN ('required', 'routine'))
+                """
+            )
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_task_record_configs_confirmation
+                ON task_record_configs(confirmation_mode)
+            """
+        )
         connection.execute(
             """
             INSERT OR IGNORE INTO task_record_configs (
                 task_id,
                 task_kind,
                 template_json,
+                confirmation_mode,
                 created_at,
                 updated_at
             )
-            SELECT id, 'reminder', '{}', ?, ?
+            SELECT id, 'reminder', '{}', 'required', ?, ?
             FROM tasks
             """,
             (now, now),
@@ -158,7 +183,9 @@ def _initialize_sync(database_path: Path) -> None:
                 COALESCE(config.template_json, '{}'),
                 CASE
                     WHEN occurrence.status = 'completed' THEN occurrence.completed_at
-                    WHEN occurrence.status IN ('skipped', 'cancelled') THEN occurrence.updated_at
+                    WHEN occurrence.status IN (
+                        'skipped', 'cancelled', 'not_documented'
+                    ) THEN occurrence.updated_at
                     ELSE NULL
                 END,
                 ?,

@@ -71,7 +71,10 @@ def _add_reminder(
     )
     connection.execute(
         """
-        INSERT INTO task_record_configs VALUES (?, 'reminder', '{}', ?, ?)
+        INSERT INTO task_record_configs (
+            task_id, task_kind, template_json, confirmation_mode,
+            created_at, updated_at
+        ) VALUES (?, 'reminder', '{}', 'required', ?, ?)
         """,
         (
             task_id,

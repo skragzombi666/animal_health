@@ -68,10 +68,14 @@ def main() -> None:
     )
     connection.execute(
         """
-        INSERT INTO task_record_configs VALUES (
+        INSERT INTO task_record_configs (
+            task_id, task_kind, template_json, confirmation_mode,
+            created_at, updated_at
+        ) VALUES (
             'TK-WEIGHT',
             'weight',
             '{"measurement":"weight"}',
+            'required',
             '2026-07-27T10:00:00+00:00',
             '2026-07-27T10:00:00+00:00'
         )
@@ -142,10 +146,14 @@ def main() -> None:
     )
     connection.execute(
         """
-        INSERT INTO task_record_configs VALUES (
+        INSERT INTO task_record_configs (
+            task_id, task_kind, template_json, confirmation_mode,
+            created_at, updated_at
+        ) VALUES (
             'TK-REMINDER',
             'reminder',
             '{}',
+            'routine',
             '2026-07-27T10:00:00+00:00',
             '2026-07-27T10:00:00+00:00'
         )

@@ -8,6 +8,12 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
 from .ai_assist import async_setup_ai_assist
+from .confirmation_api import async_setup_confirmation_policy
+from .confirmation_patches import apply_confirmation_policy_patches
+from .confirmation_policy import (
+    async_initialize_confirmation_policy,
+    async_load_confirmation_policy_settings,
+)
 from .const import DATABASE_NAME, DOMAIN
 from .coordinator import AnimalHealthCoordinator
 from .dashboard_api import async_setup_dashboard_api
@@ -61,6 +67,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     apply_v0815_patches()
     apply_v0816_patches()
     apply_v0817_patches()
+    apply_confirmation_policy_patches()
     apply_task_stabilization()
     apply_download_stabilization()
     async_setup_services(hass)
@@ -69,6 +76,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_task_record_services(hass)
     async_setup_v080_task_policy(hass)
     async_setup_task_service_descriptions(hass)
+    async_setup_confirmation_policy(hass)
     async_setup_dashboard_api(hass)
     async_setup_feature_api(hass)
     async_setup_group_lifecycle_api(hass)
@@ -92,11 +100,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
     apply_v0815_patches()
     apply_v0816_patches()
     apply_v0817_patches()
+    apply_confirmation_policy_patches()
     apply_task_stabilization()
     apply_download_stabilization()
     database_path = Path(hass.config.path(DATABASE_NAME))
     database = AnimalHealthDatabase(hass, database_path)
     await database.initialize()
+    await async_initialize_confirmation_policy(hass)
     await async_initialize_task_record_schema(hass)
     await async_initialize_v0815_features(hass)
 
@@ -111,6 +121,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
     await hass.async_add_executor_job(_initialize_sync, database_path)
     await async_initialize_v083_features(feature_store)
     await hass.async_add_executor_job(_initialize_v0817_sync, database_path)
+    await async_load_confirmation_policy_settings(hass)
 
     coordinator = AnimalHealthCoordinator(hass, database)
     await coordinator.async_config_entry_first_refresh()
