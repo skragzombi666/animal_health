@@ -21,6 +21,7 @@ from .group_lifecycle import (
 )
 from .panel import async_register_panel, async_unregister_panel
 from .runtime import AnimalHealthRuntimeData
+from .series_alerts import async_setup_series_alerts
 from .services import async_setup_services
 from .task_record_creation import async_setup_task_record_creation
 from .task_record_schema import async_initialize_task_record_schema
@@ -119,6 +120,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
         coordinator=coordinator,
         feature_store=feature_store,
     )
+    await async_setup_series_alerts(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await async_register_panel(hass)
     return True
