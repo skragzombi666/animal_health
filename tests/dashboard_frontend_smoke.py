@@ -98,11 +98,18 @@ panel.calendarOffset0816=1;
 if(panel.calendar()===calendar)throw new Error("Calendar month navigation does not change the rendered month");
 panel.calendarOffset0816=0;
 const todayView=panel.overview();
-if(!todayView.includes("Heute relevant"))throw new Error("Relevance heading missing");
+if(!todayView.includes("Anstehend"))throw new Error("Upcoming heading missing");
+if(todayView.includes(">Heute relevant<"))throw new Error("Obsolete today-only heading is still rendered");
+if(!todayView.includes('data-view="tasks"')||!todayView.includes('data-view="calendar"'))throw new Error("Upcoming section direct links are missing");
 if(todayView.includes("innerhalb 24 h"))throw new Error("Legacy 24-hour relevance wording is still rendered");
 if(todayView.includes('data-overview-scope'))throw new Error("Legacy relevance-period dropdown is still rendered");
 if(!todayView.includes("Serienelemente")||!todayView.includes("Doxycyclin"))throw new Error("Recurring series summary is missing");
 if(!todayView.includes("Nächste Fälligkeit")||!todayView.includes("15.08.2026"))throw new Error("Completed recurring date was not advanced to the next due date");
+const header=panel.body().split("</header>")[0];
+if(header.includes('data-view="animals"')||header.includes('data-view="tasks"')||header.includes('data-view="calendar"'))throw new Error("Removed top navigation links are still rendered");
+if(!header.includes('data-view="overview"')||!header.includes('data-view="timeline"'))throw new Error("Core top navigation links are missing");
+const settings=panel.settingsPage081();
+if(!settings.includes("Aktuelle Version")||!settings.includes("__VERSION__"))throw new Error("Installed version is missing from update settings");
 if(!todayView.includes("homeAnimalsCard091")||!todayView.includes('data-action="home-group-toggle-091"')||!todayView.includes('data-action="home-tag-toggle-091"')||!todayView.includes('data-action="home-search-toggle-091"'))throw new Error("Compact home animal overview filters missing");
 if(!todayView.includes("Berta")||!todayView.includes("Tina")||!todayView.includes("Hühner")||!todayView.includes("Ohne Tiergruppe"))throw new Error("Home animal tiles/groups missing");
 if(todayView.indexOf("Ohne Tiergruppe")>todayView.indexOf("Hühner"))throw new Error("Ungrouped animals must be listed before named groups");
@@ -204,7 +211,7 @@ def main() -> None:
         "calendar-prev-0816",
         "data-calendar-kind",
         "virtualRelevantItems0816",
-        "Heute relevant",
+        "Anstehend",
         "v0817_medications",
         "v0817/medications/record",
         "off_label_enabled",
@@ -228,6 +235,8 @@ def main() -> None:
         "homeGroupFilters095",
         "homeTagFilters095",
         "weekStart095",
+        "currentVersion096",
+        "upcomingLinks096",
     ):
         assert marker in combined, marker
 
