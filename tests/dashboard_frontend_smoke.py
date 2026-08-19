@@ -54,21 +54,22 @@ panel.h={language:"de",user:{is_admin:true}};
 panel.d={
   version:"__VERSION__",
   today:"2026-08-14",
-  summary:{active_animals:2,overdue_tasks:0,today_tasks:0,upcoming_tasks:1,pending_tasks:1},
+  summary:{active_animals:2,overdue_tasks:1,today_tasks:1,upcoming_tasks:1,pending_tasks:2},
   animals:[
     {id:"AH-1",device_id:"device-1",name:"Tina",species:"chicken",status:"active",is_archived:false,group_id:"GR-1",group_name:"Hühner",tag_ids:["TG-1"],tags:[{id:"TG-1",name:"Altbestand"}]},
     {id:"AH-2",device_id:"device-2",name:"Berta",species:"chicken",status:"active",is_archived:false,group_id:null,group_name:null,tag_ids:[],tags:[]}
   ],
-  tasks:[{
-    id:"TK-1",animal_id:"AH-1",animal_name:"Tina",title:"Doxycyclin",
-    task_kind:"medication",is_active:true,recurrence_type:"daily",recurrence_interval:1,
-    start_date:"2026-08-13",end_date:null,due_time:"20:00",planned:{medication_name:"Doxycyclin"}
-  }],
-  occurrences:[{
-    id:"OC-DONE",task_id:"TK-1",animal_id:"AH-1",animal_name:"Tina",task_title:"Doxycyclin",
-    task_kind:"medication",scheduled_date:"2026-08-14",scheduled_local:"2026-08-14T20:00:00+02:00",
-    scheduled_for:"2026-08-14T18:00:00+00:00",status:"completed",is_overdue:false,is_today:false,is_upcoming:false
-  }],
+  tasks:[
+    {id:"TK-1",animal_id:"AH-1",animal_name:"Tina",title:"Doxycyclin",task_kind:"medication",is_active:true,recurrence_type:"daily",recurrence_interval:1,start_date:"2026-08-13",end_date:null,due_time:"20:00",planned:{medication_name:"Doxycyclin"},overdue_count:0,next_pending_local:"2026-08-15T20:00:00+02:00"},
+    {id:"TK-2",animal_id:"AH-1",animal_name:"Tina",title:"Wochenkontrolle",task_kind:"health_check",is_active:true,recurrence_type:"weekly",recurrence_interval:1,start_date:"2026-08-14",end_date:null,due_time:null,planned:{check_focus:"Allgemeinzustand"},overdue_count:0,next_pending_local:"2026-08-14T00:00:00+02:00"},
+    {id:"TK-3",animal_id:"AH-1",animal_name:"Tina",title:"Gewicht prüfen",task_kind:"weight",is_active:true,recurrence_type:"daily",recurrence_interval:1,start_date:"2026-08-12",end_date:null,due_time:null,planned:{measurement:"weight"},overdue_count:1,next_pending_local:"2026-08-12T00:00:00+02:00"}
+  ],
+  occurrences:[
+    {id:"OC-SKIP",task_id:"TK-1",animal_id:"AH-1",animal_name:"Tina",task_title:"Doxycyclin",task_kind:"medication",scheduled_date:"2026-08-13",scheduled_local:"2026-08-13T20:00:00+02:00",scheduled_for:"2026-08-13T18:00:00+00:00",status:"skipped",is_overdue:false,is_today:false,is_upcoming:false},
+    {id:"OC-DONE",task_id:"TK-1",animal_id:"AH-1",animal_name:"Tina",task_title:"Doxycyclin",task_kind:"medication",scheduled_date:"2026-08-14",scheduled_local:"2026-08-14T20:00:00+02:00",scheduled_for:"2026-08-14T18:00:00+00:00",status:"completed",is_overdue:false,is_today:false,is_upcoming:false},
+    {id:"OC-DUE",task_id:"TK-2",animal_id:"AH-1",animal_name:"Tina",task_title:"Wochenkontrolle",task_kind:"health_check",scheduled_date:"2026-08-14",scheduled_local:"2026-08-14T00:00:00+02:00",scheduled_for:"2026-08-13T22:00:00+00:00",status:"pending",is_overdue:false,is_today:true,is_upcoming:false},
+    {id:"OC-MISS",task_id:"TK-3",animal_id:"AH-1",animal_name:"Tina",task_title:"Gewicht prüfen",task_kind:"weight",scheduled_date:"2026-08-12",scheduled_local:"2026-08-12T00:00:00+02:00",scheduled_for:"2026-08-11T22:00:00+00:00",status:"pending",is_overdue:true,is_today:false,is_upcoming:false}
+  ],
   events:[]
 };
 panel.features={groups:[{id:"GR-1",name:"Hühner",species:"chicken",animal_count:1,is_archived:false}],memberships:{"AH-1":"GR-1"}};
@@ -87,7 +88,9 @@ const calendar=panel.calendar();
 if(!calendar.includes('data-action="calendar-prev-0816"')||!calendar.includes('data-action="calendar-next-0816"'))throw new Error("Calendar month navigation missing");
 if(!calendar.includes('data-action="calendar-today-0816"'))throw new Error("Calendar today navigation missing");
 if(!calendar.includes('data-calendar-kind')||!calendar.includes('data-calendar-animal'))throw new Error("Calendar filters missing");
-if(!calendar.includes("Doxycyclin"))throw new Error("Virtual recurring medication is missing from calendar");
+if(!calendar.includes("Doxycyclin")||!calendar.includes("Wochenkontrolle")||!calendar.includes("Gewicht prüfen"))throw new Error("Recurring items are missing from calendar");
+if(!calendar.includes('data-id="OC-DUE"')||!calendar.includes('data-id="OC-MISS"'))throw new Error("Due calendar items are not directly executable");
+if(!calendar.includes("Bestätigt / ausgeführt")||!calendar.includes("Ausgesetzt / abgebrochen")||!calendar.includes("Vergangen, nicht bestätigt"))throw new Error("Calendar state legend is incomplete");
 if(panel.weekStart095()!=="monday")throw new Error("Monday must be the default first day of week");
 panel.setWeekStart095("sunday");
 if(localStorage.getItem("animal_health.week_start")!=="sunday")throw new Error("Week-start preference was not persisted");
@@ -99,12 +102,16 @@ if(panel.calendar()===calendar)throw new Error("Calendar month navigation does n
 panel.calendarOffset0816=0;
 const todayView=panel.overview();
 if(!todayView.includes("Anstehend"))throw new Error("Upcoming heading missing");
-if(todayView.includes(">Heute relevant<"))throw new Error("Obsolete today-only heading is still rendered");
+if(!todayView.includes("Heute relevant")||!todayView.includes("Wochenkontrolle"))throw new Error("Due recurring item is not shown in today's dynamic section");
+if(!todayView.includes("Überfällig / nicht bestätigt")||!todayView.includes("Gewicht prüfen")||!todayView.includes("Nicht bestätigt"))throw new Error("Overdue recurring item is not highlighted dynamically");
 if(!todayView.includes('data-view="tasks"')||!todayView.includes('data-view="calendar"'))throw new Error("Upcoming section direct links are missing");
 if(todayView.includes("innerhalb 24 h"))throw new Error("Legacy 24-hour relevance wording is still rendered");
 if(todayView.includes('data-overview-scope'))throw new Error("Legacy relevance-period dropdown is still rendered");
-if(!todayView.includes("Serienelemente")||!todayView.includes("Doxycyclin"))throw new Error("Recurring series summary is missing");
-if(!todayView.includes("Nächste Fälligkeit")||!todayView.includes("15.08.2026"))throw new Error("Completed recurring date was not advanced to the next due date");
+if(!todayView.includes("Doxycyclin")||!todayView.includes("Nächste Fälligkeit")||!todayView.includes("15.08.2026"))throw new Error("Completed recurring date was not advanced to the next due date");
+const taskManagement=panel.tasks();
+if(!taskManagement.includes("Aufgaben & Serien")||!taskManagement.includes("Aktive Serien"))throw new Error("Task management view missing");
+if(!taskManagement.includes('data-action="edit-task-097"')||!taskManagement.includes('data-action="toggle"'))throw new Error("Task management controls missing");
+if(taskManagement.includes("Heute fällig <small>")||taskManagement.includes("Erledigt <small>"))throw new Error("Operational occurrence buckets remain in task management");
 const header=panel.body().split("</header>")[0];
 if(header.includes('data-view="animals"')||header.includes('data-view="tasks"')||header.includes('data-view="calendar"'))throw new Error("Removed top navigation links are still rendered");
 if(!header.includes('data-view="overview"')||!header.includes('data-view="timeline"'))throw new Error("Core top navigation links are missing");
@@ -142,10 +149,11 @@ const events=[
  {id:"EV-1",animal_id:"AH-1",animal_name:"Tina",event_type:"medication",occurred_at:"2026-08-14T15:30:00+00:00",title:"Doxycare Tabletten",notes:null,value:1,unit:"tablet",correction_of_event_id:null,data:{medication_name:"Doxycare Tabletten",route:"oral"}},
  {id:"EV-2",animal_id:"AH-1",animal_name:"Tina",event_type:"medication",occurred_at:"2026-08-14T15:31:00+00:00",title:"Eigene Tropfen",notes:null,value:2,unit:"drop",correction_of_event_id:null,data:{medication_name:"Eigene Tropfen",route:"oral"}}
 ];
-panel.detail={animal:panel.d.animals[0],events,occurrences:[],attachments:[]};
+panel.detail={animal:panel.d.animals[0],events,occurrences:panel.d.occurrences,tasks:panel.d.tasks,attachments:[]};
 panel.view="animal-detail";
 const animalDetail=panel.animalDetail();
 if(!animalDetail.includes("animalCaptureIcons090A7"))throw new Error("Compact animal capture toolbar missing");
+if(!animalDetail.includes("Serienstatus")||!animalDetail.includes("Nicht bestätigt"))throw new Error("Compact recurring status is missing from animal timeline");
 if(animalDetail.includes('data-action="animal-more"'))throw new Error("Redundant animal-more control still shown");
 for(const action of ["record-weight","record-symptom","record-product","create-task","ai-assist","record-event","attach-document"]){
  if(!animalDetail.includes(`data-action="${action}"`))throw new Error(`Capture action missing: ${action}`);
@@ -237,6 +245,9 @@ def main() -> None:
         "weekStart095",
         "currentVersion096",
         "upcomingLinks096",
+        "taskManagement097",
+        "calendarState-unconfirmed",
+        "seriesStatus097",
     ):
         assert marker in combined, marker
 
