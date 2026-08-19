@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -8,13 +7,9 @@ INTEGRATION = ROOT / "custom_components" / "animal_health"
 FRONTEND = INTEGRATION / "frontend"
 
 
-def test_095_version_and_multi_select_filters() -> None:
-    manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    part01 = (FRONTEND / "animal-health-panel.part01.js").read_text(encoding="utf-8")
+def test_095_multi_select_filters() -> None:
     part46 = (FRONTEND / "animal-health-panel.part46.js").read_text(encoding="utf-8")
 
-    assert manifest["version"] == "0.9.5"
-    assert 'const V="0.9.5",D="animal_health"' in part01
     assert "homeGroupFilters095" in part46
     assert "homeTagFilters095" in part46
     assert "new Set(state.groupFilters)" in part46
@@ -56,7 +51,7 @@ def test_095_week_start_setting_defaults_to_monday_and_drives_calendar() -> None
     assert "weekdaySunday095" in part46
 
 
-def test_android_remains_frozen_for_095() -> None:
+def test_android_remains_frozen_after_095() -> None:
     gradle = (ROOT / "android" / "app" / "build.gradle.kts").read_text(encoding="utf-8")
     assert 'val animalHealthVersion = "0.9.0-alpha.7"' in gradle
     assert 'versionCode = 900007' in gradle
