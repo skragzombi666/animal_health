@@ -84,8 +84,8 @@ if(!overview.includes("Anstehend")||!overview.includes("Pflichtgewicht")||!overv
 if(!overview.includes("Überfällig")||!overview.includes("Diese Woche"))throw new Error("Period buckets missing");
 const tasks=panel.tasks();
 if(!tasks.includes("Aufgaben & Serien")||!tasks.includes("Bestätigung erforderlich")||!tasks.includes("Routine"))throw new Error("Confirmation modes missing from task management");
-const form=panel.taskForm();
-if(!form.includes('name="confirmation_mode"')||!form.includes("Routine ohne Einzelbestätigung"))throw new Error("Confirmation selector missing");
+const field=panel.confirmationField010("routine");
+if(!field.includes('name="confirmation_mode"')||!field.includes("Routine ohne Einzelbestätigung")||!field.includes('value="routine" selected'))throw new Error("Confirmation selector missing");
 const weekly=panel.periodBounds010(panel.task("TK-WEEK"),"2026-08-19");
 if(weekly.start!=="2026-08-17"||weekly.end!=="2026-08-23")throw new Error("Weekly period is not calendar-week based");
 console.log("Animal Health dashboard runtime validation passed");
