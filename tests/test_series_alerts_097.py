@@ -25,14 +25,20 @@ def test_series_alert_monitor_is_registered_and_aggregated() -> None:
     assert "hass.bus.async_fire" in source
     assert "signature != previous_signature" in source
     assert "current_occurrence_ids - previous_occurrence_ids" in source
-    assert 'task.recurrence_type != "once"' in source
 
 
-def test_overdue_rules_respect_all_day_and_timed_tasks() -> None:
+def test_alerts_only_cover_required_confirmations_after_period_end() -> None:
     source = (INTEGRATION / "series_alerts.py").read_text(encoding="utf-8")
 
-    assert "scheduled_local.date() < today" in source
-    assert "occurrence.scheduled_for < now_utc" in source
+    assert "async_resolve_routine_occurrences(store)" in source
+    assert "_is_recurring_required" in source
+    assert "CONFIRMATION_REQUIRED" in source
+    assert "metadata.get(\"confirmation_mode\"" in source
+    assert "recurrence_period_bounds" in source
+    assert "period_end < today" in source
     assert "status=OCCURRENCE_PENDING" in source
     assert "fire_events=False" in source
     assert "fire_events=True" in source
+    assert '"confirmation_mode": CONFIRMATION_REQUIRED' in source
+    assert "scheduled_local.date() < today" not in source
+    assert "occurrence.scheduled_for < now_utc" not in source
