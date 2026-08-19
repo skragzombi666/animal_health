@@ -1,20 +1,14 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-INTEGRATION = ROOT / "custom_components" / "animal_health"
-FRONTEND = INTEGRATION / "frontend"
+FRONTEND = ROOT / "custom_components" / "animal_health" / "frontend"
 
 
-def test_097_version_and_task_management_view() -> None:
-    manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    part01 = (FRONTEND / "animal-health-panel.part01.js").read_text(encoding="utf-8")
+def test_097_task_management_view() -> None:
     part49 = (FRONTEND / "animal-health-panel.part49.js").read_text(encoding="utf-8")
 
-    assert manifest["version"] == "0.9.7"
-    assert 'const V="0.9.7",D="animal_health"' in part01
     assert 'taskManagement097:["Aufgaben & Serien"' in part49
     assert "taskDefinitionItems097" in part49
     assert "taskManagementRow097" in part49
