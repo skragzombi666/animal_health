@@ -12,6 +12,7 @@ def test_010_version_and_confirmation_controls() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
     part01 = (FRONTEND / "animal-health-panel.part01.js").read_text(encoding="utf-8")
     part52 = (FRONTEND / "animal-health-panel.part52.js").read_text(encoding="utf-8")
+    part54 = (FRONTEND / "animal-health-panel.part54.js").read_text(encoding="utf-8")
 
     assert manifest["version"] == "0.9.10"
     assert 'const V="0.9.10",D="animal_health"' in part01
@@ -22,6 +23,9 @@ def test_010_version_and_confirmation_controls() -> None:
     assert 'confirmationDefault010' in part52
     assert '["reminder","care"]' in part52
     assert '/confirmation/mode/update' in part52
+    assert "syncEditConfirmation010" in part54
+    assert 'form?.dataset.form==="task-edit-097"' in part54
+    assert '["recurrence_type","confirmation_mode"]' in part54
 
 
 def test_010_period_based_relevance_and_neutral_undocumented_state() -> None:
