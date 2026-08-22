@@ -32,10 +32,17 @@ def _link_sync(path: Path, task_id: str, plan_id: int) -> None:
     connection.execute("PRAGMA busy_timeout = 5000")
     try:
         plan = connection.execute(
-            "SELECT id FROM v0911_treatment_plans WHERE id=?", (plan_id,)
+            "SELECT id,name,components_json FROM v0911_treatment_plans WHERE id=?",
+            (plan_id,),
         ).fetchone()
         if plan is None:
             raise KeyError(plan_id)
+        try:
+            components = json.loads(str(plan["components_json"] or "[]"))
+        except json.JSONDecodeError:
+            components = []
+        if not isinstance(components, list):
+            components = []
         row = connection.execute(
             "SELECT task_kind,template_json FROM task_record_configs WHERE task_id=?",
             (task_id,),
@@ -51,10 +58,13 @@ def _link_sync(path: Path, task_id: str, plan_id: int) -> None:
         if not isinstance(template, dict):
             template = {}
         template["treatment_plan_id"] = plan_id
+        template["treatment_plan_name"] = str(plan["name"])
+        template["treatment_plan_components"] = components
         now = datetime.now(UTC).replace(microsecond=0).isoformat()
+        encoded = json.dumps(template, ensure_ascii=False, sort_keys=True)
         connection.execute(
             "UPDATE task_record_configs SET template_json=?,updated_at=? WHERE task_id=?",
-            (json.dumps(template, ensure_ascii=False, sort_keys=True), now, task_id),
+            (encoded, now, task_id),
         )
         connection.execute(
             """
@@ -65,7 +75,7 @@ def _link_sync(path: Path, task_id: str, plan_id: int) -> None:
                 WHERE task_id=? AND status='pending'
             )
             """,
-            (json.dumps(template, ensure_ascii=False, sort_keys=True), now, task_id),
+            (encoded, now, task_id),
         )
         connection.commit()
     finally:
