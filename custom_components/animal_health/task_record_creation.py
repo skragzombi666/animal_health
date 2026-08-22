@@ -58,6 +58,8 @@ ATTR_RECURRENCE_INTERVAL = "recurrence_interval"
 ATTR_START_DATE = "start_date"
 ATTR_END_DATE = "end_date"
 ATTR_DUE_TIME = "due_time"
+ATTR_PLANNED_TREATMENT_PLAN_ID = "planned_treatment_plan_id"
+
 
 def _validation_error(
     _hass: HomeAssistant,
@@ -159,6 +161,9 @@ CREATE_RECORD_TASK_SCHEMA = vol.Schema(
         vol.Optional(ATTR_PLANNED_CARE_ACTION): _optional_text,
         vol.Optional(ATTR_PLANNED_VISIT_REASON): _optional_text,
         vol.Optional(ATTR_PLANNED_PROVIDER): _optional_text,
+        vol.Optional(ATTR_PLANNED_TREATMENT_PLAN_ID): vol.All(
+            vol.Coerce(int), vol.Range(min=1)
+        ),
     }
 )
 
@@ -216,6 +221,7 @@ def _validate_planned_fields(
         "health_check": {ATTR_PLANNED_CHECK_FOCUS},
         "care": {ATTR_PLANNED_CARE_ACTION},
         "veterinary_visit": {ATTR_PLANNED_VISIT_REASON, ATTR_PLANNED_PROVIDER},
+        "treatment": {ATTR_PLANNED_TREATMENT_PLAN_ID},
     }
     planned_keys = {
         key
@@ -235,6 +241,7 @@ def _validate_planned_fields(
             ATTR_PLANNED_CARE_ACTION,
             ATTR_PLANNED_VISIT_REASON,
             ATTR_PLANNED_PROVIDER,
+            ATTR_PLANNED_TREATMENT_PLAN_ID,
         )
         if data.get(key) not in (None, "", [])
     }
@@ -289,9 +296,7 @@ def async_setup_task_record_creation(hass: HomeAssistant) -> None:
                 end_date=call.data.get(ATTR_END_DATE),
                 due_time=call.data.get(ATTR_DUE_TIME),
             )
-            tasks = [
-                task.as_dict(task_store.timezone) for task in created_tasks
-            ]
+            tasks = [task.as_dict(task_store.timezone) for task in created_tasks]
         except KeyError as err:
             raise _validation_error(hass, "selected_animal_missing") from err
         except ValueError as err:
