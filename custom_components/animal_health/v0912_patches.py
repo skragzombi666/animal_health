@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime
 from typing import Any
 
@@ -16,23 +15,13 @@ _PATCHED = False
 def _record_plan_components_sync(
     database: AnimalHealthDatabase,
     plan_id: int,
+    plan_name: str,
+    components: list[dict[str, Any]],
     animal_id: str,
     occurred_at: datetime,
 ) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     with database._connect() as connection:  # noqa: SLF001
-        row = connection.execute(
-            "SELECT name,components_json FROM v0911_treatment_plans WHERE id=?",
-            (plan_id,),
-        ).fetchone()
-        if row is None:
-            raise KeyError(plan_id)
-        try:
-            components = json.loads(str(row["components_json"] or "[]"))
-        except json.JSONDecodeError:
-            components = []
-        if not isinstance(components, list):
-            components = []
         for component in components:
             if not isinstance(component, dict):
                 continue
@@ -60,7 +49,7 @@ def _record_plan_components_sync(
                 data={
                     "source": "treatment_plan_task",
                     "treatment_plan_id": plan_id,
-                    "treatment_plan_name": str(row["name"]),
+                    "treatment_plan_name": plan_name,
                     "component_type": component_type,
                     "product_type": component_type,
                     **(
@@ -106,20 +95,31 @@ def apply_v0912_patches() -> None:
             return result
         planned = result.occurrence.get("planned") or {}
         plan_id = planned.get("treatment_plan_id")
+        plan_name = str(planned.get("treatment_plan_name") or result.occurrence.get("task_title") or "Behandlung")
+        components = planned.get("treatment_plan_components") or []
         animal_id = result.occurrence.get("animal_id")
         performed_at = kwargs.get("performed_at")
-        if not plan_id or not animal_id or not isinstance(performed_at, datetime):
+        if (
+            not plan_id
+            or not animal_id
+            or not isinstance(performed_at, datetime)
+            or not isinstance(components, list)
+        ):
             return result
         database = AnimalHealthDatabase(self._hass, self._database_path)  # noqa: SLF001
         component_events = await self._hass.async_add_executor_job(  # noqa: SLF001
             _record_plan_components_sync,
             database,
             int(plan_id),
+            plan_name,
+            components,
             str(animal_id),
             performed_at,
         )
         if result.event is not None:
             result.event.setdefault("data", {})["treatment_plan_id"] = int(plan_id)
+            result.event["data"]["treatment_plan_name"] = plan_name
+            result.event["data"]["treatment_plan_components"] = components
             result.event["component_events"] = component_events
         return result
 
