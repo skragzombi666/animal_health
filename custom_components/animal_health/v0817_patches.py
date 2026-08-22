@@ -20,6 +20,7 @@ def apply_v0817_patches() -> None:
             "tablet": "Tablette",
             "dose": "Dosis",
             "mark": "Teilstrich",
+            "pinch": "Messerspitze",
         }
     )
     _PATCHED = True

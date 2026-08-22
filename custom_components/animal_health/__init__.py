@@ -29,6 +29,7 @@ from .panel import async_register_panel, async_unregister_panel
 from .runtime import AnimalHealthRuntimeData
 from .series_alerts import async_setup_series_alerts
 from .services import async_setup_services
+from .status_change_alerts import async_setup_status_change_alerts
 from .task_record_creation import async_setup_task_record_creation
 from .task_record_schema import async_initialize_task_record_schema
 from .task_record_services import async_setup_task_record_services
@@ -53,6 +54,9 @@ from .v086_features import async_setup_v086_features
 from .v088_features import async_setup_v088_features
 from .v0911_features import async_initialize_v0911_features, async_setup_v0911_features
 from .v0911_patches import apply_v0911_patches
+from .v0912_features import async_initialize_v0912_features, async_setup_v0912_features
+from .v0912_patches import apply_v0912_patches
+from .v0912_task_links import async_setup_v0912_task_links
 
 PLATFORMS = [
     Platform.SENSOR,
@@ -77,6 +81,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_task_record_creation(hass)
     async_setup_task_record_services(hass)
     async_setup_v080_task_policy(hass)
+    apply_v0912_patches()
     apply_v0911_patches()
     async_setup_task_service_descriptions(hass)
     async_setup_confirmation_policy(hass)
@@ -90,6 +95,8 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_v081_stt(hass)
     async_setup_v0817_features(hass)
     async_setup_v0911_features(hass)
+    async_setup_v0912_features(hass)
+    async_setup_v0912_task_links(hass)
     async_setup_v082_features(hass)
     async_setup_v083_features(hass)
     async_setup_v084_features(hass)
@@ -107,6 +114,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
     apply_confirmation_policy_patches()
     apply_task_stabilization()
     apply_download_stabilization()
+    apply_v0912_patches()
     database_path = Path(hass.config.path(DATABASE_NAME))
     database = AnimalHealthDatabase(hass, database_path)
     await database.initialize()
@@ -126,6 +134,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
     await async_initialize_v083_features(feature_store)
     await hass.async_add_executor_job(_initialize_v0817_sync, database_path)
     await async_initialize_v0911_features(hass)
+    await async_initialize_v0912_features(hass)
     await async_load_confirmation_policy_settings(hass)
 
     coordinator = AnimalHealthCoordinator(hass, database)
@@ -137,6 +146,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
         feature_store=feature_store,
     )
     await async_setup_series_alerts(hass, entry)
+    await async_setup_status_change_alerts(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await async_register_panel(hass)
     return True

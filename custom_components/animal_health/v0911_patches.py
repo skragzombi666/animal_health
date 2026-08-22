@@ -16,7 +16,10 @@ def apply_v0911_patches() -> None:
     def descriptions(language: str) -> dict[str, dict[str, Any]]:
         result = original(language)
         german = language.startswith("de")
-        label = "Teilstrich" if german else "Graduation mark"
+        additions = (
+            ("mark", "Teilstrich" if german else "Graduation mark"),
+            ("pinch", "Messerspitze" if german else "Pinch"),
+        )
         for description in result.values():
             fields = description.get("fields", {})
             for key in (
@@ -24,23 +27,21 @@ def apply_v0911_patches() -> None:
                 "planned_vaccination_dose_unit",
                 "dose_unit",
             ):
-                select = (
-                    fields.get(key, {})
-                    .get("selector", {})
-                    .get("select", {})
-                )
+                select = fields.get(key, {}).get("selector", {}).get("select", {})
                 options = select.get("options")
                 if not isinstance(options, list):
                     continue
-                if any(
-                    (item.get("value") if isinstance(item, dict) else item) == "mark"
+                existing = {
+                    item.get("value") if isinstance(item, dict) else item
                     for item in options
-                ):
-                    continue
-                if options and isinstance(options[0], dict):
-                    options.append({"value": "mark", "label": label})
-                else:
-                    options.append("mark")
+                }
+                for value, label in additions:
+                    if value in existing:
+                        continue
+                    if options and isinstance(options[0], dict):
+                        options.append({"value": value, "label": label})
+                    else:
+                        options.append(value)
         return result
 
     task_service_schema.task_record_descriptions = descriptions

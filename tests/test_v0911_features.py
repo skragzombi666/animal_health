@@ -31,10 +31,10 @@ def test_teilstrich_is_validated_and_exported() -> None:
     service_patch = (INTEGRATION / "v0911_patches.py").read_text(encoding="utf-8")
 
     ast.parse(service_patch)
-    assert '"mark")' in const_source
+    assert '"mark"' in const_source
     assert '"mark": "Teilstrich"' in patches
-    assert 'options.append({"value": "mark", "label": label})' in service_patch
-    assert 'label = "Teilstrich" if german else "Graduation mark"' in service_patch
+    assert '("mark", "Teilstrich" if german else "Graduation mark")' in service_patch
+    assert 'options.append({"value": value, "label": label})' in service_patch
 
 
 def test_v0911_state_contains_surface_metadata() -> None:

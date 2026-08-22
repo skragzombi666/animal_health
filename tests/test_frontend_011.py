@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -8,14 +7,10 @@ INTEGRATION = ROOT / "custom_components" / "animal_health"
 FRONTEND = INTEGRATION / "frontend"
 
 
-def test_011_version_and_manual_medication_entry() -> None:
-    manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    part01 = (FRONTEND / "animal-health-panel.part01.js").read_text(encoding="utf-8")
+def test_011_manual_medication_entry() -> None:
     part55 = (FRONTEND / "animal-health-panel.part55.js").read_text(encoding="utf-8")
     part56 = (FRONTEND / "animal-health-panel.part56.js").read_text(encoding="utf-8")
 
-    assert manifest["version"] == "0.9.11"
-    assert 'const V="0.9.11",D="animal_health"' in part01
     assert 'manualMedication011:["Medikament auswählen oder direkt eingeben"' in part55
     assert 'name="product_name_${index}"' in part55
     assert '<input name="product_name_${index}"' in part55
