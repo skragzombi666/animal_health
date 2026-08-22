@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 import logging
 from typing import Any, cast
 
 from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_time_interval
 
 from .const import DOMAIN
@@ -104,3 +104,12 @@ async def async_setup_status_change_alerts(
         await async_check_status_change_alerts(hass, runtime, fire_events=True)
 
     entry.async_on_unload(async_track_time_interval(hass, _scheduled, CHECK_INTERVAL))
+
+    @callback
+    def _coordinator_updated() -> None:
+        hass.async_create_task(
+            async_check_status_change_alerts(hass, runtime, fire_events=True),
+            f"{DOMAIN} scheduled status-change alert refresh",
+        )
+
+    entry.async_on_unload(runtime.coordinator.async_add_listener(_coordinator_updated))
