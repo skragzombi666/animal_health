@@ -13,7 +13,13 @@ from homeassistant.components import websocket_api
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 
-from .const import ADMINISTRATION_ROUTES, ANIMAL_STATUSES, DATABASE_NAME, DOMAIN, DOSE_UNITS
+from .const import (
+    ADMINISTRATION_ROUTES,
+    ANIMAL_STATUSES,
+    DATABASE_NAME,
+    DOMAIN,
+    DOSE_UNITS,
+)
 from .runtime import AnimalHealthRuntimeData
 
 _STATE_COMMAND = f"{DOMAIN}/v0913/state"
@@ -22,8 +28,14 @@ _SAVE_MEDICATION_COMMAND = f"{DOMAIN}/v0913/medication/save"
 _ARCHIVE_MEDICATION_COMMAND = f"{DOMAIN}/v0913/medication/archive"
 
 _CATALOG_ENRICHMENT: dict[str, dict[str, str]] = {
-    "ch.flubenol_5": {"concentration": "50 mg/g", "dosage_form": "Pulver"},
-    "ch.flubenol_kh": {"concentration": "44 mg/ml", "dosage_form": "Paste"},
+    "ch.flubenol_5": {
+        "concentration": "50 mg/g",
+        "dosage_form": "Pulver",
+    },
+    "ch.flubenol_kh": {
+        "concentration": "44 mg/ml",
+        "dosage_form": "Paste",
+    },
 }
 
 _EXTRA_CATALOG_PRODUCTS: tuple[dict[str, Any], ...] = (
@@ -47,10 +59,7 @@ def _runtime_data(hass: HomeAssistant) -> AnimalHealthRuntimeData:
 
 
 def _database_path(hass: HomeAssistant) -> Path:
-    try:
-        return _runtime_data(hass).feature_store.database_path
-    except RuntimeError:
-        return Path(hass.config.path(DATABASE_NAME))
+    return Path(hass.config.path(DATABASE_NAME))
 
 
 def _connect(path: Path) -> sqlite3.Connection:
@@ -80,12 +89,13 @@ def _optional_text(value: Any) -> str | None:
 def _initialise_sync(path: Path) -> None:
     with _connect(path) as connection:
         event_columns = {
-            str(row[1]) for row in connection.execute("PRAGMA table_info(events)").fetchall()
+            str(row[1])
+            for row in connection.execute("PRAGMA table_info(events)").fetchall()
         }
         if "is_deleted" not in event_columns:
             connection.execute(
-                "ALTER TABLE events ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0 "
-                "CHECK (is_deleted IN (0,1))"
+                "ALTER TABLE events ADD COLUMN is_deleted INTEGER NOT NULL "
+                "DEFAULT 0 CHECK (is_deleted IN (0,1))"
             )
         if "deleted_at" not in event_columns:
             connection.execute("ALTER TABLE events ADD COLUMN deleted_at TEXT")
@@ -96,13 +106,17 @@ def _initialise_sync(path: Path) -> None:
 
         medication_columns = {
             str(row[1])
-            for row in connection.execute("PRAGMA table_info(v0817_medications)").fetchall()
+            for row in connection.execute(
+                "PRAGMA table_info(v0817_medications)"
+            ).fetchall()
         }
         additions = {
             "active_ingredient": "TEXT",
             "concentration": "TEXT",
             "dosage_form": "TEXT",
-            "is_archived": "INTEGER NOT NULL DEFAULT 0 CHECK (is_archived IN (0,1))",
+            "is_archived": (
+                "INTEGER NOT NULL DEFAULT 0 CHECK (is_archived IN (0,1))"
+            ),
             "archived_at": "TEXT",
         }
         for name, definition in additions.items():
@@ -119,7 +133,8 @@ def _initialise_sync(path: Path) -> None:
 
 def _infer_concentration(name: str) -> str:
     match = re.search(
-        r"(?<!\d)(\d+(?:[.,]\d+)?)\s*(mg|mcg|µg|g)\s*/\s*(ml|g|tablette|tablet)",
+        r"(?<!\d)(\d+(?:[.,]\d+)?)\s*(mg|mcg|µg|g)\s*/\s*"
+        r"(ml|g|tablette|tablet)",
         name,
         flags=re.IGNORECASE,
     )
@@ -152,15 +167,28 @@ def _catalog_products() -> list[dict[str, Any]]:
     catalog_path = Path(__file__).parent / "catalogs" / "medicines_ch.json"
     with catalog_path.open(encoding="utf-8") as file:
         document = json.load(file)
+
     raw_items = [dict(item) for item in document.get("items", [])]
     known = {str(item.get("id") or "") for item in raw_items}
-    raw_items.extend(dict(item) for item in _EXTRA_CATALOG_PRODUCTS if item["id"] not in known)
+    raw_items.extend(
+        dict(item)
+        for item in _EXTRA_CATALOG_PRODUCTS
+        if str(item["id"]) not in known
+    )
+
     products: list[dict[str, Any]] = []
     for raw in raw_items:
         product_id = str(raw.get("id") or "")
         enrichment = _CATALOG_ENRICHMENT.get(product_id, {})
-        name = str(raw.get("name") or raw.get("name_de") or raw.get("id") or "")
-        ingredients = [str(value) for value in (raw.get("active_ingredients") or [])]
+        name = str(
+            raw.get("name")
+            or raw.get("name_de")
+            or raw.get("id")
+            or ""
+        )
+        ingredients = [
+            str(value) for value in (raw.get("active_ingredients") or [])
+        ]
         concentration = str(
             raw.get("concentration")
             or enrichment.get("concentration")
@@ -181,7 +209,9 @@ def _catalog_products() -> list[dict[str, Any]]:
                 "active_ingredients": ingredients,
                 "concentration": concentration,
                 "dosage_form": dosage_form,
-                "target_species": [str(value) for value in (raw.get("target_species") or [])],
+                "target_species": [
+                    str(value) for value in (raw.get("target_species") or [])
+                ],
                 "aliases": [str(value) for value in (raw.get("aliases") or [])],
                 "source": "catalog",
             }
@@ -197,9 +227,15 @@ def medication_snapshot_for_name(
     needle = _normalise(clean_name)
     columns = {
         str(row[1])
-        for row in connection.execute("PRAGMA table_info(v0817_medications)").fetchall()
+        for row in connection.execute(
+            "PRAGMA table_info(v0817_medications)"
+        ).fetchall()
     }
-    if columns and {"active_ingredient", "concentration", "dosage_form"} <= columns:
+    if columns and {
+        "active_ingredient",
+        "concentration",
+        "dosage_form",
+    } <= columns:
         row = connection.execute(
             """
             SELECT id,name,active_ingredient,concentration,dosage_form
@@ -219,6 +255,7 @@ def medication_snapshot_for_name(
                 "concentration": str(row["concentration"] or ""),
                 "dosage_form": str(row["dosage_form"] or ""),
             }
+
     for product in _catalog_products():
         candidates = [product["name"], *(product.get("aliases") or [])]
         if any(_normalise(value) == needle for value in candidates):
@@ -230,6 +267,7 @@ def medication_snapshot_for_name(
                 "concentration": product["concentration"],
                 "dosage_form": product["dosage_form"],
             }
+
     return {
         "source": "free_text",
         "product_name": clean_name,
@@ -243,14 +281,17 @@ def _medications_sync(path: Path) -> list[dict[str, Any]]:
     with _connect(path) as connection:
         columns = {
             str(row[1])
-            for row in connection.execute("PRAGMA table_info(v0817_medications)").fetchall()
+            for row in connection.execute(
+                "PRAGMA table_info(v0817_medications)"
+            ).fetchall()
         }
         if not columns:
             return []
         rows = connection.execute(
             """
             SELECT id,name,species_id,default_unit,default_route,
-                   active_ingredient,concentration,dosage_form,is_archived,archived_at
+                   active_ingredient,concentration,dosage_form,
+                   is_archived,archived_at
             FROM v0817_medications
             ORDER BY is_archived,name COLLATE NOCASE,species_id,id
             """
@@ -279,7 +320,8 @@ def _deleted_events_sync(path: Path) -> list[dict[str, Any]]:
             """
             SELECT e.id,e.animal_id,e.event_type,e.occurred_at,e.title,e.notes,
                    e.value,e.unit,e.correction_of_event_id,e.data_json,e.task_id,
-                   e.task_occurrence_id,e.created_at,e.deleted_at,a.name AS animal_name
+                   e.task_occurrence_id,e.created_at,e.deleted_at,
+                   a.name AS animal_name
             FROM events AS e
             LEFT JOIN animals AS a ON a.id=e.animal_id
             WHERE e.is_deleted=1
@@ -287,6 +329,7 @@ def _deleted_events_sync(path: Path) -> list[dict[str, Any]]:
             LIMIT 1000
             """
         ).fetchall()
+
     result: list[dict[str, Any]] = []
     for row in rows:
         try:
@@ -324,16 +367,22 @@ def _state_sync(path: Path) -> dict[str, Any]:
     }
 
 
-def _recompute_status_sync(connection: sqlite3.Connection, animal_id: str) -> None:
+def _recompute_status_sync(
+    connection: sqlite3.Connection,
+    animal_id: str,
+) -> None:
     rows = connection.execute(
         """
         SELECT occurred_at,created_at,data_json
         FROM events
-        WHERE animal_id=? AND event_type='status_change' AND is_deleted=0
+        WHERE animal_id=?
+          AND event_type='status_change'
+          AND is_deleted=0
         ORDER BY occurred_at DESC,created_at DESC,id DESC
         """,
         (animal_id,),
     ).fetchall()
+
     status: str | None = None
     changed_at: str | None = None
     for row in rows:
@@ -346,18 +395,26 @@ def _recompute_status_sync(connection: sqlite3.Connection, animal_id: str) -> No
             status = candidate
             changed_at = str(row["occurred_at"])
             break
+
     if status is None:
         first = connection.execute(
             """
-            SELECT data_json FROM events
+            SELECT data_json
+            FROM events
             WHERE animal_id=? AND event_type='status_change'
-            ORDER BY occurred_at ASC,created_at ASC,id ASC LIMIT 1
+            ORDER BY occurred_at ASC,created_at ASC,id ASC
+            LIMIT 1
             """,
             (animal_id,),
         ).fetchone()
         if first is not None:
             try:
-                candidate = str(json.loads(str(first["data_json"] or "{}")).get("previous_status") or "")
+                candidate = str(
+                    json.loads(str(first["data_json"] or "{}")).get(
+                        "previous_status"
+                    )
+                    or ""
+                )
                 if candidate in ANIMAL_STATUSES:
                     status = candidate
             except json.JSONDecodeError:
@@ -367,10 +424,19 @@ def _recompute_status_sync(connection: sqlite3.Connection, animal_id: str) -> No
             (animal_id,),
         ).fetchone()
         status = status or "active"
-        changed_at = str(animal["created_at"]) if animal is not None else datetime.now(UTC).isoformat()
+        changed_at = (
+            str(animal["created_at"])
+            if animal is not None
+            else datetime.now(UTC).isoformat()
+        )
+
     now = datetime.now(UTC).replace(microsecond=0).isoformat()
     connection.execute(
-        "UPDATE animals SET status=?,status_changed_at=?,updated_at=? WHERE id=?",
+        """
+        UPDATE animals
+        SET status=?,status_changed_at=?,updated_at=?
+        WHERE id=?
+        """,
         (status, changed_at, now, animal_id),
     )
 
@@ -412,13 +478,15 @@ def _save_medication_sync(
     form = _optional_text(dosage_form)
     route = _optional_text(default_route)
     now = datetime.now(UTC).replace(microsecond=0).isoformat()
+
     with _connect(path) as connection:
         if medication_id is not None:
             cursor = connection.execute(
                 """
                 UPDATE v0817_medications
-                SET name=?,normalized_name=?,species_id=?,default_unit=?,default_route=?,
-                    active_ingredient=?,concentration=?,dosage_form=?,updated_at=?
+                SET name=?,normalized_name=?,species_id=?,default_unit=?,
+                    default_route=?,active_ingredient=?,concentration=?,
+                    dosage_form=?,updated_at=?
                 WHERE id=?
                 """,
                 (
@@ -442,8 +510,8 @@ def _save_medication_sync(
                 """
                 INSERT INTO v0817_medications(
                     name,normalized_name,species_id,default_unit,default_route,
-                    active_ingredient,concentration,dosage_form,is_archived,archived_at,
-                    created_at,updated_at
+                    active_ingredient,concentration,dosage_form,is_archived,
+                    archived_at,created_at,updated_at
                 ) VALUES(?,?,?,?,?,?,?,?,0,NULL,?,?)
                 ON CONFLICT(normalized_name,species_id) DO UPDATE SET
                     name=excluded.name,
@@ -470,29 +538,27 @@ def _save_medication_sync(
                 ),
             )
             row = connection.execute(
-                "SELECT id FROM v0817_medications WHERE normalized_name=? AND species_id=?",
+                """
+                SELECT id
+                FROM v0817_medications
+                WHERE normalized_name=? AND species_id=?
+                """,
                 (_normalise(clean_name), species),
             ).fetchone()
             if row is None:
                 raise RuntimeError("Saved medication could not be loaded")
             target_id = int(row["id"])
-        if connection.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='animal_custom_values'"
-        ).fetchone():
-            connection.execute(
-                """
-                INSERT INTO animal_custom_values(
-                    kind,species_id,breed_context,value,normalized_value,created_at,updated_at
-                ) VALUES('medication',?,'',?,?,?,?,?)
-                ON CONFLICT(kind,species_id,breed_context,normalized_value) DO UPDATE SET
-                    value=excluded.value,updated_at=excluded.updated_at
-                """,
-                (species, clean_name, _normalise(clean_name), now, now),
-            )
-    return next(item for item in _medications_sync(path) if item["id"] == target_id)
+
+    return next(
+        item for item in _medications_sync(path) if item["id"] == target_id
+    )
 
 
-def _archive_medication_sync(path: Path, medication_id: int, archived: bool) -> dict[str, Any]:
+def _archive_medication_sync(
+    path: Path,
+    medication_id: int,
+    archived: bool,
+) -> dict[str, Any]:
     now = datetime.now(UTC).replace(microsecond=0).isoformat()
     with _connect(path) as connection:
         cursor = connection.execute(
@@ -505,7 +571,9 @@ def _archive_medication_sync(path: Path, medication_id: int, archived: bool) -> 
         )
         if cursor.rowcount == 0:
             raise KeyError(medication_id)
-    return next(item for item in _medications_sync(path) if item["id"] == medication_id)
+    return next(
+        item for item in _medications_sync(path) if item["id"] == medication_id
+    )
 
 
 async def async_initialize_v0913_features(hass: HomeAssistant) -> None:
@@ -521,7 +589,10 @@ def async_setup_v0913_features(hass: HomeAssistant) -> None:
         msg: dict[str, Any],
     ) -> None:
         try:
-            result = await hass.async_add_executor_job(_state_sync, _database_path(hass))
+            result = await hass.async_add_executor_job(
+                _state_sync,
+                _database_path(hass),
+            )
         except Exception as err:  # noqa: BLE001
             connection.send_error(msg["id"], "v0913_state_failed", str(err))
             return
@@ -542,11 +613,17 @@ def async_setup_v0913_features(hass: HomeAssistant) -> None:
         runtime = _runtime_data(hass)
         try:
             result = await hass.async_add_executor_job(
-                _delete_event_sync, _database_path(hass), msg["event_id"]
+                _delete_event_sync,
+                _database_path(hass),
+                msg["event_id"],
             )
             await runtime.coordinator.async_request_refresh()
         except KeyError:
-            connection.send_error(msg["id"], "event_not_found", "Event not found")
+            connection.send_error(
+                msg["id"],
+                "event_not_found",
+                "Event not found",
+            )
             return
         except Exception as err:  # noqa: BLE001
             connection.send_error(msg["id"], "v0913_delete_failed", str(err))
@@ -560,7 +637,11 @@ def async_setup_v0913_features(hass: HomeAssistant) -> None:
             vol.Required("name"): _required_text,
             vol.Optional("species_id"): _optional_text,
             vol.Required("default_unit"): vol.In(DOSE_UNITS),
-            vol.Optional("default_route"): vol.Any(None, "", vol.In(ADMINISTRATION_ROUTES)),
+            vol.Optional("default_route"): vol.Any(
+                None,
+                "",
+                vol.In(ADMINISTRATION_ROUTES),
+            ),
             vol.Optional("active_ingredient"): _optional_text,
             vol.Optional("concentration"): _optional_text,
             vol.Optional("dosage_form"): _optional_text,
@@ -586,7 +667,11 @@ def async_setup_v0913_features(hass: HomeAssistant) -> None:
                 msg.get("dosage_form"),
             )
         except Exception as err:  # noqa: BLE001
-            connection.send_error(msg["id"], "v0913_medication_save_failed", str(err))
+            connection.send_error(
+                msg["id"],
+                "v0913_medication_save_failed",
+                str(err),
+            )
             return
         connection.send_result(msg["id"], result)
 
@@ -611,7 +696,11 @@ def async_setup_v0913_features(hass: HomeAssistant) -> None:
                 bool(msg["archived"]),
             )
         except Exception as err:  # noqa: BLE001
-            connection.send_error(msg["id"], "v0913_medication_archive_failed", str(err))
+            connection.send_error(
+                msg["id"],
+                "v0913_medication_archive_failed",
+                str(err),
+            )
             return
         connection.send_result(msg["id"], result)
 
