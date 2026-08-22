@@ -12,7 +12,7 @@ from homeassistant.components import websocket_api
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 
-from .const import ADMINISTRATION_ROUTES, DOMAIN, DOSE_UNITS
+from .const import ADMINISTRATION_ROUTES, DATABASE_NAME, DOMAIN, DOSE_UNITS
 from .runtime import AnimalHealthRuntimeData
 
 _STATE_COMMAND = f"{DOMAIN}/v0911/state"
@@ -29,7 +29,7 @@ def _runtime_data(hass: HomeAssistant) -> AnimalHealthRuntimeData:
 
 
 def _database_path(hass: HomeAssistant) -> Path:
-    return _runtime_data(hass).feature_store.database_path
+    return Path(hass.config.path(DATABASE_NAME))
 
 
 def _connect(path: Path) -> sqlite3.Connection:
