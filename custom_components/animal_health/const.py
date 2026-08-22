@@ -61,7 +61,7 @@ MANUAL_EVENT_TYPES = (
 EVENT_TYPES = (*MANUAL_EVENT_TYPES, EVENT_TYPE_STATUS_CHANGE)
 
 WEIGHT_UNITS = ("mg", "g", "kg")
-DOSE_UNITS = ("mcg", "mg", "g", "ul", "ml", "drop", "tablet", "dose")
+DOSE_UNITS = ("mcg", "mg", "g", "ul", "ml", "drop", "tablet", "dose", "mark")
 ADMINISTRATION_ROUTES = (
     "oral",
     "topical",

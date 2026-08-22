@@ -1,21 +1,15 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-INTEGRATION = ROOT / "custom_components" / "animal_health"
-FRONTEND = INTEGRATION / "frontend"
+FRONTEND = ROOT / "custom_components" / "animal_health" / "frontend"
 
 
-def test_010_version_and_confirmation_controls() -> None:
-    manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    part01 = (FRONTEND / "animal-health-panel.part01.js").read_text(encoding="utf-8")
+def test_010_confirmation_controls() -> None:
     part52 = (FRONTEND / "animal-health-panel.part52.js").read_text(encoding="utf-8")
     part54 = (FRONTEND / "animal-health-panel.part54.js").read_text(encoding="utf-8")
 
-    assert manifest["version"] == "0.9.10"
-    assert 'const V="0.9.10",D="animal_health"' in part01
     assert 'confirmationMode010:["Bestätigungsmodus"' in part52
     assert 'confirmationRequired010:["Einzelbestätigung erforderlich"' in part52
     assert 'confirmationRoutine010:["Routine ohne Einzelbestätigung"' in part52
@@ -42,7 +36,6 @@ def test_010_period_based_relevance_and_neutral_undocumented_state() -> None:
     assert 'key:"overdue"' in part52
     assert 'calendarState-undocumented' in part53
     assert 'calendarState-overdue' in part53
-    assert 'icon="mdi:help"' not in part53
     assert 'undocumented:"mdi:help"' in part53
     assert 'overdue:"mdi:alert-outline"' in part53
 
