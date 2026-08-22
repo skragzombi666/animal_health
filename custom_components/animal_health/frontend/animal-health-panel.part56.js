@@ -1,0 +1,4 @@
+const AH011TaskMeds=AnimalHealthPanel.prototype;
+const AH011TaskMedsBase={taskForm:AH011TaskMeds.taskForm};
+AH011TaskMeds.taskMedicationList011=function(){return this.medicationOptions0817("","")};
+AH011TaskMeds.taskForm=function(){let html=AH011TaskMedsBase.taskForm.call(this),options=this.taskMedicationList011(),listId="all-medications-011",datalist=`<datalist id="${listId}">${options.map(option=>`<option value="${esc(option.value)}">${esc(this.medicationOptionLabel011(option))}</option>`).join("")}</datalist>`;html=html.replace(/<input\b([^>]*\bname="planned_medication_name"[^>]*)>/,(_all,attrs)=>{const cleaned=attrs.replace(/\slist="[^"]*"/g,"");return`<input${cleaned} list="${listId}">`});if(html.includes(`list="${listId}"`)&&!html.includes(`id="${listId}"`))html+=datalist;return html};
