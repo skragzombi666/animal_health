@@ -1,0 +1,7 @@
+T.symptoms_recorded_015=T.symptomsRecorded015;
+const AH015Polish=AnimalHealthPanel.prototype;
+const AH015PolishBase={eventById:AH015Polish.eventById,eventDetail:AH015Polish.eventDetail};
+AH015Polish.eventById=function(id){return AH015PolishBase.eventById.call(this,id)||(this.v0913?.deleted_events||[]).find(event=>String(event.id)===String(id))||null};
+AH015Polish.eventDetail=function(id){const event=this.eventById(id),html=AH015PolishBase.eventDetail.call(this,id);if(!event||event.event_type!=="symptom"||!Array.isArray(event.data?.symptoms))return html;const labels=event.data.symptoms.map(value=>this.symptomLabel015(value)).filter(Boolean),severity=event.data?.severity?this.l(event.data.severity):"";return`${html}<section class="symptomDetail015"><h3>${this.t("symptoms015")}</h3><div class="symptomDetailChips015">${labels.map(label=>`<span>${esc(label)}</span>`).join("")}</div>${severity?`<small>${this.t("severity")}: ${esc(severity)}</small>`:""}</section>`};
+const AH015PolishRender=AH015Polish.render;
+AH015Polish.render=function(){AH015PolishRender.call(this);this.shadowRoot.innerHTML+=`<style>.symptomDetail015{display:grid;gap:8px}.symptomDetail015 h3{margin:0}.symptomDetailChips015{display:flex;flex-wrap:wrap;gap:6px}.symptomDetailChips015 span{padding:5px 9px;border-radius:999px;background:var(--secondary-background-color);border:1px solid var(--divider-color)}.symptomDetail015 small{color:var(--secondary-text-color)}</style>`};
