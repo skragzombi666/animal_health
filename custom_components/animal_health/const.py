@@ -72,6 +72,7 @@ DOSE_UNITS = (
     "dose",
     "mark",
     "pinch",
+    "coffee_spoon",
 )
 ADMINISTRATION_ROUTES = (
     "oral",
