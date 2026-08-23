@@ -13,8 +13,8 @@ def test_012_version_and_off_label_modes() -> None:
     part01 = (FRONTEND / "animal-health-panel.part01.js").read_text(encoding="utf-8")
     part57 = (FRONTEND / "animal-health-panel.part57.js").read_text(encoding="utf-8")
 
-    assert manifest["version"] >= "0.9.12"
-    assert 'const V="0.9.13",D="animal_health"' in part01
+    assert manifest["version"] in {"0.9.12", "0.9.13", "0.9.14"}
+    assert f'const V="{manifest["version"]}",D="animal_health"' in part01
     for mode in ("show_all", "show_marked", "hide", "on_demand"):
         assert f'"{mode}"' in part57
     assert "allowOffLabel012" in part57
