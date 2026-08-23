@@ -19,6 +19,7 @@ def apply_v0911_patches() -> None:
         additions = (
             ("mark", "Teilstrich" if german else "Graduation mark"),
             ("pinch", "Messerspitze" if german else "Pinch"),
+            ("coffee_spoon", "Kaffeelöffel" if german else "Coffee spoon"),
         )
         for description in result.values():
             fields = description.get("fields", {})
