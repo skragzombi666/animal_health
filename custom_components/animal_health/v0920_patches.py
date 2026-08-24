@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from pathlib import Path
 from typing import Any
 
 from .database import AnimalHealthDatabase
+from .task_records import TaskRecordStore
 
 _PATCHED = False
 
@@ -49,6 +51,44 @@ def _official_snapshot(connection: sqlite3.Connection, name: str) -> dict[str, A
     }
 
 
+def _persist_treatment_parent_sync(
+    path: Path,
+    event_id: str,
+    treatment_data: dict[str, Any],
+) -> None:
+    """Persist plan linkage that the legacy treatment-task wrapper added post-insert."""
+    connection = sqlite3.connect(path)
+    try:
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA busy_timeout = 5000")
+        row = connection.execute(
+            "SELECT data_json FROM events WHERE id=? AND event_type='treatment'",
+            (event_id,),
+        ).fetchone()
+        if row is None:
+            return
+        try:
+            existing = json.loads(str(row["data_json"] or "{}"))
+        except json.JSONDecodeError:
+            existing = {}
+        if not isinstance(existing, dict):
+            existing = {}
+        for key in (
+            "treatment_plan_id",
+            "treatment_plan_name",
+            "treatment_plan_components",
+        ):
+            if key in treatment_data:
+                existing[key] = treatment_data[key]
+        connection.execute(
+            "UPDATE events SET data_json=? WHERE id=?",
+            (json.dumps(existing, ensure_ascii=False, sort_keys=True), event_id),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
 def apply_v0920_patches() -> None:
     global _PATCHED
     if _PATCHED:
@@ -85,3 +125,29 @@ def apply_v0920_patches() -> None:
         return base_create(database, connection, **kwargs)
 
     AnimalHealthDatabase._create_event_in_connection = _create_event_with_official_snapshot  # type: ignore[method-assign]
+
+    base_execute = TaskRecordStore.execute
+
+    async def _execute_with_persisted_treatment_parent(
+        self: TaskRecordStore,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        result = await base_execute(self, *args, **kwargs)
+        event = result.event
+        if not isinstance(event, dict) or str(event.get("event_type") or "") != "treatment":
+            return result
+        data = event.get("data")
+        if not isinstance(data, dict) or data.get("treatment_plan_id") in (None, ""):
+            return result
+        event_id = str(event.get("id") or "").strip()
+        if event_id:
+            await self._hass.async_add_executor_job(  # noqa: SLF001
+                _persist_treatment_parent_sync,
+                self._database_path,  # noqa: SLF001
+                event_id,
+                data,
+            )
+        return result
+
+    TaskRecordStore.execute = _execute_with_persisted_treatment_parent
