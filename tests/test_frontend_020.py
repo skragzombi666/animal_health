@@ -1,19 +1,25 @@
 from __future__ import annotations
 
+import importlib.util
 import io
 import json
 import zipfile
 from pathlib import Path
 
-from custom_components.animal_health.swissmedic_catalog import (
-    SWISSMEDIC_DATASET_ID,
-    SWISSMEDIC_OGD_URL,
-    parse_swissmedic_ogd_zip,
-)
-
 ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "custom_components" / "animal_health"
 FRONTEND = INTEGRATION / "frontend"
+
+_SPEC = importlib.util.spec_from_file_location(
+    "animal_health_swissmedic_catalog_test",
+    INTEGRATION / "swissmedic_catalog.py",
+)
+assert _SPEC is not None and _SPEC.loader is not None
+_CATALOG = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(_CATALOG)
+SWISSMEDIC_DATASET_ID = _CATALOG.SWISSMEDIC_DATASET_ID
+SWISSMEDIC_OGD_URL = _CATALOG.SWISSMEDIC_OGD_URL
+parse_swissmedic_ogd_zip = _CATALOG.parse_swissmedic_ogd_zip
 
 
 def _xml(rows: list[dict[str, str]]) -> bytes:
@@ -171,7 +177,7 @@ def test_020_swissmedic_catalog_replaces_curated_selector_source() -> None:
     assert "this.v0913.catalog_products=official" in frontend
     assert '`${D}/v0920/state`' in frontend
     assert "catalogSourceCard020" in frontend
-    assert "ZL172" not in frontend  # source metadata comes from backend state, not duplicated UI constants
+    assert "ZL172" not in frontend
 
 
 def test_020_treatment_timeline_is_collapsed_with_indented_children() -> None:
@@ -180,7 +186,6 @@ def test_020_treatment_timeline_is_collapsed_with_indented_children() -> None:
     assert "treatmentChildren020" in frontend
     assert "toggle-treatment-020" in frontend
     assert "expandedTreatments020" in frontend
-    assert "treatmentChildren020" in frontend
     assert "margin:2px 0 6px 26px" in frontend
     assert "border-left:2px solid var(--divider-color)" in frontend
     assert 'if(this.treatmentSummaryForChild020(event,list))return""' in frontend
