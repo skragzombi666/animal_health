@@ -32,6 +32,7 @@ def _initialize_sync(database_path: Path) -> None:
                             'weight',
                             'medication',
                             'vaccination',
+                            'treatment',
                             'health_check',
                             'care',
                             'veterinary_visit'
