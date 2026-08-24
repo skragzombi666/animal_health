@@ -17,6 +17,8 @@ from .runtime import AnimalHealthRuntimeData
 _STATE_COMMAND = f"{DOMAIN}/v0917/state"
 _SAVE_GROUP_ORDER_COMMAND = f"{DOMAIN}/v0917/group_order/save"
 _SAVE_ANIMAL_ORDER_COMMAND = f"{DOMAIN}/v0917/animal_order/save"
+_SAVE_PRODUCT_CATEGORY_COMMAND = f"{DOMAIN}/v0917/product/category"
+PRODUCT_CATEGORIES = ("medication", "supplement", "care", "other")
 
 
 def _runtime_data(hass: HomeAssistant) -> AnimalHealthRuntimeData:
@@ -61,6 +63,14 @@ def _initialise_sync(path: Path) -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_v0917_animal_order_group_position
                 ON v0917_animal_order(group_id, position, animal_id);
+
+            CREATE TABLE IF NOT EXISTS v0917_product_categories (
+                medication_id INTEGER PRIMARY KEY
+                    REFERENCES v0817_medications(id) ON DELETE CASCADE,
+                category TEXT NOT NULL DEFAULT 'medication'
+                    CHECK(category IN ('medication','supplement','care','other')),
+                updated_at TEXT NOT NULL
+            );
             """
         )
 
@@ -99,6 +109,13 @@ def _ordered_animal_ids(connection: sqlite3.Connection, group_id: str) -> list[s
     return [str(row["id"]) for row in rows]
 
 
+def _product_categories(connection: sqlite3.Connection) -> dict[str, str]:
+    rows = connection.execute(
+        "SELECT medication_id,category FROM v0917_product_categories"
+    ).fetchall()
+    return {str(row["medication_id"]): str(row["category"]) for row in rows}
+
+
 def _state_sync(path: Path) -> dict[str, Any]:
     with _connect(path) as connection:
         groups = _ordered_group_ids(connection)
@@ -106,7 +123,12 @@ def _state_sync(path: Path) -> dict[str, Any]:
             group_id: _ordered_animal_ids(connection, group_id)
             for group_id in groups
         }
-    return {"group_order": groups, "animal_order": animals}
+        categories = _product_categories(connection)
+    return {
+        "group_order": groups,
+        "animal_order": animals,
+        "product_categories": categories,
+    }
 
 
 def _unique_ids(values: Any) -> list[str]:
@@ -179,6 +201,31 @@ def _save_animal_order_sync(
     return order
 
 
+def _save_product_category_sync(
+    path: Path,
+    medication_id: int,
+    category: str,
+) -> dict[str, Any]:
+    now = datetime.now(UTC).replace(microsecond=0).isoformat()
+    with _connect(path) as connection:
+        row = connection.execute(
+            "SELECT id,name FROM v0817_medications WHERE id=?", (medication_id,)
+        ).fetchone()
+        if row is None:
+            raise KeyError(medication_id)
+        connection.execute(
+            """
+            INSERT INTO v0917_product_categories(medication_id,category,updated_at)
+            VALUES(?,?,?)
+            ON CONFLICT(medication_id) DO UPDATE SET
+                category=excluded.category,
+                updated_at=excluded.updated_at
+            """,
+            (medication_id, category, now),
+        )
+    return {"medication_id": medication_id, "category": category, "name": str(row["name"])}
+
+
 async def async_initialize_v0917_features(hass: HomeAssistant) -> None:
     await hass.async_add_executor_job(_initialise_sync, _database_path(hass))
 
@@ -246,6 +293,32 @@ def async_setup_v0917_features(hass: HomeAssistant) -> None:
             return
         connection.send_result(msg["id"], {"animal_order": result})
 
+    @websocket_api.websocket_command(
+        {
+            vol.Required("type"): _SAVE_PRODUCT_CATEGORY_COMMAND,
+            vol.Required("medication_id"): vol.Coerce(int),
+            vol.Required("category"): vol.In(PRODUCT_CATEGORIES),
+        }
+    )
+    @websocket_api.async_response
+    async def websocket_product_category(
+        hass: HomeAssistant,
+        connection: websocket_api.ActiveConnection,
+        msg: dict[str, Any],
+    ) -> None:
+        try:
+            result = await hass.async_add_executor_job(
+                _save_product_category_sync,
+                _database_path(hass),
+                int(msg["medication_id"]),
+                str(msg["category"]),
+            )
+        except Exception as err:  # noqa: BLE001
+            connection.send_error(msg["id"], "v0917_product_category_failed", str(err))
+            return
+        connection.send_result(msg["id"], result)
+
     websocket_api.async_register_command(hass, websocket_state)
     websocket_api.async_register_command(hass, websocket_group_order)
     websocket_api.async_register_command(hass, websocket_animal_order)
+    websocket_api.async_register_command(hass, websocket_product_category)
