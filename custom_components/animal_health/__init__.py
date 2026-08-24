@@ -63,6 +63,7 @@ from .v0915_features import async_initialize_v0915_features, async_setup_v0915_f
 from .v0916_migration import async_migrate_v0916_task_kinds
 from .v0917_features import async_initialize_v0917_features, async_setup_v0917_features
 from .v0917_patches import apply_v0917_patches
+from .v0918_features import async_initialize_v0918_features, async_setup_v0918_features
 
 PLATFORMS = [Platform.SENSOR, Platform.SELECT, Platform.BUTTON, Platform.SWITCH]
 
@@ -103,6 +104,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_v0913_features(hass)
     async_setup_v0915_features(hass)
     async_setup_v0917_features(hass)
+    async_setup_v0918_features(hass)
     async_setup_v082_features(hass)
     async_setup_v083_features(hass)
     async_setup_v084_features(hass)
@@ -147,6 +149,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
     await async_initialize_v0913_features(hass)
     await async_initialize_v0915_features(hass)
     await async_initialize_v0917_features(hass)
+    await async_initialize_v0918_features(hass)
     await async_load_confirmation_policy_settings(hass)
 
     coordinator = AnimalHealthCoordinator(hass, database)
