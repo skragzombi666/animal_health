@@ -60,6 +60,7 @@ from .v0912_task_links import async_setup_v0912_task_links
 from .v0913_features import async_initialize_v0913_features, async_setup_v0913_features
 from .v0913_patches import apply_v0913_patches
 from .v0915_features import async_initialize_v0915_features, async_setup_v0915_features
+from .v0916_migration import async_migrate_v0916_task_kinds
 
 PLATFORMS = [
     Platform.SENSOR,
@@ -126,6 +127,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
     database = AnimalHealthDatabase(hass, database_path)
     await database.initialize()
     await async_initialize_confirmation_policy(hass)
+    await async_migrate_v0916_task_kinds(hass)
     await async_initialize_task_record_schema(hass)
     await async_initialize_v0815_features(hass)
 
