@@ -90,7 +90,13 @@ def apply_v0917_patches() -> None:
             return result
         return base_validate_component(item)
 
-    treatment_features.COMPONENT_TYPES = ("product", "feed", "action")
+    treatment_features.COMPONENT_TYPES = (
+        "medication",
+        "supplement",
+        "product",
+        "feed",
+        "action",
+    )
     treatment_features._validate_component = _validate_component
 
     def _execute_treatment_sync(
