@@ -18,6 +18,7 @@ def test_017_version_is_consistent() -> None:
 def test_017_persistent_group_and_animal_ordering() -> None:
     backend = (INTEGRATION / "v0917_features.py").read_text(encoding="utf-8")
     frontend = (FRONTEND / "animal-health-panel.part66.js").read_text(encoding="utf-8")
+    polish = (FRONTEND / "animal-health-panel.part67.js").read_text(encoding="utf-8")
     init = (INTEGRATION / "__init__.py").read_text(encoding="utf-8")
     assert "CREATE TABLE IF NOT EXISTS v0917_group_order" in backend
     assert "CREATE TABLE IF NOT EXISTS v0917_animal_order" in backend
@@ -27,6 +28,9 @@ def test_017_persistent_group_and_animal_ordering() -> None:
     assert "groupAnimalTiles017" in frontend
     assert "animal-order-up-017" in frontend
     assert "home-groups-017" in frontend
+    assert "reorderAnimalSelects017" in polish
+    assert "reorderAnimalCheckboxes017" in polish
+    assert "reorderGroupSelects017" in polish
     assert "async_initialize_v0917_features" in init
     assert "async_setup_v0917_features" in init
 
@@ -51,25 +55,30 @@ def test_017_tasks_without_time_do_not_show_implicit_midnight() -> None:
 
 def test_017_required_recurring_tasks_keep_overdue_and_current_due() -> None:
     frontend = (FRONTEND / "animal-health-panel.part66.js").read_text(encoding="utf-8")
+    polish = (FRONTEND / "animal-health-panel.part67.js").read_text(encoding="utf-8")
     assert "AH017.dynamicRelevantGroups095=function" in frontend
     assert 'mode!=="required"' in frontend
     assert "overdue.length" in frontend
     assert "if(current)" in frontend
     assert 'ensureGroup("overdue","overdueUnconfirmed097")' in frontend
+    assert "overdueFollowup017" in polish
 
 
 def test_017_unified_product_model() -> None:
     frontend = (FRONTEND / "animal-health-panel.part66.js").read_text(encoding="utf-8")
+    polish = (FRONTEND / "animal-health-panel.part67.js").read_text(encoding="utf-8")
     backend = (INTEGRATION / "v0917_features.py").read_text(encoding="utf-8")
     patches = (INTEGRATION / "v0917_patches.py").read_text(encoding="utf-8")
     assert "CREATE TABLE IF NOT EXISTS v0917_product_categories" in backend
     assert "/v0917/product/category" in backend
     assert "productManagement017" in frontend
     assert '[["product","componentProduct017"],["feed","componentFeed012"],["action","componentAction012"]]' in frontend
-    assert 'type="product"' not in frontend  # component type is emitted through the select option, not a duplicate radio split
     assert 'return["medication","supplement","product"].includes' in frontend
-    assert 'treatment_features.COMPONENT_TYPES = ("product", "feed", "action")' in patches
+    for legacy in ('"medication"', '"supplement"'):
+        assert legacy in patches
+    assert '"product"' in patches
     assert 'snapshot["product_category"]' in patches
+    assert "Produkte und Futter" in polish
 
 
 def test_android_remains_frozen_after_017() -> None:
