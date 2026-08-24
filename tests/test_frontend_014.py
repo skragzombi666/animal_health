@@ -13,7 +13,7 @@ def test_014_version_and_settings_alignment() -> None:
     part01 = (FRONTEND / "animal-health-panel.part01.js").read_text(encoding="utf-8")
     part62 = (FRONTEND / "animal-health-panel.part62.js").read_text(encoding="utf-8")
 
-    assert manifest["version"] in {"0.9.14", "0.9.15", "0.9.16"}
+    assert manifest["version"] in {"0.9.14", "0.9.15", "0.9.16", "0.9.17"}
     assert f'const V="{manifest["version"]}",D="animal_health"' in part01
     assert "header nav{flex:1 1 auto!important" in part62
     assert "justify-content:flex-end!important" in part62
