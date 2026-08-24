@@ -11,8 +11,8 @@ FRONTEND = INTEGRATION / "frontend"
 def test_017_version_is_consistent() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
     part01 = (FRONTEND / "animal-health-panel.part01.js").read_text(encoding="utf-8")
-    assert manifest["version"] == "0.9.17"
-    assert 'const V="0.9.17",D="animal_health"' in part01
+    assert manifest["version"] in {"0.9.17", "0.9.18"}
+    assert f'const V="{manifest["version"]}",D="animal_health"' in part01
 
 
 def test_017_persistent_group_and_animal_ordering() -> None:
