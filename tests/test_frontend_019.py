@@ -22,7 +22,9 @@ def test_019_compact_quick_capture_is_icon_only() -> None:
     assert 'title="${esc(this.t(label))}"' in frontend
     compact = frontend.split('const content=compact?', 1)[1].split(':`<div class="quickCaptureGrid', 1)[0]
     assert "quickCaptureLabel019" not in compact
-    assert "capturePlus019" in compact
+    assert "captureIcon019(icon)" in compact
+    assert "capturePlus019" in frontend
+    assert '<ha-icon icon="mdi:plus"></ha-icon>' in frontend
     assert "repeat(6,minmax(0,1fr))" in frontend
 
 
