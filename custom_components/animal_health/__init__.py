@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.event import async_track_time_interval
 
 from .ai_assist import async_setup_ai_assist
 from .confirmation_api import async_setup_confirmation_policy
@@ -169,6 +171,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
         database=database,
         coordinator=coordinator,
         feature_store=feature_store,
+    )
+
+    async def _refresh_official_catalog(_now) -> None:
+        await async_refresh_v0920_catalog(hass)
+
+    entry.async_on_unload(
+        async_track_time_interval(hass, _refresh_official_catalog, timedelta(hours=24))
     )
     await async_setup_series_alerts(hass, entry)
     await async_setup_status_change_alerts(hass, entry)
