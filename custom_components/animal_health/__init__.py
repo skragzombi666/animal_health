@@ -61,13 +61,10 @@ from .v0913_features import async_initialize_v0913_features, async_setup_v0913_f
 from .v0913_patches import apply_v0913_patches
 from .v0915_features import async_initialize_v0915_features, async_setup_v0915_features
 from .v0916_migration import async_migrate_v0916_task_kinds
+from .v0917_features import async_initialize_v0917_features, async_setup_v0917_features
+from .v0917_patches import apply_v0917_patches
 
-PLATFORMS = [
-    Platform.SENSOR,
-    Platform.SELECT,
-    Platform.BUTTON,
-    Platform.SWITCH,
-]
+PLATFORMS = [Platform.SENSOR, Platform.SELECT, Platform.BUTTON, Platform.SWITCH]
 
 type AnimalHealthConfigEntry = ConfigEntry[AnimalHealthRuntimeData]
 
@@ -88,6 +85,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     apply_v0912_patches()
     apply_v0911_patches()
     apply_v0913_patches()
+    apply_v0917_patches()
     async_setup_task_service_descriptions(hass)
     async_setup_confirmation_policy(hass)
     async_setup_dashboard_api(hass)
@@ -104,6 +102,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_v0912_task_links(hass)
     async_setup_v0913_features(hass)
     async_setup_v0915_features(hass)
+    async_setup_v0917_features(hass)
     async_setup_v082_features(hass)
     async_setup_v083_features(hass)
     async_setup_v084_features(hass)
@@ -123,6 +122,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
     apply_download_stabilization()
     apply_v0912_patches()
     apply_v0913_patches()
+    apply_v0917_patches()
     database_path = Path(hass.config.path(DATABASE_NAME))
     database = AnimalHealthDatabase(hass, database_path)
     await database.initialize()
@@ -146,11 +146,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
     await async_initialize_v0912_features(hass)
     await async_initialize_v0913_features(hass)
     await async_initialize_v0915_features(hass)
+    await async_initialize_v0917_features(hass)
     await async_load_confirmation_policy_settings(hass)
 
     coordinator = AnimalHealthCoordinator(hass, database)
     await coordinator.async_config_entry_first_refresh()
-
     entry.runtime_data = AnimalHealthRuntimeData(
         database=database,
         coordinator=coordinator,

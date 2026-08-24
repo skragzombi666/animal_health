@@ -12,8 +12,8 @@ def test_016_version_is_consistent() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
     part01 = (FRONTEND / "animal-health-panel.part01.js").read_text(encoding="utf-8")
 
-    assert manifest["version"] == "0.9.16"
-    assert 'const V="0.9.16",D="animal_health"' in part01
+    assert manifest["version"] in {"0.9.16", "0.9.17"}
+    assert f'const V="{manifest["version"]}",D="animal_health"' in part01
 
 
 def test_016_treatment_task_kind_is_migrated_before_schema_init() -> None:
