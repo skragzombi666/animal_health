@@ -11,7 +11,7 @@ FRONTEND = INTEGRATION / "frontend"
 def test_019_version_is_consistent() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
     part01 = (FRONTEND / "animal-health-panel.part01.js").read_text(encoding="utf-8")
-    assert manifest["version"] in {"0.9.19", "0.9.20", "0.9.21"}
+    assert manifest["version"] in {"0.9.19", "0.9.20", "0.9.21", "0.9.22"}
     assert f'const V="{manifest["version"]}",D="animal_health"' in part01
 
 
@@ -23,8 +23,6 @@ def test_019_compact_quick_capture_is_icon_only() -> None:
     compact = frontend.split('const content=compact?', 1)[1].split(':`<div class="quickCaptureGrid', 1)[0]
     assert "quickCaptureLabel019" not in compact
     assert "captureIcon019(icon)" in compact
-    assert "capturePlus019" in frontend
-    assert '<ha-icon icon="mdi:plus"></ha-icon>' in frontend
     assert "repeat(6,minmax(0,1fr))" in frontend
 
 
@@ -46,7 +44,7 @@ def test_019_animal_detail_capture_stays_icon_only() -> None:
     assert ".animalCaptureIcons090A7 .captureLabel016" in frontend
 
 
-def test_019_shared_add_badge_has_no_embedded_plus_icons() -> None:
+def test_019_quick_capture_uses_only_plain_core_icons() -> None:
     frontend = (FRONTEND / "animal-health-panel.part70.js").read_text(encoding="utf-8")
     for icon in (
         '"mdi:scale"',
@@ -57,10 +55,10 @@ def test_019_shared_add_badge_has_no_embedded_plus_icons() -> None:
         '"mdi:creation-outline"',
     ):
         assert icon in frontend
-    assert '<ha-icon icon="mdi:plus"></ha-icon>' in frontend
-    assert "mdi:note-plus-outline" not in frontend
-    assert "mdi:clipboard-plus-outline" not in frontend
-    assert "mdi:alert-plus" not in frontend
+    assert 'captureIcon019=function(icon){return`<span class="captureIcon019"><ha-icon icon="${icon}"></ha-icon></span>`}' in frontend
+    assert ".capturePlus019,.capturePlus016{display:none!important}" in frontend
+    assert '<ha-icon icon="mdi:plus"></ha-icon>' not in frontend
+    assert '["record-weight","mdi:scale","recordWeight",false]' in frontend
 
 
 def test_android_remains_frozen_after_019() -> None:
