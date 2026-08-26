@@ -11,8 +11,8 @@ FRONTEND = INTEGRATION / "frontend"
 def test_022_version_is_consistent() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
     part01 = (FRONTEND / "animal-health-panel.part01.js").read_text(encoding="utf-8")
-    assert manifest["version"] == "0.9.22"
-    assert 'const V="0.9.22",D="animal_health"' in part01
+    assert manifest["version"] in {"0.9.22", "0.9.23"}
+    assert f'const V="{manifest["version"]}",D="animal_health"' in part01
 
 
 def test_022_quick_capture_has_no_plus_badges_and_no_primary_weight_tile() -> None:
