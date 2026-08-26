@@ -5,7 +5,7 @@ Object.assign(T,{
 const AH019=AnimalHealthPanel.prototype;
 const AH019Base={render:AH019.render};
 AH019.captureActions019=function(){return[
- ["record-weight","mdi:scale","recordWeight",true],
+ ["record-weight","mdi:scale","recordWeight",false],
  ["record-symptom","mdi:alert-circle-outline","recordSymptom",false],
  ["record-product","mdi:pill","recordProduct",false],
  ["record-event","mdi:file-document-outline","recordGeneral",false],
@@ -21,7 +21,7 @@ AH019.quickCaptureCard091=function(){
 AH019.decorateQuickCapture016=function(){
  for(const button of this.shadowRoot.querySelectorAll(".animalCaptureIcons090A7 [data-action]")){
   const definition=this.captureDefinitions016?.[button.dataset.action];if(!definition)continue;
-  button.classList.remove("captureTile016");button.classList.add("animalCaptureButton019");
+  button.classList.remove("captureTile016","primary");button.classList.add("animalCaptureButton019");
   button.innerHTML=this.captureIcon019(definition.icon);
  }
 };
