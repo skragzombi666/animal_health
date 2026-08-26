@@ -62,6 +62,17 @@ def test_023_symptoms_are_persistent_episodes_with_assessments() -> None:
     assert "async_setup_v0923_features" in init
 
 
+def test_023_active_symptoms_are_carried_forward_without_daily_database_rows() -> None:
+    frontend = (FRONTEND / "animal-health-panel.part76.js").read_text(encoding="utf-8")
+    backend = (INTEGRATION / "v0923_features.py").read_text(encoding="utf-8")
+    assert "activeEpisodesForTimeline023" in frontend
+    assert "episodeCarryEvent023" in frontend
+    assert "episode_carry_forward:true" in frontend
+    assert "timelineEntry023(this.episodeCarryEvent023" in frontend
+    assert "alreadyShown" in frontend
+    assert "episode_carry_forward" not in backend
+
+
 def test_023_symptom_prefix_is_removed() -> None:
     frontend = (FRONTEND / "animal-health-panel.part75.js").read_text(encoding="utf-8")
     assert "legacySymptomCompact023" in frontend
