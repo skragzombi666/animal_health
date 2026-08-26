@@ -3,6 +3,7 @@ const AH022Base={
  eventDetail:AH022.eventDetail,
  treatmentBundle021:AH022.treatmentBundle021,
  medicationBatchBundle021:AH022.medicationBatchBundle021,
+ handleClick:AH022.handleClick,
  render:AH022.render
 };
 AH022.rewriteAction022=function(html,action,icon,label){
@@ -22,7 +23,9 @@ AH022.responsiveEventActions022=function(html){
 AH022.eventDetail=function(id){return this.responsiveEventActions022(AH022Base.eventDetail.call(this,id))};
 AH022.treatmentBundle021=function(event){return this.responsiveEventActions022(AH022Base.treatmentBundle021.call(this,event))};
 AH022.medicationBatchBundle021=function(event){return this.responsiveEventActions022(AH022Base.medicationBatchBundle021.call(this,event))};
+AH022.handleClick=async function(event){const button=event.composedPath().find(node=>node?.dataset?.action),action=button?.dataset?.action;if(["med-copy-0817","treatment-copy-021","batch-copy-021"].includes(action))return;return AH022Base.handleClick.call(this,event)};
 AH022.render=function(){AH022Base.render.call(this);this.shadowRoot.innerHTML+=`<style>
 .eventActions0817 button,.eventActions021 button,.bundleActions021 button{display:inline-flex;align-items:center;justify-content:center;gap:6px}.eventActions0817 button ha-icon,.eventActions021 button ha-icon,.bundleActions021 button ha-icon{flex:0 0 auto}.actionLabel022{display:inline}.eventActions0817,.eventActions021,.bundleActions021{gap:6px}
+:host([narrow]) .eventActions0817,:host([narrow]) .eventActions021,:host([narrow]) .bundleActions021{justify-content:flex-end!important;align-items:center!important;flex-wrap:wrap!important}:host([narrow]) .eventActions0817 button,:host([narrow]) .eventActions021 button,:host([narrow]) .bundleActions021 button{width:42px!important;height:42px!important;min-width:42px!important;max-width:42px!important;min-height:42px!important;padding:0!important;display:grid!important;place-items:center!important;flex:0 0 42px!important}:host([narrow]) .eventActions0817 button ha-icon,:host([narrow]) .eventActions021 button ha-icon,:host([narrow]) .bundleActions021 button ha-icon{width:22px!important;height:22px!important;margin:0!important}:host([narrow]) .actionLabel022{display:none!important}
 @media(max-width:700px){.eventActions0817,.eventActions021,.bundleActions021{justify-content:flex-end!important;align-items:center!important;flex-wrap:wrap!important}.eventActions0817 button,.eventActions021 button,.bundleActions021 button{width:42px!important;height:42px!important;min-width:42px!important;max-width:42px!important;min-height:42px!important;padding:0!important;display:grid!important;place-items:center!important;flex:0 0 42px!important}.eventActions0817 button ha-icon,.eventActions021 button ha-icon,.bundleActions021 button ha-icon{width:22px!important;height:22px!important;margin:0!important}.actionLabel022{display:none!important}}
 </style>`};
