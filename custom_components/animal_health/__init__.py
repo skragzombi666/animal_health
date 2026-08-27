@@ -74,13 +74,15 @@ from .v0920_features import (
 from .v0920_patches import apply_v0920_patches
 from .v0923_features import async_initialize_v0923_features, async_setup_v0923_features
 from .v0923_patches import apply_v0923_patches
+from .v0924_features import async_initialize_v0924_features, async_setup_v0924_features
+from .v0924_patches import apply_v0924_patches
 
 PLATFORMS = [Platform.SENSOR, Platform.SELECT, Platform.BUTTON, Platform.SWITCH]
 
 type AnimalHealthConfigEntry = ConfigEntry[AnimalHealthRuntimeData]
 
 
-async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
+def _apply_all_patches() -> None:
     apply_v082_patches()
     apply_v0815_patches()
     apply_v0816_patches()
@@ -88,17 +90,22 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     apply_confirmation_policy_patches()
     apply_task_stabilization()
     apply_download_stabilization()
-    async_setup_services(hass)
-    async_setup_task_services(hass)
-    async_setup_task_record_creation(hass)
-    async_setup_task_record_services(hass)
-    async_setup_v080_task_policy(hass)
     apply_v0912_patches()
     apply_v0911_patches()
     apply_v0913_patches()
     apply_v0917_patches()
     apply_v0920_patches()
     apply_v0923_patches()
+    apply_v0924_patches()
+
+
+async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
+    _apply_all_patches()
+    async_setup_services(hass)
+    async_setup_task_services(hass)
+    async_setup_task_record_creation(hass)
+    async_setup_task_record_services(hass)
+    async_setup_v080_task_policy(hass)
     async_setup_task_service_descriptions(hass)
     async_setup_confirmation_policy(hass)
     async_setup_dashboard_api(hass)
@@ -119,6 +126,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_v0918_features(hass)
     async_setup_v0920_features(hass)
     async_setup_v0923_features(hass)
+    async_setup_v0924_features(hass)
     async_setup_v082_features(hass)
     async_setup_v083_features(hass)
     async_setup_v084_features(hass)
@@ -129,18 +137,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry) -> bool:
-    apply_v082_patches()
-    apply_v0815_patches()
-    apply_v0816_patches()
-    apply_v0817_patches()
-    apply_confirmation_policy_patches()
-    apply_task_stabilization()
-    apply_download_stabilization()
-    apply_v0912_patches()
-    apply_v0913_patches()
-    apply_v0917_patches()
-    apply_v0920_patches()
-    apply_v0923_patches()
+    _apply_all_patches()
     database_path = Path(hass.config.path(DATABASE_NAME))
     database = AnimalHealthDatabase(hass, database_path)
     await database.initialize()
@@ -168,6 +165,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
     await async_initialize_v0918_features(hass)
     await async_initialize_v0920_features(hass)
     await async_initialize_v0923_features(hass)
+    await async_initialize_v0924_features(hass)
     await async_refresh_v0920_catalog(hass)
     await async_load_confirmation_policy_settings(hass)
 
