@@ -99,24 +99,35 @@ def _assign_task_treatment_group(path, event: dict[str, Any], component_events: 
         connection.close()
 
 
-def _move_medication_correction_attachments(database, items: list[dict[str, Any]], results: list[dict[str, Any]]) -> None:
+def _preserve_medication_correction_context(database, items: list[dict[str, Any]], results: list[dict[str, Any]]) -> None:
     if not results:
         return
-    pairs: list[tuple[str, str]] = []
+    pairs: list[tuple[str, str, dict[str, Any]]] = []
     for raw, result in zip(items, results, strict=False):
         old_id = str(raw.get("correction_event_id") or "").strip()
         new_id = str(result.get("id") or "").strip()
         if old_id and new_id:
-            pairs.append((old_id, new_id))
+            pairs.append((old_id, new_id, result))
     if not pairs:
         return
     with database._connect() as connection:  # noqa: SLF001
-        if not v0924_features._table_exists(connection, "attachments"):
-            return
-        connection.executemany(
-            "UPDATE attachments SET event_id=? WHERE event_id=?",
-            [(new_id, old_id) for old_id, new_id in pairs],
-        )
+        attachments = v0924_features._table_exists(connection, "attachments")
+        for old_id, new_id, result in pairs:
+            old = connection.execute("SELECT data_json FROM events WHERE id=?", (old_id,)).fetchone()
+            new = connection.execute("SELECT data_json FROM events WHERE id=?", (new_id,)).fetchone()
+            if old is not None and new is not None:
+                old_data = _json_dict(old["data_json"])
+                new_data = _json_dict(new["data_json"])
+                for key, value in old_data.items():
+                    if key.startswith("treatment_") or key in {"component_type", "source"}:
+                        new_data[key] = value
+                connection.execute(
+                    "UPDATE events SET data_json=? WHERE id=?",
+                    (json.dumps(new_data, ensure_ascii=False, sort_keys=True), new_id),
+                )
+                result.setdefault("data", {}).update(new_data)
+            if attachments:
+                connection.execute("UPDATE attachments SET event_id=? WHERE event_id=?", (new_id, old_id))
 
 
 def apply_v0924_patches() -> None:
@@ -172,7 +183,7 @@ def apply_v0924_patches() -> None:
 
     base_record_medications = v0923_features._record_medications_sync
 
-    def record_medications_with_attachment_corrections(
+    def record_medications_with_correction_context(
         database,
         animal_id: str,
         occurred_at,
@@ -180,10 +191,10 @@ def apply_v0924_patches() -> None:
         items: list[dict[str, Any]],
     ):
         results = base_record_medications(database, animal_id, occurred_at, common_notes, items)
-        _move_medication_correction_attachments(database, items, results)
+        _preserve_medication_correction_context(database, items, results)
         return results
 
-    v0923_features._record_medications_sync = record_medications_with_attachment_corrections
+    v0923_features._record_medications_sync = record_medications_with_correction_context
 
     base_task_execute = TaskRecordStore.execute
 
