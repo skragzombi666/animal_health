@@ -6,6 +6,7 @@ from typing import Any
 
 from . import v0912_features as treatment_features
 from . import v0920_features
+from . import v0923_features
 from . import v0924_features
 from .database import AnimalHealthDatabase
 from .task_records import TaskRecordStore
@@ -98,6 +99,26 @@ def _assign_task_treatment_group(path, event: dict[str, Any], component_events: 
         connection.close()
 
 
+def _move_medication_correction_attachments(database, items: list[dict[str, Any]], results: list[dict[str, Any]]) -> None:
+    if not results:
+        return
+    pairs: list[tuple[str, str]] = []
+    for raw, result in zip(items, results, strict=False):
+        old_id = str(raw.get("correction_event_id") or "").strip()
+        new_id = str(result.get("id") or "").strip()
+        if old_id and new_id:
+            pairs.append((old_id, new_id))
+    if not pairs:
+        return
+    with database._connect() as connection:  # noqa: SLF001
+        if not v0924_features._table_exists(connection, "attachments"):
+            return
+        connection.executemany(
+            "UPDATE attachments SET event_id=? WHERE event_id=?",
+            [(new_id, old_id) for old_id, new_id in pairs],
+        )
+
+
 def apply_v0924_patches() -> None:
     global _PATCHED
     if _PATCHED:
@@ -149,6 +170,21 @@ def apply_v0924_patches() -> None:
 
     AnimalHealthDatabase._create_event_in_connection = create_event_with_v0924_product_snapshot  # type: ignore[method-assign]
 
+    base_record_medications = v0923_features._record_medications_sync
+
+    def record_medications_with_attachment_corrections(
+        database,
+        animal_id: str,
+        occurred_at,
+        common_notes: str | None,
+        items: list[dict[str, Any]],
+    ):
+        results = base_record_medications(database, animal_id, occurred_at, common_notes, items)
+        _move_medication_correction_attachments(database, items, results)
+        return results
+
+    v0923_features._record_medications_sync = record_medications_with_attachment_corrections
+
     base_task_execute = TaskRecordStore.execute
 
     async def task_execute_with_treatment_identity(self: TaskRecordStore, *args: Any, **kwargs: Any):
@@ -157,7 +193,10 @@ def apply_v0924_patches() -> None:
         if not isinstance(event, dict) or str(event.get("event_type") or "") != "treatment":
             return result
         data = event.get("data") if isinstance(event.get("data"), dict) else {}
-        plan_id = data.get("treatment_plan_id") or data.get("task_execution", {}).get("treatment_plan_id") if isinstance(data.get("task_execution"), dict) else data.get("treatment_plan_id")
+        plan_id = data.get("treatment_plan_id")
+        task_execution = data.get("task_execution")
+        if plan_id in (None, "") and isinstance(task_execution, dict):
+            plan_id = task_execution.get("treatment_plan_id")
         if plan_id in (None, ""):
             return result
         components = event.get("component_events") or []
@@ -172,6 +211,3 @@ def apply_v0924_patches() -> None:
         return result
 
     TaskRecordStore.execute = task_execute_with_treatment_identity
-
-    base_record_medications = v0924_features._runtime_data  # keep module strongly loaded for patch ordering
-    del base_record_medications
