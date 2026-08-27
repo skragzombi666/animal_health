@@ -74,6 +74,7 @@ from .v0920_features import (
 from .v0920_patches import apply_v0920_patches
 from .v0923_features import async_initialize_v0923_features, async_setup_v0923_features
 from .v0923_patches import apply_v0923_patches
+from .v0924_capture import async_setup_v0924_capture
 from .v0924_features import async_initialize_v0924_features, async_setup_v0924_features
 from .v0924_patches import apply_v0924_patches
 
@@ -127,6 +128,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_v0920_features(hass)
     async_setup_v0923_features(hass)
     async_setup_v0924_features(hass)
+    async_setup_v0924_capture(hass)
     async_setup_v082_features(hass)
     async_setup_v083_features(hass)
     async_setup_v084_features(hass)
