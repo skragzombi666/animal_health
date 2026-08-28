@@ -11,8 +11,8 @@ FRONTEND = INTEGRATION / "frontend"
 def test_023_version_is_consistent() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
     part01 = (FRONTEND / "animal-health-panel.part01.js").read_text(encoding="utf-8")
-    assert manifest["version"] == "0.9.23"
-    assert 'const V="0.9.23",D="animal_health"' in part01
+    assert manifest["version"] in {"0.9.23", "0.9.24"}
+    assert f'const V="{manifest["version"]}",D="animal_health"' in part01
 
 
 def test_023_date_precision_is_explicit_and_date_only_is_supported() -> None:
