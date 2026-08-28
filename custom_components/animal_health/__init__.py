@@ -77,6 +77,7 @@ from .v0923_patches import apply_v0923_patches
 from .v0924_capture import async_setup_v0924_capture
 from .v0924_features import async_initialize_v0924_features, async_setup_v0924_features
 from .v0924_patches import apply_v0924_patches
+from .v0924_polish import apply_v0924_polish, async_setup_v0924_polish
 
 PLATFORMS = [Platform.SENSOR, Platform.SELECT, Platform.BUTTON, Platform.SWITCH]
 
@@ -98,6 +99,7 @@ def _apply_all_patches() -> None:
     apply_v0920_patches()
     apply_v0923_patches()
     apply_v0924_patches()
+    apply_v0924_polish()
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
@@ -129,6 +131,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_v0923_features(hass)
     async_setup_v0924_features(hass)
     async_setup_v0924_capture(hass)
+    async_setup_v0924_polish(hass)
     async_setup_v082_features(hass)
     async_setup_v083_features(hass)
     async_setup_v084_features(hass)
