@@ -134,15 +134,17 @@ def _group_update_sync(
         if any(occurred_date < str(row["started_date"]) for row in ordered):
             raise ValueError("An episode update cannot be before its start date")
 
-        origin_batches = {
+        origin_batch_values = [
             str(
                 _json_object(row["start_data_json"]).get("symptom_capture_batch_id")
                 or ""
             ).strip()
             for row in ordered
-        }
-        origin_batches.discard("")
-        if len(ids) > 1 and len(origin_batches) != 1:
+        ]
+        if len(ids) > 1 and (
+            any(not batch for batch in origin_batch_values)
+            or len(set(origin_batch_values)) != 1
+        ):
             raise ValueError(
                 "Symptoms can only be updated together when they were captured together"
             )
