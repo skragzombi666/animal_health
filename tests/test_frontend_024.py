@@ -120,7 +120,7 @@ def test_024_swissmedic_uses_sequences_routes_overrides_and_metacam_fallback() -
     assert '"default_route": route_ids[0] if len(route_ids) == 1 else ""' in parser
     assert "ABLAUFDATUM is not used as an additional filter" in parser
     assert "v0924_catalog_overrides" in backend
-    assert '"56764"' in backend
+    assert "swissmedic.56764.fallback" in backend
     assert '"Metacam 15 mg/ml ad us. vet., Suspension für Pferde"' in backend
     assert "Deklarationen.XML" in polish
     assert "active_ingredient_details" in polish
