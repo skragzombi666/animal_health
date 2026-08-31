@@ -86,6 +86,7 @@ from .v0927_features import (
     async_initialize_v0927_features,
     async_setup_v0927_features,
 )
+from .v0927_migration import async_migrate_v0927_task_kinds
 
 PLATFORMS = [Platform.SENSOR, Platform.SELECT, Platform.BUTTON, Platform.SWITCH]
 
@@ -162,6 +163,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
     await database.initialize()
     await async_initialize_confirmation_policy(hass)
     await async_migrate_v0916_task_kinds(hass)
+    await async_migrate_v0927_task_kinds(hass)
     await async_initialize_task_record_schema(hass)
     await async_initialize_v0815_features(hass)
 
