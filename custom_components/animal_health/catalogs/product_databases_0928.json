@@ -1,0 +1,181 @@
+{
+  "schema_version": 1,
+  "databases": [
+    {
+      "id": "animal_health_supplements",
+      "products": [
+        {
+          "id": "ufa.gallo_fit",
+          "kind": "supplement",
+          "name": "UFA Gallo-Fit",
+          "manufacturer": "UFA AG",
+          "product_category": "Ergänzungsfuttermittel",
+          "product_form": "Mehl",
+          "target_species": [
+            "chicken"
+          ],
+          "purpose": "Unterstützung von Geflügel in Stresssituationen, beim Einstallen, bei Krankheiten und bei Parasitendruck.",
+          "active_components": [
+            {
+              "name": "Vitamine",
+              "category": "vitamin",
+              "function": "Unterstützung in Belastungssituationen"
+            },
+            {
+              "name": "Spurenelemente",
+              "category": "trace_element",
+              "function": "Unterstützung in Belastungssituationen"
+            },
+            {
+              "name": "Toxinbinder",
+              "category": "functional_component",
+              "function": "Bindung unerwünschter Stoffe im Futter"
+            },
+            {
+              "name": "Pigmente",
+              "category": "functional_component"
+            },
+            {
+              "name": "Leberschutz-Komponenten",
+              "category": "functional_component",
+              "function": "Unterstützung der Leber"
+            }
+          ],
+          "composition": "Die vollständige Herstellerdeklaration ist der aktuellen Produktkennzeichnung zu entnehmen.",
+          "analytical_components": [
+            {"name": "Rohasche", "value": 430, "unit": "g/kg", "basis": "product"},
+            {"name": "Rohprotein", "value": 95, "unit": "g/kg", "basis": "product"},
+            {"name": "Rohfett", "value": 60, "unit": "g/kg", "basis": "product"},
+            {"name": "Rohfaser", "value": 55, "unit": "g/kg", "basis": "product"},
+            {"name": "Lysin", "value": 4.5, "unit": "g/kg", "basis": "product"},
+            {"name": "Methionin", "value": 7, "unit": "g/kg", "basis": "product"},
+            {"name": "Kalzium", "value": 120, "unit": "g/kg", "basis": "product"},
+            {"name": "Phosphor", "value": 50, "unit": "g/kg", "basis": "product"},
+            {"name": "Natrium", "value": 1.5, "unit": "g/kg", "basis": "product"},
+            {"name": "Magnesium", "value": 1, "unit": "g/kg", "basis": "product"}
+          ],
+          "dosage_recommendation": "5 g pro Tier und Tag über das Futter.",
+          "default_amount": 5,
+          "default_unit": "g",
+          "dose_basis": "per_animal",
+          "frequency": "daily",
+          "application_method": "over_feed",
+          "source_name": "UFA AG – Produktinformation UFA Gallo-Fit",
+          "source_url": "https://www.ufa.ch/product/ufa-gallo-fit",
+          "source_as_of": "2026-08-31",
+          "classifications": ["supplement", "poultry"]
+        },
+        {
+          "id": "ufa.antifex",
+          "kind": "supplement",
+          "name": "UFA-Antifex",
+          "manufacturer": "UFA AG",
+          "product_category": "Ergänzungsfuttermittel / Bioregulator",
+          "product_form": "Pulver",
+          "target_species": [
+            "chicken",
+            "pig"
+          ],
+          "purpose": "Unterstützung und Regeneration der Darmflora, insbesondere bei Verdauungsstörungen und nach Fütterungsarzneimitteln.",
+          "active_components": [
+            {
+              "name": "Stabile natürliche Milchsäurebakterien",
+              "category": "probiotic",
+              "function": "Stabilisierung der Darmflora"
+            }
+          ],
+          "composition": "Die vollständige Herstellerdeklaration ist der aktuellen Produktkennzeichnung zu entnehmen.",
+          "dosage_recommendation": "Während mindestens 7 Tagen oder bis sich der Kot normalisiert hat. Masthühner 0,3 g, Legehennen 0,5 g pro Tier und Tag.",
+          "dose_variants": [
+            {"target": "broiler_chicken", "amount": 0.3, "unit": "g", "basis": "per_animal", "frequency": "daily"},
+            {"target": "laying_hen", "amount": 0.5, "unit": "g", "basis": "per_animal", "frequency": "daily"}
+          ],
+          "application_method": "feed_or_water",
+          "source_name": "UFA AG – Produktinformation UFA-Antifex",
+          "source_url": "https://www.ufa.ch/product/ufa-antifex",
+          "source_as_of": "2026-08-31",
+          "classifications": ["supplement", "probiotic"]
+        }
+      ]
+    },
+    {
+      "id": "animal_health_feed_chicken",
+      "products": [
+        {
+          "id": "ufa.505",
+          "kind": "feed",
+          "name": "UFA 505",
+          "manufacturer": "UFA AG",
+          "feed_type": "Ergänzungsfuttermittel zu Körnern für Legehennen",
+          "feed_form": "Expandat",
+          "target_species": [
+            "chicken"
+          ],
+          "purpose": "Ergänzt die Körnergabe mit Nährstoffen, Mineralien und Spurenelementen für Legehennen.",
+          "composition": "Die vollständige Zutatenliste ist der aktuellen Produktkennzeichnung zu entnehmen.",
+          "analytical_components": [
+            {"name": "Rohasche", "value": 180, "unit": "g/kg", "basis": "product"},
+            {"name": "Rohprotein", "value": 200, "unit": "g/kg", "basis": "product"},
+            {"name": "Rohfett", "value": 45, "unit": "g/kg", "basis": "product"},
+            {"name": "Rohfaser", "value": 40, "unit": "g/kg", "basis": "product"},
+            {"name": "UEG", "value": 10.7, "unit": "MJ/kg", "basis": "product"},
+            {"name": "Lysin", "value": 10.7, "unit": "g/kg", "basis": "product"},
+            {"name": "Methionin", "value": 6.2, "unit": "g/kg", "basis": "product"},
+            {"name": "Kalzium", "value": 54, "unit": "g/kg", "basis": "product"},
+            {"name": "Phosphor", "value": 5.3, "unit": "g/kg", "basis": "product"},
+            {"name": "Natrium", "value": 2.2, "unit": "g/kg", "basis": "product"}
+          ],
+          "feeding_recommendation": "Stets zur freien Verfügung anbieten. Richtmenge 70–90 g pro Tier und Tag, höchstens zwei Drittel der Tagesration; abends mit 30–40 g UFA 506 ergänzen.",
+          "recommended_amount_min": 70,
+          "recommended_amount_max": 90,
+          "recommended_amount_unit": "g",
+          "dose_basis": "per_animal",
+          "frequency": "daily",
+          "feeding_method": "free_access",
+          "related_products": ["UFA 506"],
+          "source_name": "UFA AG – Produktinformation UFA 505",
+          "source_url": "https://www.ufa.ch/product/ufa-505",
+          "source_as_of": "2026-08-31",
+          "classifications": ["feed", "laying_hen", "complementary_feed"]
+        },
+        {
+          "id": "ufa.506",
+          "kind": "feed",
+          "name": "UFA 506",
+          "manufacturer": "UFA AG",
+          "feed_type": "Körner-Plus, Ergänzungsfutter für Geflügel",
+          "feed_form": "Körner",
+          "target_species": [
+            "chicken"
+          ],
+          "purpose": "Körnergabe als Beschäftigung und energiereiche Ergänzung zu UFA 505 oder UFA 605.",
+          "composition": "Die vollständige Zutatenliste ist der aktuellen Produktkennzeichnung zu entnehmen.",
+          "analytical_components": [
+            {"name": "Rohasche", "value": 15, "unit": "g/kg", "basis": "product"},
+            {"name": "Rohprotein", "value": 95, "unit": "g/kg", "basis": "product"},
+            {"name": "Rohfett", "value": 35, "unit": "g/kg", "basis": "product"},
+            {"name": "Rohfaser", "value": 20, "unit": "g/kg", "basis": "product"},
+            {"name": "UEG", "value": 13.5, "unit": "MJ/kg", "basis": "product"},
+            {"name": "Lysin", "value": 2.6, "unit": "g/kg", "basis": "product"},
+            {"name": "Methionin", "value": 1.5, "unit": "g/kg", "basis": "product"},
+            {"name": "Kalzium", "value": 0.5, "unit": "g/kg", "basis": "product"},
+            {"name": "Phosphor", "value": 3.5, "unit": "g/kg", "basis": "product"},
+            {"name": "Natrium", "value": 0.5, "unit": "g/kg", "basis": "product"}
+          ],
+          "feeding_recommendation": "Legehennen am Abend 30–40 g pro Tier und Tag als Ergänzung zu 70–90 g Ergänzungsfutter für Legehennen anbieten.",
+          "recommended_amount_min": 30,
+          "recommended_amount_max": 40,
+          "recommended_amount_unit": "g",
+          "dose_basis": "per_animal",
+          "frequency": "daily",
+          "feeding_method": "direct_evening",
+          "related_products": ["UFA 505", "UFA 605"],
+          "source_name": "UFA AG – Produktinformation UFA 506",
+          "source_url": "https://www.ufa.ch/product/ufa-506",
+          "source_as_of": "2026-08-31",
+          "classifications": ["feed", "laying_hen", "grain_mix"]
+        }
+      ]
+    }
+  ]
+}
