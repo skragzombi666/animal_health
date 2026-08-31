@@ -11,7 +11,7 @@ FRONTEND = INTEGRATION / "frontend"
 def test_019_version_is_consistent() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
     part01 = (FRONTEND / "animal-health-panel.part01.js").read_text(encoding="utf-8")
-    assert manifest["version"] in {"0.9.19", "0.9.20", "0.9.21", "0.9.22", "0.9.23", "0.9.24", "0.9.25", "0.9.26"}
+    assert manifest["version"] in {"0.9.19", "0.9.20", "0.9.21", "0.9.22", "0.9.23", "0.9.24", "0.9.25", "0.9.26", "0.9.27"}
     assert f'const V="{manifest["version"]}",D="animal_health"' in part01
 
 
