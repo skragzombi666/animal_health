@@ -11,8 +11,8 @@ FRONTEND = INTEGRATION / "frontend"
 def test_027_version_is_consistent() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
     part01 = (FRONTEND / "animal-health-panel.part01.js").read_text(encoding="utf-8")
-    assert manifest["version"] == "0.9.27"
-    assert 'const V="0.9.27",D="animal_health"' in part01
+    assert tuple(map(int, manifest["version"].split("."))) >= (0, 9, 27)
+    assert f'const V="{manifest["version"]}",D="animal_health"' in part01
 
 
 def test_027_gabe_backend_and_product_databases() -> None:
