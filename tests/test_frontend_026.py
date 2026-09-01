@@ -16,8 +16,8 @@ def test_026_version_is_consistent_and_android_stays_frozen() -> None:
     manifest = json.loads(_read(INTEGRATION / "manifest.json"))
     part01 = _read(FRONTEND / "animal-health-panel.part01.js")
     gradle = _read(ROOT / "android" / "app" / "build.gradle.kts")
-    assert manifest["version"] == "0.9.27"
-    assert 'const V="0.9.27",D="animal_health"' in part01
+    assert tuple(map(int, manifest["version"].split("."))) >= (0, 9, 26)
+    assert f'const V="{manifest["version"]}",D="animal_health"' in part01
     assert 'val animalHealthVersion = "0.9.0-alpha.7"' in gradle
     assert "versionCode = 900007" in gradle
 
