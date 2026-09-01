@@ -202,7 +202,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
     await async_initialize_v0928_features(hass)
     await async_load_confirmation_policy_settings(hass)
 
-    coordinator = AnimalHealthCoordinator(hass, database_path)
+    coordinator = AnimalHealthCoordinator(hass, database)
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = AnimalHealthRuntimeData(
         database=database,
