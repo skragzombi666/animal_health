@@ -12,7 +12,7 @@ def test_016_version_is_consistent() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
     part01 = (FRONTEND / "animal-health-panel.part01.js").read_text(encoding="utf-8")
 
-    assert manifest["version"] in {"0.9.16", "0.9.17", "0.9.18", "0.9.19", "0.9.20", "0.9.21", "0.9.22", "0.9.23", "0.9.24", "0.9.25", "0.9.26", "0.9.27"}
+    assert tuple(map(int, manifest["version"].split("."))) >= (0, 9, 16)
     assert f'const V="{manifest["version"]}",D="animal_health"' in part01
 
 
@@ -31,7 +31,7 @@ def test_016_treatment_task_kind_is_migrated_before_schema_init() -> None:
     )
 
 
-def test_016_quick_capture_uses_one_shared_plus_badge() -> None:
+def test_016_quick_capture_icons_are_plain() -> None:
     part65 = (FRONTEND / "animal-health-panel.part65.js").read_text(encoding="utf-8")
 
     assert '"record-weight":{icon:"mdi:scale"' in part65
@@ -41,7 +41,7 @@ def test_016_quick_capture_uses_one_shared_plus_badge() -> None:
     assert '"create-task":{icon:"mdi:clipboard-outline"' in part65
     assert '"ai-assist":{icon:"mdi:creation-outline"' in part65
     assert '"attach-document":{icon:"mdi:paperclip"' in part65
-    assert '<span class="capturePlus016"><ha-icon icon="mdi:plus"></ha-icon></span>' in part65
+    assert '<span class="capturePlus016"><ha-icon icon="mdi:plus"></ha-icon></span>' not in part65
     assert ".quickCaptureCard091 [data-action]" in part65
     assert ".animalCaptureIcons090A7 [data-action]" in part65
     assert "mdi:note-plus-outline" not in part65
