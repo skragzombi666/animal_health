@@ -92,6 +92,7 @@ from .v0928_features import (
     async_initialize_v0928_features,
     async_setup_v0928_features,
 )
+from .v0929_features import apply_v0929_patches, async_setup_v0929_features
 
 PLATFORMS = [Platform.SENSOR, Platform.SELECT, Platform.BUTTON, Platform.SWITCH]
 
@@ -118,6 +119,7 @@ def _apply_all_patches() -> None:
     apply_v0925_patches()
     apply_v0927_patches()
     apply_v0928_patches()
+    apply_v0929_patches()
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
@@ -154,6 +156,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async_setup_v0926_features(hass)
     async_setup_v0927_features(hass)
     async_setup_v0928_features(hass)
+    async_setup_v0929_features(hass)
     async_setup_v082_features(hass)
     async_setup_v083_features(hass)
     async_setup_v084_features(hass)
@@ -199,7 +202,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AnimalHealthConfigEntry)
     await async_initialize_v0928_features(hass)
     await async_load_confirmation_policy_settings(hass)
 
-    coordinator = AnimalHealthCoordinator(hass, database)
+    coordinator = AnimalHealthCoordinator(hass, database_path)
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = AnimalHealthRuntimeData(
         database=database,
