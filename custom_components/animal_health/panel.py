@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 
 from aiohttp import web
@@ -45,7 +46,14 @@ def _integration_version() -> str:
 def _frontend_source() -> str:
     if not _FRONTEND_PARTS:
         raise RuntimeError("Animal Health frontend source parts are missing")
-    return "".join(path.read_text(encoding="utf-8") for path in _FRONTEND_PARTS)
+    source = "".join(path.read_text(encoding="utf-8") for path in _FRONTEND_PARTS)
+    version = _integration_version()
+    return re.sub(
+        r'const V="[^"]+",D="animal_health";',
+        f'const V="{version}",D="animal_health";',
+        source,
+        count=1,
+    )
 
 
 def _frontend_revision() -> str:
@@ -102,7 +110,7 @@ class AnimalHealthLegacyBrandView(HomeAssistantView):
     """Keep the previous SVG endpoint available for cached older frontends."""
 
     url = PANEL_LEGACY_BRAND_URL
-    name = "api:animal_health:brand_legacy"
+    name = f"api:{DOMAIN}:brand_legacy"
     requires_auth = False
 
     async def get(self, request: web.Request) -> web.Response:
