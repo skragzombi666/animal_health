@@ -6,6 +6,13 @@ ROOT = Path(__file__).resolve().parents[1]
 FEATURES = ROOT / "custom_components" / "animal_health" / "v0934_features.py"
 INIT = ROOT / "custom_components" / "animal_health" / "__init__.py"
 MANIFEST = ROOT / "custom_components" / "animal_health" / "manifest.json"
+FRONTEND_VERSION = (
+    ROOT
+    / "custom_components"
+    / "animal_health"
+    / "frontend"
+    / "animal-health-panel.part01.js"
+)
 ANDROID = ROOT / "android" / "app" / "build.gradle.kts"
 
 
@@ -45,9 +52,11 @@ def test_034_backend_patch_is_wired_after_earlier_versions() -> None:
     assert "await async_initialize_v0934_features(hass)" in source
 
 
-def test_034_versions_and_android_bundle_count_are_updated() -> None:
+def test_034_release_version_and_shared_bundle_count_are_updated() -> None:
     assert '"version": "0.9.34"' in MANIFEST.read_text(encoding="utf-8")
+    assert 'const V="0.9.34"' in FRONTEND_VERSION.read_text(encoding="utf-8")
     android = ANDROID.read_text(encoding="utf-8")
-    assert "versionCode = 8" in android
-    assert 'versionName = "0.9.34"' in android
+    assert 'val animalHealthVersion = "0.9.0-alpha.7"' in android
+    assert "versionCode = 900007" in android
     assert "ordered.size == 42" in android
+    assert "Expected 42 Animal Health frontend parts" in android
