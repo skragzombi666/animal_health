@@ -15,8 +15,8 @@ val bundleSharedFrontend by tasks.registering {
     outputs.file(generatedSharedUiAssets.map { it.file("animal-health-panel.js") })
     doLast {
         val ordered = parts.files.sortedBy { it.name }
-        require(ordered.size == 41) {
-            "Expected 41 Animal Health frontend parts, found ${ordered.size}"
+        require(ordered.size == 94) {
+            "Expected 94 Animal Health frontend parts, found ${ordered.size}"
         }
         val target = generatedSharedUiAssets.get().file("animal-health-panel.js").asFile
         target.parentFile.mkdirs()
