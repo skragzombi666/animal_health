@@ -50,6 +50,9 @@ def test_034_backend_patch_is_wired_after_earlier_versions() -> None:
     assert "from .v0934_features import" in source
     assert source.index("apply_v0930_patches()") < source.index("apply_v0934_patches()")
     assert "await async_initialize_v0934_features(hass)" in source
+    assert "await async_setup_v0927_features(hass)" in source
+    assert "await async_setup_v0928_features(hass)" in source
+    assert "\n    async_setup_v0928_features(hass)" not in source
 
 
 def test_034_release_version_and_shared_bundle_count_are_updated() -> None:
