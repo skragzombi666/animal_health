@@ -1,25 +1,49 @@
 # Animal Health 0.9.34
 
-Version 0.9.34 consolidates the smartphone feedback from 0.9.33 into shared data and UI paths instead of adding isolated view-specific corrections.
+Version 0.9.34 führt die Smartphone-Rückmeldungen aus 0.9.33 über gemeinsame Daten- und UI-Pfade zusammen. Die Fehler werden nicht separat pro Ansicht überdeckt, sondern an den zugrunde liegenden Komponenten behoben.
 
-## Product databases
+## Produktdatenbanken
 
-The standalone Android frontend now provides the complete `v0928` product-database command set locally. Bundled medicine, vaccine, supplement and feed catalogues are loaded from verified app assets. Personal databases, imports, edits, local overrides, visibility changes and deletions are persisted locally. Home Assistant continues to use the existing server-side database API. Technical errors such as `Unknown command` are replaced by a clear compatibility message.
+- Home Assistant verwendet weiterhin die serverseitige Produktdatenbank-API aus 0.9.28.
+- Das gemeinsam genutzte Frontend besitzt zusätzlich einen vollständigen lokalen `v0928`-Adapter für die eigenständige Android-WebView. Mitgelieferte Medikamente, Impfstoffe, Ergänzungen und Futtermittel werden aus den App-Assets geladen; eigene Datenbanken, Importe, lokale Änderungen, Ausblendungen und Löschungen werden lokal gespeichert.
+- Technische Meldungen wie `Unknown command` werden nicht mehr unverändert angezeigt. Bei einem Versionskonflikt erscheint eine verständliche Kompatibilitätsmeldung.
 
-## Navigation
+## Smartphone-Zurücknavigation
 
-Internal navigation now has one authoritative browser-history implementation. Each real Animal Health state change creates one history entry; one back action consumes exactly one entry and restores the preceding page, detail view, settings section or modal. Rapid repeated back requests are locked until the current history transition is complete. Nested animal creation returns to the originating form without leaving a duplicate no-op history entry.
+- Für die interne Navigation besteht nur noch ein maßgeblicher Browser-History-Pfad.
+- Jede tatsächliche Änderung von Seite, Detailansicht, Einstellungsbereich oder Dialog erzeugt genau einen History-Eintrag.
+- Ein Zurück-Befehl verbraucht genau einen Eintrag und stellt den vorherigen Animal-Health-Zustand wieder her.
+- Schnell wiederholte Zurück-Befehle werden gesperrt, bis die aktuelle History-Transition abgeschlossen ist.
+- Das direkte Anlegen eines Tiers aus einem Formular kehrt ohne zusätzlichen leeren History-Schritt in das Ursprungsformular zurück.
 
-## Chronology
+## Chronik
 
-Medication administrations use one responsive inline flow for animal, dose, product name, task origin and secondary metadata. Artificial block breaks and post-render width measurement are removed. The task-origin icon occupies normal layout space and cannot overlap text. The same renderer is used on the home page, animal page, complete chronology and inside expanded treatment plans.
+- Medikamentengaben verwenden in Startseite, Tieransicht, Gesamtchronik und aufgeklappten Behandlungsplänen denselben responsiven Inline-Textfluss.
+- Mengenangabe, Produktname, Aufgabenherkunft und Sekundärangaben brechen nur bei tatsächlichem Platzmangel um.
+- Die nachträgliche Breitenmessung und der künstliche Blockumbruch nach der Menge entfallen.
+- Das Symbol «Aus Aufgabe» belegt regulären Layoutplatz und kann keinen Text mehr überlagern.
 
-Treatment plans completed from tasks are repaired after execution and during upgrade. The parent event stores the treatment-plan snapshot, task source, occurrence reference and execution identity. Existing component events are linked to the same execution and source. The chronology can render snapshot components even when an older event did not persist its child references.
+## Behandlungspläne aus Aufgaben
 
-## Multiple selection
+- Beim Erledigen einer Behandlungsplan-Aufgabe werden Plan-ID, Planname, Beschreibung und die vollständige Komponenten-Momentaufnahme am übergeordneten Chronikeintrag gespeichert.
+- Die untergeordneten Medikamenten-, Ergänzungs-, Futter- und Handlungseinträge werden derselben Ausführung und Aufgabenherkunft zugeordnet.
+- Bereits vorhandene unvollständige Einträge werden beim Upgrade repariert, soweit die historischen Aufgaben- oder Plandaten noch vorhanden sind.
+- Spätere Änderungen am Stammdaten-Behandlungsplan verändern die gespeicherte historische Momentaufnahme nicht.
 
-Simple multiple-choice fields use one component: selected values as removable chips, a compact dropdown for additional values, and a plus action for direct creation or a custom value. This covers animal targets and checkbox-based multi-selects, including task creation and task editing. Creating an animal from the selector restores the original form and selects the new animal.
+## Einheitliche Mehrfachauswahl
 
-## Completed tasks
+- Mehrfachauswahlen verwenden eine gemeinsame Komponente: ausgewählte Werte als entfernbare Chips, darunter ein kompaktes Dropdown und rechts die Plus-Aktion.
+- Dies gilt insbesondere für Tierziele und bisherige Checkbox-Mehrfachauswahlen in Aufgaben- und Ausführungsformularen.
+- Ein Tier kann direkt aus der Auswahl neu angelegt werden. Danach wird das Ursprungsformular mit seinen Eingaben wiederhergestellt und das neue Tier ausgewählt.
 
-Task definitions are enriched with persistent pending/completed counts and the last completion time. Completed one-time tasks remain visible outside the limited occurrence window. They can be duplicated or rescheduled as a new task. The completed historical task and its chronology entries remain immutable.
+## Abgeschlossene Aufgaben
+
+- Aufgaben werden mit der vollständigen Zahl offener und erledigter Vorkommen sowie dem letzten Erledigungszeitpunkt angereichert.
+- Abgeschlossene Einmal-Aufgaben bleiben in einem eigenen Abschnitt der Aufgabenverwaltung sichtbar.
+- Sie können dupliziert oder als neue Aufgabe erneut geplant werden. «Fortsetzen / erneut planen» setzt eine abgeschlossene Einmal-Aufgabe standardmäßig als tägliche neue Aufgabe auf.
+- Die ursprüngliche Aufgabe und ihre Chronikeinträge bleiben unverändert.
+
+## Versionsstand
+
+- Home-Assistant-/HACS-Version: **0.9.34**
+- Android bleibt gemäß bestehender Freigabestrategie bei **0.9.0-alpha.7**; der gemeinsame Frontend-Bundle-Test berücksichtigt den zusätzlichen 0.9.34-Frontendteil.
