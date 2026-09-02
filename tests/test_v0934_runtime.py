@@ -1,13 +1,77 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import sqlite3
+import sys
+import types
 from pathlib import Path
+from typing import Any
 
-from custom_components.animal_health.v0934_features import (
-    _enrich_task_completion_stats_sync,
-    _repair_treatment_event_sync,
-)
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+PACKAGE_ROOT = ROOT / "custom_components" / "animal_health"
+
+
+def _load_features(monkeypatch: pytest.MonkeyPatch) -> Any:
+    custom_components = types.ModuleType("custom_components")
+    custom_components.__path__ = [str(ROOT / "custom_components")]
+    package = types.ModuleType("custom_components.animal_health")
+    package.__path__ = [str(PACKAGE_ROOT)]
+
+    homeassistant = types.ModuleType("homeassistant")
+    homeassistant.__path__ = []
+    homeassistant_core = types.ModuleType("homeassistant.core")
+    homeassistant_core.HomeAssistant = object
+
+    task_kinds = types.ModuleType("custom_components.animal_health.task_kinds")
+    task_kinds.TASK_KIND_TREATMENT = "treatment"
+
+    class TaskRecordStore:
+        async def execute(self, *args: Any, **kwargs: Any) -> Any:
+            raise NotImplementedError
+
+        async def enrich_tasks(self, tasks: Any) -> Any:
+            return tasks
+
+    class TaskExecutionResult:
+        def __init__(self, occurrence: Any, event: Any) -> None:
+            self.occurrence = occurrence
+            self.event = event
+
+    task_records = types.ModuleType("custom_components.animal_health.task_records")
+    task_records.TaskRecordStore = TaskRecordStore
+    task_records.TaskExecutionResult = TaskExecutionResult
+
+    const = types.ModuleType("custom_components.animal_health.const")
+    const.DATABASE_NAME = "animal_health.db"
+
+    package.task_kinds = task_kinds
+    package.task_records = task_records
+    package.const = const
+    modules = {
+        "custom_components": custom_components,
+        "custom_components.animal_health": package,
+        "custom_components.animal_health.task_kinds": task_kinds,
+        "custom_components.animal_health.task_records": task_records,
+        "custom_components.animal_health.const": const,
+        "homeassistant": homeassistant,
+        "homeassistant.core": homeassistant_core,
+    }
+    for name, module in modules.items():
+        monkeypatch.setitem(sys.modules, name, module)
+
+    module_name = "custom_components.animal_health.v0934_features"
+    spec = importlib.util.spec_from_file_location(
+        module_name,
+        PACKAGE_ROOT / "v0934_features.py",
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, module_name, module)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _database(path: Path) -> sqlite3.Connection:
@@ -61,7 +125,11 @@ def _database(path: Path) -> sqlite3.Connection:
     return connection
 
 
-def test_treatment_task_repair_freezes_plan_and_links_components(tmp_path: Path) -> None:
+def test_treatment_task_repair_freezes_plan_and_links_components(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    features = _load_features(monkeypatch)
     path = tmp_path / "animal_health.db"
     components = [
         {
@@ -179,7 +247,7 @@ def test_treatment_task_repair_freezes_plan_and_links_components(tmp_path: Path)
             ),
         )
 
-    repaired = _repair_treatment_event_sync(path, "event-parent")
+    repaired = features._repair_treatment_event_sync(path, "event-parent")
 
     assert repaired is not None
     parent = repaired["data"]
@@ -206,7 +274,11 @@ def test_treatment_task_repair_freezes_plan_and_links_components(tmp_path: Path)
     assert child["treatment_execution_id"] == parent["treatment_execution_id"]
 
 
-def test_task_completion_stats_are_not_limited_to_dashboard_window(tmp_path: Path) -> None:
+def test_task_completion_stats_are_not_limited_to_dashboard_window(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    features = _load_features(monkeypatch)
     path = tmp_path / "animal_health.db"
     with _database(path) as connection:
         connection.executemany(
@@ -247,7 +319,7 @@ def test_task_completion_stats_are_not_limited_to_dashboard_window(tmp_path: Pat
             ],
         )
 
-    enriched = _enrich_task_completion_stats_sync(
+    enriched = features._enrich_task_completion_stats_sync(
         path,
         [{"id": "task-1"}, {"id": "task-2"}, {"id": "task-3"}],
     )
