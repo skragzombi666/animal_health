@@ -12,7 +12,7 @@ def test_035_overrides_global_block_span_rule_inside_medication_flow() -> None:
     base = BASE.read_text(encoding="utf-8")
     source = SOURCE.read_text(encoding="utf-8")
 
-    assert ".row span,.row small{display:block" in base
+    assert ".stat span,.row span,.row small,.animal span{display:block" in base
     assert ".row.event.gabeCompact034 .gabeFlow034>span{display:inline!important}" in source
     assert ".gabeTypeBadge027" in source
     assert ".scopeBadge026" in source
