@@ -61,5 +61,5 @@ def test_034_release_version_and_shared_bundle_count_are_updated() -> None:
     android = ANDROID.read_text(encoding="utf-8")
     assert 'val animalHealthVersion = "0.9.0-alpha.7"' in android
     assert "versionCode = 900007" in android
-    assert "ordered.size == 43" in android
-    assert "Expected 43 Animal Health frontend parts" in android
+    assert "ordered.size == 94" in android
+    assert "Expected 94 Animal Health frontend parts" in android
