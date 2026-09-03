@@ -102,6 +102,7 @@ def test_039_valid_task_submit_delegates_and_invalid_treatment_is_visible() -> N
 const T={};
 const esc=value=>String(value??"");
 class AnimalHealthPanel{}
+AnimalHealthPanel.prototype.t=function(key){return key};
 AnimalHealthPanel.prototype.taskForm=function(){return""};
 AnimalHealthPanel.prototype.syncTask=function(){};
 AnimalHealthPanel.prototype.applyAITaskDraft=function(){};
@@ -143,7 +144,7 @@ const makeForm=(kind,planValue="PLAN-1")=>{
  await invalidPanel.handleSubmit({composedPath:()=>[invalidForm],preventDefault(){prevented=true}});
  if(!prevented||invalidPanel.delegated)throw new Error("invalid treatment task reached the save path");
  if(!invalidPanel.message||!invalidForm._plan.reported||!invalidForm._plan.focused)throw new Error("invalid treatment was not reported visibly");
- const settingsPanel=new AnimalHealthPanel();settingsPanel.t=key=>key;
+ const settingsPanel=new AnimalHealthPanel();
  const overview=settingsPanel.settingsPage081();
  if(!overview.includes('data-action="settings-group-039"'))throw new Error("settings overview is not navigable");
  settingsPanel.settingsGroupId039="medications";
