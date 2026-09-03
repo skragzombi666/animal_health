@@ -149,11 +149,11 @@ globalThis.removeEventListener=function(){};
 
 
 def test_037_release_version_and_shared_bundle_count_are_updated() -> None:
-    assert '"version": "0.9.37"' in MANIFEST.read_text(encoding="utf-8")
+    assert '"version": "0.9.38"' in MANIFEST.read_text(encoding="utf-8")
     frontend = (FRONTEND / "animal-health-panel.part01.js").read_text(encoding="utf-8")
-    assert 'const V="0.9.37"' in frontend
+    assert 'const V="0.9.38"' in frontend
     android = ANDROID.read_text(encoding="utf-8")
     assert 'val animalHealthVersion = "0.9.0-alpha.7"' in android
     assert "versionCode = 900007" in android
-    assert "ordered.size == 97" in android
-    assert "Expected 97 Animal Health frontend parts" in android
+    assert "ordered.size == 98" in android
+    assert "Expected 98 Animal Health frontend parts" in android
