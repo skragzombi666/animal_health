@@ -127,6 +127,9 @@ class AnimalHealthLegacyBrandView(HomeAssistantView):
 
 async def async_register_panel(hass: HomeAssistant) -> None:
     """Register the Animal Health frontend panel and module endpoint."""
+    from .v0937_features import apply_v0937_patches
+
+    apply_v0937_patches()
     state = hass.data.setdefault(_PANEL_STATE_KEY, {})
     if not state.get("frontend_view_registered"):
         hass.http.register_view(AnimalHealthPanelView())
