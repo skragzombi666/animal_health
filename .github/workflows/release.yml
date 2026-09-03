@@ -1,9 +1,11 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows:
+      - Validate
+    types:
+      - completed
   workflow_dispatch:
 
 permissions:
@@ -11,36 +13,55 @@ permissions:
 
 jobs:
   release:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Read integration version
-        id: version
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Resolve release metadata
+        id: release
         shell: bash
         run: |
-          VERSION=$(python - <<'PY'
+          python - <<'PY' >> "$GITHUB_OUTPUT"
           import json
+          import os
           from pathlib import Path
-          print(json.loads(Path('custom_components/animal_health/manifest.json').read_text())['version'])
-          PY
+
+          manifest = Path("custom_components/animal_health/manifest.json")
+          version = str(json.loads(manifest.read_text(encoding="utf-8"))["version"])
+          notes = Path(f"docs/version-{version}.md")
+          if not notes.is_file():
+              raise SystemExit(f"Missing release notes: {notes}")
+          sha = (
+              os.environ.get("WORKFLOW_RUN_SHA")
+              if os.environ.get("GITHUB_EVENT_NAME") == "workflow_run"
+              else os.environ["GITHUB_SHA"]
           )
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          print(f"version={version}")
+          print(f"notes={notes}")
+          print(f"sha={sha}")
+          PY
+        env:
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
       - name: Create Home Assistant release
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ steps.release.outputs.version }}
+          NOTES: ${{ steps.release.outputs.notes }}
+          TARGET_SHA: ${{ steps.release.outputs.sha }}
         shell: bash
         run: |
           TAG="v${VERSION}"
-          NOTES="docs/version-${VERSION}.md"
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists."
             exit 0
           fi
-          ARGS=("$TAG" --target "$GITHUB_SHA" --title "Animal Health ${VERSION}" --latest)
-          if [ -f "$NOTES" ]; then
-            ARGS+=(--notes-file "$NOTES")
-          else
-            ARGS+=(--generate-notes)
-          fi
-          gh release create "${ARGS[@]}"
+          gh release create "$TAG" \
+            --target "$TARGET_SHA" \
+            --title "Animal Health ${VERSION}" \
+            --latest \
+            --notes-file "$NOTES"

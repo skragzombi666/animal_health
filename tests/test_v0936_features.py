@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 import sys
 from types import ModuleType
@@ -17,6 +18,7 @@ FRONTEND_VERSION = (
     / "frontend"
     / "animal-health-panel.part01.js"
 )
+FRONTEND = FRONTEND_VERSION.parent
 ANDROID = ROOT / "android" / "app" / "build.gradle.kts"
 
 
@@ -142,11 +144,12 @@ def test_036_patch_is_wired_after_existing_task_template_patches() -> None:
     assert source.index("apply_v0934_patches()") < source.index("apply_v0936_patches()")
 
 
-def test_036_release_version_and_shared_bundle_count_are_updated() -> None:
-    assert '"version": "0.9.38"' in MANIFEST.read_text(encoding="utf-8")
-    assert 'const V="0.9.38"' in FRONTEND_VERSION.read_text(encoding="utf-8")
+def test_036_release_version_and_shared_bundle_count_are_consistent() -> None:
+    version = str(json.loads(MANIFEST.read_text(encoding="utf-8"))["version"])
+    assert f'const V="{version}"' in FRONTEND_VERSION.read_text(encoding="utf-8")
+    part_count = len(list(FRONTEND.glob("animal-health-panel.part*.js")))
     android = ANDROID.read_text(encoding="utf-8")
     assert 'val animalHealthVersion = "0.9.0-alpha.7"' in android
     assert "versionCode = 900007" in android
-    assert "ordered.size == 98" in android
-    assert "Expected 98 Animal Health frontend parts" in android
+    assert f"ordered.size == {part_count}" in android
+    assert f"Expected {part_count} Animal Health frontend parts" in android

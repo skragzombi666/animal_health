@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -19,15 +20,15 @@ def test_039_task_forms_cover_all_specialised_kinds_and_visible_validation() -> 
     frontend = source()
     for marker in (
         "taskKindFieldsets039",
-        'data-task-kind039="medication"',
-        'data-task-kind039="vaccination"',
-        'data-task-kind039="deworming"',
-        'data-task-kind039="supplement"',
-        'data-task-kind039="feed"',
-        'data-task-kind039="treatment"',
-        'data-task-kind039="health_check"',
-        'data-task-kind039="care"',
-        'data-task-kind039="veterinary_visit"',
+        'fieldset("medication"',
+        'fieldset("vaccination"',
+        'fieldset("deworming"',
+        'fieldset("supplement"',
+        'fieldset("feed"',
+        'fieldset("treatment"',
+        'fieldset("health_check"',
+        'fieldset("care"',
+        'fieldset("veterinary_visit"',
         'name="planned_medication_name"',
         'name="planned_treatment_plan_id"',
         'name="treatment_plan_name"',
@@ -42,7 +43,7 @@ def test_039_hidden_task_fields_are_disabled_and_do_not_block_submit() -> None:
     frontend = source()
     for marker in (
         "fieldset.hidden=!active",
-        "field.disabled=!active",
+        "field.disabled=!active||field.dataset.noPlans039!==undefined",
         "form.noValidate=true",
         'form?.dataset.form!=="task"',
         "await AH039Base.handleSubmit.call(this,event)",
@@ -69,8 +70,8 @@ def test_039_settings_have_exact_three_level_structure() -> None:
         'id:"ai"',
         'id:"administration"',
         'id:"danger"',
-        'data-action="settings-group-039"',
-        'data-action="settings-item-039"',
+        'settingsNav039(this.settingsGroups039(),"settings-group-039")',
+        'settingsNav039(group.items,"settings-item-039")',
         'data-action="settings-back-039"',
         "settingsContent039",
     ):
@@ -118,6 +119,7 @@ const makeForm=(kind,planValue="PLAN-1")=>{
  plan.value=planValue;plan.disabled=false;plan.selectedOptions=[{dataset:{name:"Plan A"},textContent:"Plan A"}];
  const name={value:""},fieldsets=[makeFieldset(kind,[activeField]),makeFieldset(kind==="treatment"?"medication":"treatment",[inactiveField])];
  return{
+  tagName:"FORM",
   dataset:{form:"task"},
   elements:{task_kind:{value:kind},planned_treatment_plan_id:plan,treatment_plan_name:name},
   querySelectorAll(selector){return selector==="[data-task-kind039]"?fieldsets:[]},
@@ -141,6 +143,12 @@ const makeForm=(kind,planValue="PLAN-1")=>{
  await invalidPanel.handleSubmit({composedPath:()=>[invalidForm],preventDefault(){prevented=true}});
  if(!prevented||invalidPanel.delegated)throw new Error("invalid treatment task reached the save path");
  if(!invalidPanel.message||!invalidForm._plan.reported||!invalidForm._plan.focused)throw new Error("invalid treatment was not reported visibly");
+ const settingsPanel=new AnimalHealthPanel();settingsPanel.t=key=>key;
+ const overview=settingsPanel.settingsPage081();
+ if(!overview.includes('data-action="settings-group-039"'))throw new Error("settings overview is not navigable");
+ settingsPanel.settingsGroupId039="medications";
+ const group=settingsPanel.settingsPage081();
+ if(!group.includes('data-action="settings-item-039"')||group.includes("offLabelPolicy012"))throw new Error("settings group is not a pure item overview");
  process.stdout.write("ok");
 })().catch(error=>{console.error(error);process.exit(1)});
 '''
@@ -173,15 +181,17 @@ def test_039_existing_navigation_and_thumbnail_repairs_remain_present() -> None:
     assert "history.back()" not in final
 
 
-def test_039_release_version_and_shared_bundle_count_are_updated() -> None:
-    assert '"version": "0.9.39"' in MANIFEST.read_text(encoding="utf-8")
+def test_039_release_version_and_shared_bundle_count_are_consistent() -> None:
+    version = str(json.loads(MANIFEST.read_text(encoding="utf-8"))["version"])
     frontend = (FRONTEND / "animal-health-panel.part01.js").read_text(encoding="utf-8")
-    assert 'const V="0.9.39"' in frontend
+    assert f'const V="{version}"' in frontend
+    parts = sorted(FRONTEND.glob("animal-health-panel.part*.js"))
+    assert parts[-1] == SOURCE
     android = ANDROID.read_text(encoding="utf-8")
     assert 'val animalHealthVersion = "0.9.0-alpha.7"' in android
     assert "versionCode = 900007" in android
-    assert "ordered.size == 99" in android
-    assert "Expected 99 Animal Health frontend parts" in android
+    assert f"ordered.size == {len(parts)}" in android
+    assert f"Expected {len(parts)} Animal Health frontend parts" in android
 
 
 def test_039_final_frontend_patch_has_valid_javascript() -> None:
