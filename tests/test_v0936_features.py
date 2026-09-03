@@ -143,10 +143,10 @@ def test_036_patch_is_wired_after_existing_task_template_patches() -> None:
 
 
 def test_036_release_version_and_shared_bundle_count_are_updated() -> None:
-    assert '"version": "0.9.36"' in MANIFEST.read_text(encoding="utf-8")
-    assert 'const V="0.9.36"' in FRONTEND_VERSION.read_text(encoding="utf-8")
+    assert '"version": "0.9.37"' in MANIFEST.read_text(encoding="utf-8")
+    assert 'const V="0.9.37"' in FRONTEND_VERSION.read_text(encoding="utf-8")
     android = ANDROID.read_text(encoding="utf-8")
     assert 'val animalHealthVersion = "0.9.0-alpha.7"' in android
     assert "versionCode = 900007" in android
-    assert "ordered.size == 96" in android
-    assert "Expected 96 Animal Health frontend parts" in android
+    assert "ordered.size == 97" in android
+    assert "Expected 97 Animal Health frontend parts" in android
