@@ -1,7 +1,15 @@
-# Android alpha.3 regression
+# Gemeinsamer Frontend-Bundle-Vertrag
 
-The Android wrapper must load the Animal Health frontend as one assembled JavaScript program.
+Die Home-Assistant-Integration und die eigenständige Android-App laden dasselbe eingecheckte Frontend-Artefakt:
 
-The `animal-health-panel.part*.js` files are source chunks and are intentionally not standalone scripts. The Android build task concatenates all 40 ordered parts into `animal-health-panel.js`; `android-shared-ui.js` loads only that bundle.
+```text
+custom_components/animal_health/frontend/dist/animal-health-panel.js
+```
 
-This file documents the startup regression found in 0.9.0-alpha.2 and the invariant covered by `tests/test_android_alpha.py`.
+Die 99 Dateien `animal-health-panel.part01.js` bis `animal-health-panel.part99.js` sind während Phase 0 und Phase 1 nur eingefrorene Legacy-Quellen des Referenzstands 0.9.41. Sie werden nicht mehr von Home Assistant oder Gradle zur Laufzeit gesucht, sortiert oder zusammengesetzt.
+
+Ihre vorübergehend notwendige Reihenfolge ist vollständig und explizit in `custom_components/animal_health/frontend/legacy/manifest.json` festgelegt. `scripts/build_frontend.mjs` erzeugt daraus deterministisch das Dist-Bundle. `node scripts/build_frontend.mjs --check` weist ein fehlendes oder veraltetes Artefakt zurück.
+
+Home Assistant liest nur das Dist-Bundle. Der Android-Build kopiert genau dieselben Bytes als `animal-health-panel.js` in die generierten App-Assets. `android-shared-ui.js` lädt ausschliesslich dieses Bundle.
+
+Dieser Vertrag verhindert eine erneute Abhängigkeit von lexikografischer Fragmentreihenfolge und sichert zugleich den bisherigen Startmechanismus der Android-App. Die Legacy-Fragmente, das Manifest und die Übergangsbrücke werden nach vollständiger fachlicher Ablösung entfernt.

@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "custom_components" / "animal_health"
 FRONTEND = INTEGRATION / "frontend"
+DIST = FRONTEND / "dist" / "animal-health-panel.js"
 
 
 def test_branding_keeps_full_resolution_master_and_small_runtime_asset() -> None:
@@ -27,11 +28,10 @@ def test_branding_keeps_full_resolution_master_and_small_runtime_asset() -> None
 
 def test_frontend_brand_endpoint_serves_lightweight_versioned_asset() -> None:
     panel = (INTEGRATION / "panel.py").read_text(encoding="utf-8")
-    frontend = "".join(
-        path.read_text(encoding="utf-8")
-        for path in sorted(FRONTEND.glob("animal-health-panel.part*.js"))
+    frontend = DIST.read_text(encoding="utf-8")
+    manifest = json.loads(
+        (INTEGRATION / "manifest.json").read_text(encoding="utf-8")
     )
-    manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
 
     assert '_BRAND_MASTER_PATH = Path(__file__).parent / "brand" / "icon.png"' in panel
     assert '_BRAND_UI_PATH = _FRONTEND_DIR / "animal-health-brand.svg"' in panel
