@@ -96,6 +96,7 @@ from .v0929_features import apply_v0929_patches, async_setup_v0929_features
 from .v0930_features import apply_v0930_patches
 from .v0934_features import apply_v0934_patches, async_initialize_v0934_features
 from .v0936_features import apply_v0936_patches
+from .v0941_features import apply_v0941_patches
 
 PLATFORMS = [Platform.SENSOR, Platform.SELECT, Platform.BUTTON, Platform.SWITCH]
 
@@ -126,6 +127,7 @@ def _apply_all_patches() -> None:
     apply_v0930_patches()
     apply_v0934_patches()
     apply_v0936_patches()
+    apply_v0941_patches()
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
