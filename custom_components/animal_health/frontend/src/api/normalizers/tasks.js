@@ -14,9 +14,26 @@ import {
 
 const CLOSED_STATUSES = new Set(["completed", "skipped", "cancelled"]);
 
-function targetScope(raw, animalId, animalIds, groupId) {
-  const value = optionalText(firstDefined(raw, ["scope", "target_scope", "targetScope"]));
-  if (value === "general" || value === "group" || value === "animals") return value;
+function embeddedPlannedRecord(raw) {
+  const embedded = firstDefined(raw, ["planned"], {});
+  return embedded !== null &&
+    typeof embedded === "object" &&
+    !Array.isArray(embedded)
+    ? embedded
+    : {};
+}
+
+function targetScope(raw, fallback, animalId, animalIds, groupId) {
+  const value = optionalText(
+    firstDefined(
+      raw,
+      ["target_scope", "targetScope"],
+      firstDefined(fallback, ["scope"], firstDefined(raw, ["scope"])),
+    ),
+  );
+  if (value === "general" || value === "group" || value === "animals") {
+    return value;
+  }
   if (value === "animal") return "animal";
   if (groupId) return "group";
   if (animalIds.length > 1) return "animals";
@@ -24,13 +41,53 @@ function targetScope(raw, animalId, animalIds, groupId) {
   return "general";
 }
 
-export function normalizeTarget(rawValue = {}) {
+export function normalizeTarget(rawValue = {}, fallbackValue = {}) {
   const raw = asRecord(rawValue, "target");
-  const explicitAnimalId = optionalText(firstDefined(raw, ["animal_id", "animalId"]));
-  const animalIds = stringList(firstDefined(raw, ["animal_ids", "animalIds"], []), "target.animalIds");
-  const animalId = explicitAnimalId || (animalIds.length === 1 ? animalIds[0] : null);
-  const groupId = optionalText(firstDefined(raw, ["group_id", "groupId"]));
-  const scope = targetScope(raw, animalId, animalIds, groupId);
+  const fallback = asRecord(fallbackValue || {}, "targetFallback");
+  const explicitAnimalId = optionalText(
+    firstDefined(
+      raw,
+      ["animal_id", "animalId"],
+      firstDefined(fallback, ["animal_id", "animalId"]),
+    ),
+  );
+  const animalIds = stringList(
+    firstDefined(
+      raw,
+      ["target_animal_ids", "targetAnimalIds", "animal_ids", "animalIds"],
+      firstDefined(fallback, ["animal_ids", "animalIds"], []),
+    ),
+    "target.animalIds",
+  );
+  const animalId =
+    explicitAnimalId || (animalIds.length === 1 ? animalIds[0] : null);
+  const groupId = optionalText(
+    firstDefined(
+      raw,
+      ["target_group_id", "targetGroupId", "group_id", "groupId"],
+      firstDefined(fallback, ["group_id", "groupId"]),
+    ),
+  );
+  const scope = targetScope(raw, fallback, animalId, animalIds, groupId);
+  const memberSnapshot = stringList(
+    firstDefined(
+      raw,
+      [
+        "member_snapshot",
+        "memberSnapshot",
+        "target_member_snapshot",
+        "targetMemberSnapshot",
+        "target_animal_ids",
+        "targetAnimalIds",
+      ],
+      firstDefined(
+        fallback,
+        ["member_snapshot", "memberSnapshot"],
+        [],
+      ),
+    ),
+    "target.memberSnapshot",
+  );
   return {
     scope,
     animalId: scope === "animal" ? animalId : null,
@@ -41,52 +98,66 @@ export function normalizeTarget(rawValue = {}) {
           ? [animalId]
           : [],
     groupId: scope === "group" ? groupId : null,
-    memberSnapshot: stringList(
-      firstDefined(raw, ["member_snapshot", "memberSnapshot", "target_member_snapshot"], []),
-      "target.memberSnapshot",
-    ),
+    memberSnapshot,
   };
 }
 
 function normalizePlanned(raw, inherited = {}) {
-  const embedded = firstDefined(raw, ["planned"], {});
-  const embeddedRecord =
-    embedded !== null && typeof embedded === "object" && !Array.isArray(embedded)
-      ? camelizeObject(embedded)
-      : {};
   return {
     ...camelizeObject(inherited || {}),
-    ...embeddedRecord,
+    ...camelizeObject(embeddedPlannedRecord(raw)),
     ...collectPrefixedFields(raw, "planned_"),
   };
 }
 
 export function normalizeTaskDefinition(rawValue) {
   const raw = asRecord(rawValue, "task");
-  const id = requiredText(firstDefined(raw, ["id", "task_id", "taskId"]), "task.id");
+  const id = requiredText(
+    firstDefined(raw, ["id", "task_id", "taskId"]),
+    "task.id",
+  );
   const recurrenceType = requiredText(
     firstDefined(raw, ["recurrence_type", "recurrenceType"], "once"),
     "task.recurrenceType",
   );
-  const explicitSeriesId = optionalText(firstDefined(raw, ["series_id", "seriesId"]));
+  const explicitSeriesId = optionalText(
+    firstDefined(raw, ["series_id", "seriesId"]),
+  );
   return {
     id,
     seriesId: explicitSeriesId || (recurrenceType === "once" ? null : id),
-    target: normalizeTarget(raw),
-    animalName: optionalText(firstDefined(raw, ["animal_name", "animalName"])),
-    title: requiredText(firstDefined(raw, ["title", "task_title", "taskTitle"]), "task.title"),
+    target: normalizeTarget({ ...raw, ...embeddedPlannedRecord(raw) }),
+    animalName: optionalText(
+      firstDefined(raw, ["animal_name", "animalName"]),
+    ),
+    title: requiredText(
+      firstDefined(raw, ["title", "task_title", "taskTitle"]),
+      "task.title",
+    ),
     description: optionalText(raw.description),
-    kind: requiredText(firstDefined(raw, ["task_kind", "taskKind", "kind"], "reminder"), "task.kind"),
+    kind: requiredText(
+      firstDefined(raw, ["task_kind", "taskKind", "kind"], "reminder"),
+      "task.kind",
+    ),
     recurrenceType,
     recurrenceInterval: integerValue(
       firstDefined(raw, ["recurrence_interval", "recurrenceInterval"]),
       1,
       "task.recurrenceInterval",
     ),
-    startDate: dateOnly(firstDefined(raw, ["start_date", "startDate"]), "task.startDate"),
-    endDate: dateOnly(firstDefined(raw, ["end_date", "endDate"]), "task.endDate"),
+    startDate: dateOnly(
+      firstDefined(raw, ["start_date", "startDate"]),
+      "task.startDate",
+    ),
+    endDate: dateOnly(
+      firstDefined(raw, ["end_date", "endDate"]),
+      "task.endDate",
+    ),
     dueTime: optionalText(firstDefined(raw, ["due_time", "dueTime"])),
-    isActive: booleanValue(firstDefined(raw, ["is_active", "isActive"]), true),
+    isActive: booleanValue(
+      firstDefined(raw, ["is_active", "isActive"]),
+      true,
+    ),
     nextPendingAt: dateTime(
       firstDefined(raw, ["next_pending_at", "nextPendingAt"]),
       "task.nextPendingAt",
@@ -107,22 +178,40 @@ export function normalizeTaskDefinition(rawValue) {
     ),
     planned: normalizePlanned(raw),
     entityId: optionalText(firstDefined(raw, ["entity_id", "entityId"])),
-    createdAt: dateTime(firstDefined(raw, ["created_at", "createdAt"]), "task.createdAt"),
-    updatedAt: dateTime(firstDefined(raw, ["updated_at", "updatedAt"]), "task.updatedAt"),
+    createdAt: dateTime(
+      firstDefined(raw, ["created_at", "createdAt"]),
+      "task.createdAt",
+    ),
+    updatedAt: dateTime(
+      firstDefined(raw, ["updated_at", "updatedAt"]),
+      "task.updatedAt",
+    ),
   };
 }
 
 function getTask(taskById, definitionId) {
   if (taskById instanceof Map) return taskById.get(definitionId) || null;
-  if (taskById && typeof taskById === "object") return taskById[definitionId] || null;
+  if (taskById && typeof taskById === "object") {
+    return taskById[definitionId] || null;
+  }
   return null;
 }
 
 function occurrenceTiming(raw, status, scheduledDate, today) {
   if (CLOSED_STATUSES.has(status) || status !== "pending") return "closed";
-  if (booleanValue(firstDefined(raw, ["is_overdue", "isOverdue"]), false)) return "overdue";
-  if (booleanValue(firstDefined(raw, ["is_today", "isToday"]), false)) return "today";
-  if (booleanValue(firstDefined(raw, ["is_upcoming", "isUpcoming"]), false)) return "upcoming";
+  if (
+    booleanValue(firstDefined(raw, ["is_overdue", "isOverdue"]), false)
+  ) {
+    return "overdue";
+  }
+  if (booleanValue(firstDefined(raw, ["is_today", "isToday"]), false)) {
+    return "today";
+  }
+  if (
+    booleanValue(firstDefined(raw, ["is_upcoming", "isUpcoming"]), false)
+  ) {
+    return "upcoming";
+  }
   if (scheduledDate && today) {
     if (scheduledDate < today) return "overdue";
     if (scheduledDate === today) return "today";
@@ -141,22 +230,36 @@ export function normalizeTaskOccurrence(
     "occurrence.id",
   );
   const definitionId = requiredText(
-    firstDefined(raw, ["task_id", "taskId", "definition_id", "definitionId"]),
+    firstDefined(
+      raw,
+      ["task_id", "taskId", "definition_id", "definitionId"],
+    ),
     "occurrence.definitionId",
   );
   const task = getTask(taskById, definitionId);
-  const status = requiredText(firstDefined(raw, ["status"], "pending"), "occurrence.status");
+  const status = requiredText(
+    firstDefined(raw, ["status"], "pending"),
+    "occurrence.status",
+  );
   const scheduledDate = dateOnly(
-    firstDefined(raw, ["scheduled_date", "scheduledDate", "due_date", "dueDate"]),
+    firstDefined(
+      raw,
+      ["scheduled_date", "scheduledDate", "due_date", "dueDate"],
+    ),
     "occurrence.dueDate",
   );
   const localToday = dateOnly(today, "today");
-  const explicitSeriesId = optionalText(firstDefined(raw, ["series_id", "seriesId"]));
+  const explicitSeriesId = optionalText(
+    firstDefined(raw, ["series_id", "seriesId"]),
+  );
   return {
     id,
     seriesId: explicitSeriesId || task?.seriesId || null,
     definitionId,
-    target: normalizeTarget({ ...(task?.target || {}), ...raw }),
+    target: normalizeTarget(
+      { ...raw, ...embeddedPlannedRecord(raw) },
+      task?.target || {},
+    ),
     animalName: optionalText(
       firstDefined(raw, ["animal_name", "animalName"], task?.animalName),
     ),
@@ -196,7 +299,13 @@ export function normalizeTaskOccurrence(
             ),
             notes: optionalText(raw.notes),
           },
-    createdAt: dateTime(firstDefined(raw, ["created_at", "createdAt"]), "occurrence.createdAt"),
-    updatedAt: dateTime(firstDefined(raw, ["updated_at", "updatedAt"]), "occurrence.updatedAt"),
+    createdAt: dateTime(
+      firstDefined(raw, ["created_at", "createdAt"]),
+      "occurrence.createdAt",
+    ),
+    updatedAt: dateTime(
+      firstDefined(raw, ["updated_at", "updatedAt"]),
+      "occurrence.updatedAt",
+    ),
   };
 }
