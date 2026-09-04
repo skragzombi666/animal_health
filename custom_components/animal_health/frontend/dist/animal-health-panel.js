@@ -5908,3 +5908,3557 @@ AH039.render=function(){
 @media(max-width:700px){.taskKindFields039,.settingsGrid039{grid-template-columns:1fr}.taskKindFields039>.wide,.taskVaccination039{grid-column:1}.settingsNav039{min-height:78px}.settingsHead039 h1{font-size:1.35rem}}
 </style>`
 };
+
+/* ANIMAL_HEALTH_MODERN_RUNTIME */
+(() => {
+  // custom_components/animal_health/frontend/src/api/commands.js
+  var COMMANDS = Object.freeze({
+    dashboard: "animal_health/dashboard",
+    catalog: "animal_health/catalog",
+    features: "animal_health/features",
+    tagState: "animal_health/v080/state",
+    animalDetail: "animal_health/animal_detail",
+    attachmentsList: "animal_health/attachments/list",
+    download: "animal_health/download",
+    treatmentState: "animal_health/v0912/state",
+    masterDataState: "animal_health/v0924/state",
+    productState: "animal_health/v0928/state"
+  });
+
+  // custom_components/animal_health/frontend/src/api/errors.js
+  var ERROR_CODES = Object.freeze({
+    VALIDATION: "validation",
+    NOT_FOUND: "not_found",
+    CONFLICT: "conflict",
+    PERMISSION: "permission",
+    TRANSPORT: "transport",
+    UNAVAILABLE: "unavailable",
+    INTERNAL: "internal"
+  });
+  var STABLE_CODES = new Set(Object.values(ERROR_CODES));
+  function record(value) {
+    return value !== null && typeof value === "object" ? value : {};
+  }
+  function errorMessage(value) {
+    if (value instanceof Error && value.message) return value.message;
+    const source = record(value);
+    if (typeof source.message === "string" && source.message.trim()) {
+      return source.message.trim();
+    }
+    if (typeof value === "string" && value.trim()) return value.trim();
+    return "Animal Health operation failed";
+  }
+  function explicitCode(value) {
+    const source = record(value);
+    for (const candidate of [source.code, source.error_code, source.errorCode]) {
+      if (typeof candidate === "string" && candidate.trim()) {
+        return candidate.trim().toLowerCase();
+      }
+    }
+    return "";
+  }
+  function numericStatus(value) {
+    const source = record(value);
+    for (const candidate of [source.status, source.statusCode, source.httpStatus]) {
+      const parsed = Number(candidate);
+      if (Number.isInteger(parsed) && parsed >= 100 && parsed <= 599) {
+        return parsed;
+      }
+    }
+    return null;
+  }
+  function classifyErrorCode(value) {
+    const code = explicitCode(value);
+    if (STABLE_CODES.has(code)) return code;
+    const status = numericStatus(value);
+    if (status === 400 || status === 422) return ERROR_CODES.VALIDATION;
+    if (status === 401 || status === 403) return ERROR_CODES.PERMISSION;
+    if (status === 404) return ERROR_CODES.NOT_FOUND;
+    if (status === 409) return ERROR_CODES.CONFLICT;
+    if (status === 502 || status === 503 || status === 504) {
+      return ERROR_CODES.UNAVAILABLE;
+    }
+    const haystack = `${code} ${errorMessage(value)}`.toLowerCase();
+    if (/not[_ -]?found|no longer exists|does not exist|unknown (?:animal|task|record|resource)|missing (?:animal|task|record|resource)/.test(
+      haystack
+    )) {
+      return ERROR_CODES.NOT_FOUND;
+    }
+    if (/already exists|duplicate|conflict|integrity/.test(haystack)) {
+      return ERROR_CODES.CONFLICT;
+    }
+    if (/unauthori[sz]ed|forbidden|permission|access denied/.test(haystack)) {
+      return ERROR_CODES.PERMISSION;
+    }
+    if (/validation|invalid|required|must not be empty|unsupported/.test(haystack)) {
+      return ERROR_CODES.VALIDATION;
+    }
+    if (/not loaded|unavailable|not available|not supported/.test(haystack)) {
+      return ERROR_CODES.UNAVAILABLE;
+    }
+    if (/connection|network|offline|timeout|timed out|failed to fetch|socket|transport/.test(
+      haystack
+    )) {
+      return ERROR_CODES.TRANSPORT;
+    }
+    return ERROR_CODES.INTERNAL;
+  }
+  var AnimalHealthError = class extends Error {
+    constructor(message, {
+      code = ERROR_CODES.INTERNAL,
+      operation = null,
+      details = {},
+      cause = null
+    } = {}) {
+      super(String(message || "Animal Health operation failed"));
+      this.name = "AnimalHealthError";
+      this.code = STABLE_CODES.has(code) ? code : ERROR_CODES.INTERNAL;
+      this.operation = operation === null ? null : String(operation);
+      this.details = details !== null && typeof details === "object" && !Array.isArray(details) ? { ...details } : {};
+      this.cause = cause;
+    }
+  };
+  function normalizeError(value, { operation = null, details = {} } = {}) {
+    if (value instanceof AnimalHealthError) return value;
+    const source = record(value);
+    const sourceDetails = source.details !== null && typeof source.details === "object" && !Array.isArray(source.details) ? source.details : {};
+    return new AnimalHealthError(errorMessage(value), {
+      code: classifyErrorCode(value),
+      operation,
+      details: { ...sourceDetails, ...details },
+      cause: value
+    });
+  }
+  function validationError(message, path = null, details = {}) {
+    return new AnimalHealthError(message, {
+      code: ERROR_CODES.VALIDATION,
+      operation: "validation",
+      details: {
+        ...path ? { path: String(path) } : {},
+        ...details
+      }
+    });
+  }
+
+  // custom_components/animal_health/frontend/src/api/normalizers/common.js
+  function isRecord(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value);
+  }
+  function asRecord(value, path = "value") {
+    if (!isRecord(value)) {
+      throw validationError(`${path} must be an object`, path);
+    }
+    return value;
+  }
+  function asArray(value, path = "value") {
+    if (value == null) return [];
+    if (!Array.isArray(value)) {
+      throw validationError(`${path} must be an array`, path);
+    }
+    return value;
+  }
+  function firstDefined(source, keys, fallback = null) {
+    if (!isRecord(source)) return fallback;
+    for (const key of keys) {
+      if (Object.hasOwn(source, key) && source[key] !== void 0) {
+        return source[key];
+      }
+    }
+    return fallback;
+  }
+  function requiredText(value, path = "value") {
+    if (value == null) {
+      throw validationError(`${path} is required`, path);
+    }
+    const text2 = String(value).trim();
+    if (!text2) {
+      throw validationError(`${path} is required`, path);
+    }
+    return text2;
+  }
+  function optionalText(value) {
+    if (value == null) return null;
+    const text2 = String(value).trim();
+    return text2 || null;
+  }
+  function booleanValue(value, fallback = false) {
+    if (value === true || value === false) return value;
+    if (value === 1 || value === "1" || value === "true") return true;
+    if (value === 0 || value === "0" || value === "false") return false;
+    return fallback;
+  }
+  function numberValue(value, fallback = null, path = "value") {
+    if (value == null || value === "") return fallback;
+    const parsed = typeof value === "number" ? value : Number(value);
+    if (!Number.isFinite(parsed)) {
+      throw validationError(`${path} must be a finite number`, path);
+    }
+    return parsed;
+  }
+  function integerValue(value, fallback = null, path = "value") {
+    const parsed = numberValue(value, fallback, path);
+    if (parsed == null) return parsed;
+    if (!Number.isInteger(parsed)) {
+      throw validationError(`${path} must be an integer`, path);
+    }
+    return parsed;
+  }
+  function stringList(value, path = "value") {
+    const source = value == null ? [] : Array.isArray(value) ? value : [value];
+    const result = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const item of source) {
+      if (item == null) continue;
+      const text2 = String(item).trim();
+      if (!text2 || seen.has(text2)) continue;
+      seen.add(text2);
+      result.push(text2);
+    }
+    if (value != null && !Array.isArray(value) && isRecord(value)) {
+      throw validationError(`${path} must contain text values`, path);
+    }
+    return result;
+  }
+  function leapYear(year) {
+    return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  }
+  function daysInMonth(year, month) {
+    const days = [31, leapYear(year) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    return days[month - 1] || 0;
+  }
+  function dateOnly(value, path = "value") {
+    if (value == null || value === "") return null;
+    const text2 = String(value).trim();
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text2);
+    if (!match) {
+      throw validationError(`${path} must use YYYY-MM-DD`, path);
+    }
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) {
+      throw validationError(`${path} is not a valid calendar date`, path);
+    }
+    return text2;
+  }
+  function dateTime(value, path = "value") {
+    if (value == null || value === "") return null;
+    const text2 = String(value).trim();
+    if (!/[T ]\d{2}:\d{2}/.test(text2) || Number.isNaN(Date.parse(text2))) {
+      throw validationError(`${path} must be an ISO-8601 date-time`, path);
+    }
+    return text2;
+  }
+  function snakeToCamel(value) {
+    return String(value).replace(
+      /_([a-z0-9])/g,
+      (_match, character) => character.toUpperCase()
+    );
+  }
+  function camelizeObject(value) {
+    if (Array.isArray(value)) return value.map((item) => camelizeObject(item));
+    if (!isRecord(value)) return value;
+    const result = {};
+    for (const [key, item] of Object.entries(value)) {
+      result[snakeToCamel(key)] = camelizeObject(item);
+    }
+    return result;
+  }
+  function collectPrefixedFields(source, prefix) {
+    const record2 = asRecord(source, "source");
+    const result = {};
+    for (const [key, value] of Object.entries(record2)) {
+      if (!key.startsWith(prefix) || value === void 0) continue;
+      const target = snakeToCamel(key.slice(prefix.length));
+      if (target) result[target] = camelizeObject(value);
+    }
+    return result;
+  }
+  function recordOfText(value, path = "value") {
+    if (value == null) return {};
+    const source = asRecord(value, path);
+    const result = {};
+    for (const [key, item] of Object.entries(source)) {
+      if (item == null || item === "") continue;
+      result[String(key)] = String(item);
+    }
+    return result;
+  }
+  function recordOfStringLists(value, path = "value") {
+    if (value == null) return {};
+    const source = asRecord(value, path);
+    return Object.fromEntries(
+      Object.entries(source).map(([key, item]) => [
+        String(key),
+        stringList(item, `${path}.${key}`)
+      ])
+    );
+  }
+
+  // custom_components/animal_health/frontend/src/api/normalizers/animals.js
+  function normalizeLatestWeight(value, path = "animal.latestWeight") {
+    if (value == null) return null;
+    const raw = asRecord(value, path);
+    return {
+      eventId: requiredText(
+        firstDefined(raw, ["event_id", "eventId"]),
+        `${path}.eventId`
+      ),
+      valueKg: numberValue(
+        firstDefined(raw, ["value_kg", "valueKg"]),
+        null,
+        `${path}.valueKg`
+      ),
+      originalValue: numberValue(
+        firstDefined(raw, ["original_value", "originalValue"]),
+        null,
+        `${path}.originalValue`
+      ),
+      originalUnit: optionalText(
+        firstDefined(raw, ["original_unit", "originalUnit"])
+      ),
+      occurredAt: dateTime(
+        firstDefined(raw, ["occurred_at", "occurredAt"]),
+        `${path}.occurredAt`
+      )
+    };
+  }
+  function normalizeAnimal(rawValue, metadata = {}) {
+    const raw = asRecord(rawValue, "animal");
+    const meta = metadata == null ? {} : asRecord(metadata, "animalMetadata");
+    return {
+      id: requiredText(firstDefined(raw, ["id", "animal_id", "animalId"]), "animal.id"),
+      name: requiredText(firstDefined(raw, ["name", "animal_name", "animalName"]), "animal.name"),
+      species: requiredText(firstDefined(raw, ["species", "species_id", "speciesId"]), "animal.species"),
+      breed: optionalText(firstDefined(raw, ["breed", "breed_name", "breedName"])),
+      color: optionalText(firstDefined(raw, ["color", "colour"])),
+      sex: optionalText(raw.sex),
+      birthDate: dateOnly(firstDefined(raw, ["birth_date", "birthDate"]), "animal.birthDate"),
+      arrivalDate: dateOnly(firstDefined(raw, ["arrival_date", "arrivalDate"]), "animal.arrivalDate"),
+      status: requiredText(firstDefined(raw, ["status"], "active"), "animal.status"),
+      statusChangedAt: dateTime(
+        firstDefined(raw, ["status_changed_at", "statusChangedAt"]),
+        "animal.statusChangedAt"
+      ),
+      isArchived: booleanValue(firstDefined(raw, ["is_archived", "isArchived"]), false),
+      archivedAt: dateTime(
+        firstDefined(raw, ["archived_at", "archivedAt"]),
+        "animal.archivedAt"
+      ),
+      createdAt: dateTime(firstDefined(raw, ["created_at", "createdAt"]), "animal.createdAt"),
+      updatedAt: dateTime(firstDefined(raw, ["updated_at", "updatedAt"]), "animal.updatedAt"),
+      deviceId: optionalText(firstDefined(raw, ["device_id", "deviceId"])),
+      latestWeight: normalizeLatestWeight(
+        firstDefined(raw, ["latest_weight", "latestWeight"])
+      ),
+      groupId: optionalText(
+        firstDefined(meta, ["groupId", "group_id"], firstDefined(raw, ["group_id", "groupId"]))
+      ),
+      tagIds: stringList(
+        firstDefined(meta, ["tagIds", "tag_ids"], firstDefined(raw, ["tag_ids", "tagIds"], [])),
+        "animal.tagIds"
+      ),
+      profileAttachmentId: optionalText(
+        firstDefined(
+          meta,
+          ["profileAttachmentId", "profile_attachment_id"],
+          firstDefined(raw, ["profile_attachment_id", "profileAttachmentId"])
+        )
+      )
+    };
+  }
+  function normalizeGroup(rawValue) {
+    const raw = asRecord(rawValue, "group");
+    return {
+      id: requiredText(firstDefined(raw, ["id", "group_id", "groupId"]), "group.id"),
+      name: requiredText(raw.name, "group.name"),
+      species: optionalText(firstDefined(raw, ["species", "species_id", "speciesId"])),
+      description: optionalText(raw.description),
+      createdAt: dateTime(firstDefined(raw, ["created_at", "createdAt"]), "group.createdAt"),
+      updatedAt: dateTime(firstDefined(raw, ["updated_at", "updatedAt"]), "group.updatedAt"),
+      animalCount: integerValue(
+        firstDefined(raw, ["animal_count", "animalCount"]),
+        0,
+        "group.animalCount"
+      )
+    };
+  }
+  function normalizeTag(rawValue) {
+    const raw = asRecord(rawValue, "tag");
+    return {
+      id: requiredText(firstDefined(raw, ["id", "tag_id", "tagId"]), "tag.id"),
+      name: requiredText(raw.name, "tag.name"),
+      description: optionalText(raw.description),
+      createdAt: dateTime(firstDefined(raw, ["created_at", "createdAt"]), "tag.createdAt"),
+      updatedAt: dateTime(firstDefined(raw, ["updated_at", "updatedAt"]), "tag.updatedAt"),
+      animalCount: integerValue(
+        firstDefined(raw, ["animal_count", "animalCount"]),
+        0,
+        "tag.animalCount"
+      )
+    };
+  }
+  function normalizeAttachment(rawValue) {
+    const raw = asRecord(rawValue, "attachment");
+    return {
+      id: requiredText(firstDefined(raw, ["id", "attachment_id", "attachmentId"]), "attachment.id"),
+      animalId: requiredText(firstDefined(raw, ["animal_id", "animalId"]), "attachment.animalId"),
+      eventId: optionalText(firstDefined(raw, ["event_id", "eventId"])),
+      filename: requiredText(raw.filename, "attachment.filename"),
+      mediaType: requiredText(firstDefined(raw, ["media_type", "mediaType"]), "attachment.mediaType"),
+      sizeBytes: integerValue(
+        firstDefined(raw, ["size_bytes", "sizeBytes"]),
+        0,
+        "attachment.sizeBytes"
+      ),
+      title: optionalText(raw.title),
+      createdAt: dateTime(firstDefined(raw, ["created_at", "createdAt"]), "attachment.createdAt"),
+      thumbnailUrl: optionalText(firstDefined(raw, ["thumbnail_url", "thumbnailUrl"])),
+      previewUrl: optionalText(firstDefined(raw, ["preview_url", "previewUrl"])),
+      downloadUrl: optionalText(firstDefined(raw, ["download_url", "downloadUrl", "url"]))
+    };
+  }
+
+  // custom_components/animal_health/frontend/src/api/normalizers/tasks.js
+  var CLOSED_STATUSES = /* @__PURE__ */ new Set(["completed", "skipped", "cancelled"]);
+  function embeddedPlannedRecord(raw) {
+    const embedded = firstDefined(raw, ["planned"], {});
+    return embedded !== null && typeof embedded === "object" && !Array.isArray(embedded) ? embedded : {};
+  }
+  function targetScope(raw, fallback, animalId, animalIds, groupId) {
+    const value = optionalText(
+      firstDefined(
+        raw,
+        ["target_scope", "targetScope"],
+        firstDefined(fallback, ["scope"], firstDefined(raw, ["scope"]))
+      )
+    );
+    if (value === "general" || value === "group" || value === "animals") {
+      return value;
+    }
+    if (value === "animal") return "animal";
+    if (groupId) return "group";
+    if (animalIds.length > 1) return "animals";
+    if (animalId || animalIds.length === 1) return "animal";
+    return "general";
+  }
+  function normalizeTarget(rawValue = {}, fallbackValue = {}) {
+    const raw = asRecord(rawValue, "target");
+    const fallback = asRecord(fallbackValue || {}, "targetFallback");
+    const explicitAnimalId = optionalText(
+      firstDefined(
+        raw,
+        ["animal_id", "animalId"],
+        firstDefined(fallback, ["animal_id", "animalId"])
+      )
+    );
+    const animalIds = stringList(
+      firstDefined(
+        raw,
+        ["target_animal_ids", "targetAnimalIds", "animal_ids", "animalIds"],
+        firstDefined(fallback, ["animal_ids", "animalIds"], [])
+      ),
+      "target.animalIds"
+    );
+    const animalId = explicitAnimalId || (animalIds.length === 1 ? animalIds[0] : null);
+    const groupId = optionalText(
+      firstDefined(
+        raw,
+        ["target_group_id", "targetGroupId", "group_id", "groupId"],
+        firstDefined(fallback, ["group_id", "groupId"])
+      )
+    );
+    const scope = targetScope(raw, fallback, animalId, animalIds, groupId);
+    const memberSnapshot = stringList(
+      firstDefined(
+        raw,
+        [
+          "member_snapshot",
+          "memberSnapshot",
+          "target_member_snapshot",
+          "targetMemberSnapshot",
+          "target_animal_ids",
+          "targetAnimalIds"
+        ],
+        firstDefined(
+          fallback,
+          ["member_snapshot", "memberSnapshot"],
+          []
+        )
+      ),
+      "target.memberSnapshot"
+    );
+    return {
+      scope,
+      animalId: scope === "animal" ? animalId : null,
+      animalIds: scope === "animals" ? animalIds : scope === "animal" && animalId ? [animalId] : [],
+      groupId: scope === "group" ? groupId : null,
+      memberSnapshot
+    };
+  }
+  function normalizePlanned(raw, inherited = {}) {
+    return {
+      ...camelizeObject(inherited || {}),
+      ...camelizeObject(embeddedPlannedRecord(raw)),
+      ...collectPrefixedFields(raw, "planned_")
+    };
+  }
+  function normalizeTaskDefinition(rawValue) {
+    const raw = asRecord(rawValue, "task");
+    const id = requiredText(
+      firstDefined(raw, ["id", "task_id", "taskId"]),
+      "task.id"
+    );
+    const recurrenceType = requiredText(
+      firstDefined(raw, ["recurrence_type", "recurrenceType"], "once"),
+      "task.recurrenceType"
+    );
+    const explicitSeriesId = optionalText(
+      firstDefined(raw, ["series_id", "seriesId"])
+    );
+    return {
+      id,
+      seriesId: explicitSeriesId || (recurrenceType === "once" ? null : id),
+      target: normalizeTarget({ ...raw, ...embeddedPlannedRecord(raw) }),
+      animalName: optionalText(
+        firstDefined(raw, ["animal_name", "animalName"])
+      ),
+      title: requiredText(
+        firstDefined(raw, ["title", "task_title", "taskTitle"]),
+        "task.title"
+      ),
+      description: optionalText(raw.description),
+      kind: requiredText(
+        firstDefined(raw, ["task_kind", "taskKind", "kind"], "reminder"),
+        "task.kind"
+      ),
+      recurrenceType,
+      recurrenceInterval: integerValue(
+        firstDefined(raw, ["recurrence_interval", "recurrenceInterval"]),
+        1,
+        "task.recurrenceInterval"
+      ),
+      startDate: dateOnly(
+        firstDefined(raw, ["start_date", "startDate"]),
+        "task.startDate"
+      ),
+      endDate: dateOnly(
+        firstDefined(raw, ["end_date", "endDate"]),
+        "task.endDate"
+      ),
+      dueTime: optionalText(firstDefined(raw, ["due_time", "dueTime"])),
+      isActive: booleanValue(
+        firstDefined(raw, ["is_active", "isActive"]),
+        true
+      ),
+      nextPendingAt: dateTime(
+        firstDefined(raw, ["next_pending_at", "nextPendingAt"]),
+        "task.nextPendingAt"
+      ),
+      nextPendingLocal: dateTime(
+        firstDefined(raw, ["next_pending_local", "nextPendingLocal"]),
+        "task.nextPendingLocal"
+      ),
+      pendingCount: integerValue(
+        firstDefined(raw, ["pending_count", "pendingCount"]),
+        0,
+        "task.pendingCount"
+      ),
+      overdueCount: integerValue(
+        firstDefined(raw, ["overdue_count", "overdueCount"]),
+        0,
+        "task.overdueCount"
+      ),
+      planned: normalizePlanned(raw),
+      entityId: optionalText(firstDefined(raw, ["entity_id", "entityId"])),
+      createdAt: dateTime(
+        firstDefined(raw, ["created_at", "createdAt"]),
+        "task.createdAt"
+      ),
+      updatedAt: dateTime(
+        firstDefined(raw, ["updated_at", "updatedAt"]),
+        "task.updatedAt"
+      )
+    };
+  }
+  function getTask(taskById, definitionId) {
+    if (taskById instanceof Map) return taskById.get(definitionId) || null;
+    if (taskById && typeof taskById === "object") {
+      return taskById[definitionId] || null;
+    }
+    return null;
+  }
+  function occurrenceTiming(raw, status, scheduledDate, today) {
+    if (CLOSED_STATUSES.has(status) || status !== "pending") return "closed";
+    if (booleanValue(firstDefined(raw, ["is_overdue", "isOverdue"]), false)) {
+      return "overdue";
+    }
+    if (booleanValue(firstDefined(raw, ["is_today", "isToday"]), false)) {
+      return "today";
+    }
+    if (booleanValue(firstDefined(raw, ["is_upcoming", "isUpcoming"]), false)) {
+      return "upcoming";
+    }
+    if (scheduledDate && today) {
+      if (scheduledDate < today) return "overdue";
+      if (scheduledDate === today) return "today";
+      return "upcoming";
+    }
+    return "upcoming";
+  }
+  function normalizeTaskOccurrence(rawValue, { taskById = {}, today = null } = {}) {
+    const raw = asRecord(rawValue, "occurrence");
+    const id = requiredText(
+      firstDefined(raw, ["id", "occurrence_id", "occurrenceId"]),
+      "occurrence.id"
+    );
+    const definitionId = requiredText(
+      firstDefined(
+        raw,
+        ["task_id", "taskId", "definition_id", "definitionId"]
+      ),
+      "occurrence.definitionId"
+    );
+    const task = getTask(taskById, definitionId);
+    const status = requiredText(
+      firstDefined(raw, ["status"], "pending"),
+      "occurrence.status"
+    );
+    const scheduledDate = dateOnly(
+      firstDefined(
+        raw,
+        ["scheduled_date", "scheduledDate", "due_date", "dueDate"]
+      ),
+      "occurrence.dueDate"
+    );
+    const localToday = dateOnly(today, "today");
+    const explicitSeriesId = optionalText(
+      firstDefined(raw, ["series_id", "seriesId"])
+    );
+    return {
+      id,
+      seriesId: explicitSeriesId || task?.seriesId || null,
+      definitionId,
+      target: normalizeTarget(
+        { ...raw, ...embeddedPlannedRecord(raw) },
+        task?.target || {}
+      ),
+      animalName: optionalText(
+        firstDefined(raw, ["animal_name", "animalName"], task?.animalName)
+      ),
+      title: requiredText(
+        firstDefined(raw, ["task_title", "taskTitle", "title"], task?.title),
+        "occurrence.title"
+      ),
+      scheduledAt: dateTime(
+        firstDefined(raw, ["scheduled_for", "scheduledAt"]),
+        "occurrence.scheduledAt"
+      ),
+      scheduledLocal: dateTime(
+        firstDefined(raw, ["scheduled_local", "scheduledLocal"]),
+        "occurrence.scheduledLocal"
+      ),
+      dueDate: scheduledDate,
+      status,
+      timing: occurrenceTiming(raw, status, scheduledDate, localToday),
+      completedAt: dateTime(
+        firstDefined(raw, ["completed_at", "completedAt"]),
+        "occurrence.completedAt"
+      ),
+      notes: optionalText(raw.notes),
+      taskIsActive: booleanValue(
+        firstDefined(raw, ["task_is_active", "taskIsActive"], task?.isActive),
+        true
+      ),
+      planned: normalizePlanned(raw, task?.planned),
+      completion: status === "pending" ? null : {
+        status,
+        completedAt: dateTime(
+          firstDefined(raw, ["completed_at", "completedAt"]),
+          "occurrence.completedAt"
+        ),
+        notes: optionalText(raw.notes)
+      },
+      createdAt: dateTime(
+        firstDefined(raw, ["created_at", "createdAt"]),
+        "occurrence.createdAt"
+      ),
+      updatedAt: dateTime(
+        firstDefined(raw, ["updated_at", "updatedAt"]),
+        "occurrence.updatedAt"
+      )
+    };
+  }
+
+  // custom_components/animal_health/frontend/src/api/normalizers/timeline.js
+  function attachmentsFor(index, eventId) {
+    if (index instanceof Map) return index.get(eventId) || [];
+    if (index && typeof index === "object") return index[eventId] || [];
+    return [];
+  }
+  function normalizeHealthEvent(rawValue, { attachmentsByEventId = {} } = {}) {
+    const raw = asRecord(rawValue, "event");
+    const id = requiredText(
+      firstDefined(raw, ["id", "event_id", "eventId"]),
+      "event.id"
+    );
+    const animalId = requiredText(
+      firstDefined(raw, ["animal_id", "animalId"]),
+      "event.animalId"
+    );
+    const taskId = optionalText(firstDefined(raw, ["task_id", "taskId"]));
+    const occurrenceId = optionalText(
+      firstDefined(
+        raw,
+        [
+          "task_occurrence_id",
+          "taskOccurrenceId",
+          "occurrence_id",
+          "occurrenceId"
+        ]
+      )
+    );
+    const rawPayload = firstDefined(raw, ["data", "payload"], {});
+    const payload = camelizeObject(
+      rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload) ? rawPayload : {}
+    );
+    const target = normalizeTarget(payload, {
+      scope: "animal",
+      animalId,
+      animalIds: [animalId],
+      groupId: null,
+      memberSnapshot: []
+    });
+    const sourceKind = optionalText(
+      firstDefined(payload, ["source", "sourceKind"])
+    );
+    const hasSource = taskId || occurrenceId || sourceKind;
+    return {
+      id,
+      animalId,
+      animalName: optionalText(
+        firstDefined(raw, ["animal_name", "animalName"])
+      ),
+      type: requiredText(
+        firstDefined(raw, ["event_type", "eventType", "type"]),
+        "event.type"
+      ),
+      occurredAt: dateTime(
+        firstDefined(raw, ["occurred_at", "occurredAt"]),
+        "event.occurredAt"
+      ),
+      title: requiredText(
+        firstDefined(raw, ["title"], "event"),
+        "event.title"
+      ),
+      notes: optionalText(raw.notes),
+      value: numberValue(raw.value, null, "event.value"),
+      unit: optionalText(raw.unit),
+      correctionOfEventId: optionalText(
+        firstDefined(raw, ["correction_of_event_id", "correctionOfEventId"])
+      ),
+      createdAt: dateTime(
+        firstDefined(raw, ["created_at", "createdAt"]),
+        "event.createdAt"
+      ),
+      target,
+      source: hasSource ? {
+        kind: taskId || occurrenceId ? "task" : sourceKind,
+        taskId,
+        occurrenceId,
+        groupId: target.groupId,
+        treatmentPlanId: optionalText(
+          firstDefined(payload, ["treatmentPlanId"])
+        )
+      } : null,
+      payload,
+      attachments: attachmentsFor(attachmentsByEventId, id).map(
+        (item) => normalizeAttachment(item)
+      )
+    };
+  }
+
+  // custom_components/animal_health/frontend/src/api/normalizers/catalog.js
+  function objectList(value, path) {
+    return asArray(value, path).map(
+      (item, index) => camelizeObject(asRecord(item, `${path}[${index}]`))
+    );
+  }
+  function normalizeCatalog(rawValue) {
+    const raw = asRecord(rawValue, "catalog");
+    return {
+      animalStatuses: stringList(firstDefined(raw, ["animal_statuses", "animalStatuses"], [])),
+      animalSexes: stringList(firstDefined(raw, ["animal_sexes", "animalSexes"], [])),
+      eventTypes: stringList(firstDefined(raw, ["event_types", "eventTypes"], [])),
+      weightUnits: stringList(firstDefined(raw, ["weight_units", "weightUnits"], [])),
+      doseUnits: stringList(firstDefined(raw, ["dose_units", "doseUnits"], [])),
+      administrationRoutes: stringList(
+        firstDefined(raw, ["administration_routes", "administrationRoutes"], [])
+      ),
+      symptoms: stringList(firstDefined(raw, ["symptoms"], [])),
+      symptomSeverities: stringList(
+        firstDefined(raw, ["symptom_severities", "symptomSeverities"], [])
+      ),
+      vaccinationTargets: stringList(
+        firstDefined(raw, ["vaccination_targets", "vaccinationTargets"], [])
+      ),
+      taskKinds: stringList(firstDefined(raw, ["task_kinds", "taskKinds"], [])),
+      healthCheckResults: stringList(
+        firstDefined(raw, ["health_check_results", "healthCheckResults"], [])
+      ),
+      medicineNames: stringList(
+        firstDefined(raw, ["medicine_names", "medicineNames"], [])
+      ),
+      vaccineNames: stringList(
+        firstDefined(raw, ["vaccine_names", "vaccineNames"], [])
+      ),
+      species: objectList(firstDefined(raw, ["species"], []), "catalog.species"),
+      breeds: objectList(firstDefined(raw, ["breeds"], []), "catalog.breeds")
+    };
+  }
+
+  // custom_components/animal_health/frontend/src/api/normalizers/features.js
+  function normalizeExports(value) {
+    const raw = value == null ? {} : asRecord(value, "features.exports");
+    return {
+      json: optionalText(raw.json),
+      backup: optionalText(raw.backup),
+      animalPdf: optionalText(firstDefined(raw, ["animal_pdf", "animalPdf"]))
+    };
+  }
+  function normalizeFeatureState(featuresValue, tagStateValue = {}) {
+    const features = asRecord(featuresValue, "features");
+    const tagState = asRecord(tagStateValue, "tagState");
+    return {
+      storage: optionalText(features.storage),
+      maxAttachmentSizeBytes: integerValue(
+        firstDefined(features, ["max_attachment_size_bytes", "maxAttachmentSizeBytes"]),
+        0,
+        "features.maxAttachmentSizeBytes"
+      ),
+      primaryGroupRequired: booleanValue(
+        firstDefined(tagState, ["primary_group_required", "primaryGroupRequired"]),
+        false
+      ),
+      groups: asArray(features.groups, "features.groups").map(normalizeGroup),
+      memberships: recordOfText(features.memberships, "features.memberships"),
+      tags: asArray(tagState.tags, "tagState.tags").map(normalizeTag),
+      tagMemberships: recordOfStringLists(
+        firstDefined(tagState, ["tag_memberships", "tagMemberships"], {}),
+        "tagState.tagMemberships"
+      ),
+      profiles: Object.fromEntries(
+        Object.entries(asRecord(firstDefined(tagState, ["profiles"], {}), "tagState.profiles")).map(
+          ([animalId, attachmentId]) => [String(animalId), optionalText(attachmentId)]
+        )
+      ),
+      exports: normalizeExports(features.exports)
+    };
+  }
+
+  // custom_components/animal_health/frontend/src/api/normalizers/dashboard.js
+  function animalMetadata(featureState, animalId) {
+    if (!featureState) return {};
+    return {
+      groupId: featureState.memberships?.[animalId] || null,
+      tagIds: featureState.tagMemberships?.[animalId] || [],
+      profileAttachmentId: featureState.profiles?.[animalId] || null
+    };
+  }
+  function normalizeSummary(value) {
+    const raw = value == null ? {} : asRecord(value, "dashboard.summary");
+    return {
+      activeAnimals: integerValue(firstDefined(raw, ["active_animals", "activeAnimals"]), 0),
+      archivedAnimals: integerValue(firstDefined(raw, ["archived_animals", "archivedAnimals"]), 0),
+      pendingTasks: integerValue(firstDefined(raw, ["pending_tasks", "pendingTasks"]), 0),
+      overdueTasks: integerValue(firstDefined(raw, ["overdue_tasks", "overdueTasks"]), 0),
+      todayTasks: integerValue(firstDefined(raw, ["today_tasks", "todayTasks"]), 0),
+      upcomingTasks: integerValue(firstDefined(raw, ["upcoming_tasks", "upcomingTasks"]), 0)
+    };
+  }
+  function taskIndex(tasks) {
+    return Object.fromEntries(tasks.map((task) => [task.id, task]));
+  }
+  function attachmentIndex(attachments) {
+    const result = {};
+    for (const attachment of attachments) {
+      if (!attachment.eventId) continue;
+      (result[attachment.eventId] ||= []).push(attachment);
+    }
+    return result;
+  }
+  function normalizeDashboard(rawValue, { featureState = null, today = null } = {}) {
+    const raw = asRecord(rawValue, "dashboard");
+    const localToday = dateOnly(firstDefined(raw, ["today"], today), "dashboard.today");
+    const tasks = asArray(raw.tasks, "dashboard.tasks").map(normalizeTaskDefinition);
+    const byId = taskIndex(tasks);
+    return {
+      version: requiredText(raw.version, "dashboard.version"),
+      generatedAt: dateTime(
+        firstDefined(raw, ["generated_at", "generatedAt"]),
+        "dashboard.generatedAt"
+      ),
+      timeZone: optionalText(firstDefined(raw, ["time_zone", "timeZone"])),
+      today: localToday,
+      summary: normalizeSummary(raw.summary),
+      animals: asArray(raw.animals, "dashboard.animals").map((animal) => {
+        const id = requiredText(firstDefined(animal, ["id", "animal_id", "animalId"]), "animal.id");
+        return normalizeAnimal(animal, animalMetadata(featureState, id));
+      }),
+      tasks,
+      occurrences: asArray(raw.occurrences, "dashboard.occurrences").map(
+        (occurrence) => normalizeTaskOccurrence(occurrence, { taskById: byId, today: localToday })
+      ),
+      events: asArray(raw.events, "dashboard.events").map(
+        (event) => normalizeHealthEvent(event)
+      )
+    };
+  }
+  function normalizeAnimalDetail(rawValue, { featureState = null, today = null } = {}) {
+    const raw = asRecord(rawValue, "animalDetail");
+    const attachments = asArray(raw.attachments, "animalDetail.attachments").map(
+      normalizeAttachment
+    );
+    const attachmentsByEventId = attachmentIndex(attachments);
+    const tasks = asArray(raw.tasks, "animalDetail.tasks").map(normalizeTaskDefinition);
+    const byId = taskIndex(tasks);
+    const animalRaw = asRecord(raw.animal, "animalDetail.animal");
+    const animalId = requiredText(
+      firstDefined(animalRaw, ["id", "animal_id", "animalId"]),
+      "animal.id"
+    );
+    return {
+      version: requiredText(raw.version, "animalDetail.version"),
+      animal: normalizeAnimal(animalRaw, animalMetadata(featureState, animalId)),
+      tasks,
+      occurrences: asArray(raw.occurrences, "animalDetail.occurrences").map(
+        (occurrence) => normalizeTaskOccurrence(occurrence, { taskById: byId, today })
+      ),
+      events: asArray(raw.events, "animalDetail.events").map(
+        (event) => normalizeHealthEvent(event, { attachmentsByEventId })
+      ),
+      attachments
+    };
+  }
+  function normalizeAnimalDirectory({
+    dashboard,
+    catalog,
+    features,
+    tagState
+  }) {
+    const featureState = normalizeFeatureState(features, tagState);
+    const normalizedDashboard = normalizeDashboard(dashboard, { featureState });
+    return {
+      ...normalizedDashboard,
+      groups: featureState.groups,
+      tags: featureState.tags,
+      memberships: featureState.memberships,
+      tagMemberships: featureState.tagMemberships,
+      profiles: featureState.profiles,
+      exports: featureState.exports,
+      storage: featureState.storage,
+      maxAttachmentSizeBytes: featureState.maxAttachmentSizeBytes,
+      primaryGroupRequired: featureState.primaryGroupRequired,
+      catalog: normalizeCatalog(catalog)
+    };
+  }
+
+  // custom_components/animal_health/frontend/src/api/normalizers/products.js
+  function normalizeProductDatabase(rawValue) {
+    const raw = asRecord(rawValue, "productDatabase");
+    return {
+      id: requiredText(
+        firstDefined(raw, ["id", "database_id", "databaseId"]),
+        "productDatabase.id"
+      ),
+      name: requiredText(raw.name, "productDatabase.name"),
+      description: optionalText(raw.description),
+      productTypes: stringList(
+        firstDefined(raw, ["product_types", "productTypes"], []),
+        "productDatabase.productTypes"
+      ),
+      sourceName: optionalText(firstDefined(raw, ["source_name", "sourceName"])),
+      sourceType: optionalText(firstDefined(raw, ["source_type", "sourceType"])),
+      version: optionalText(raw.version),
+      dataAsOf: optionalText(firstDefined(raw, ["data_as_of", "dataAsOf"])),
+      priority: integerValue(raw.priority, 0, "productDatabase.priority"),
+      updateMode: optionalText(firstDefined(raw, ["update_mode", "updateMode"])),
+      licenseNotice: optionalText(
+        firstDefined(raw, ["license_notice", "licenseNotice"])
+      ),
+      sourceUrl: optionalText(firstDefined(raw, ["source_url", "sourceUrl"])),
+      enabled: booleanValue(raw.enabled, true),
+      isSystem: booleanValue(firstDefined(raw, ["is_system", "isSystem"]), false),
+      supportsLocalOverrides: booleanValue(
+        firstDefined(raw, ["supports_local_overrides", "supportsLocalOverrides"]),
+        false
+      ),
+      viewOf: optionalText(firstDefined(raw, ["view_of", "viewOf"])),
+      itemCount: integerValue(
+        firstDefined(raw, ["item_count", "itemCount"]),
+        0,
+        "productDatabase.itemCount"
+      ),
+      modifiedCount: integerValue(
+        firstDefined(raw, ["modified_count", "modifiedCount"]),
+        0,
+        "productDatabase.modifiedCount"
+      )
+    };
+  }
+  function normalizeIngredientDetails(value, path) {
+    return asArray(value, path).map(
+      (item, index) => camelizeObject(asRecord(item, `${path}[${index}]`))
+    );
+  }
+  function normalizeProductInternal(rawValue, {
+    includeOriginal = true,
+    inheritedDatabaseId = null,
+    inheritedKind = null
+  } = {}) {
+    const raw = asRecord(rawValue, "product");
+    const databaseId = requiredText(
+      firstDefined(
+        raw,
+        ["database_id", "databaseId", "source_id", "sourceId", "source"],
+        inheritedDatabaseId
+      ),
+      "product.databaseId"
+    );
+    const kind = requiredText(
+      firstDefined(raw, ["kind", "product_type", "productType"], inheritedKind),
+      "product.kind"
+    );
+    const product = {
+      id: requiredText(firstDefined(raw, ["id", "item_id", "itemId"]), "product.id"),
+      catalogItemId: optionalText(
+        firstDefined(raw, ["catalog_item_id", "catalogItemId"])
+      ),
+      databaseId,
+      kind,
+      name: requiredText(raw.name, "product.name"),
+      targetSpecies: stringList(
+        firstDefined(raw, ["target_species", "targetSpecies"], []),
+        "product.targetSpecies"
+      ),
+      activeIngredient: optionalText(
+        firstDefined(raw, ["active_ingredient", "activeIngredient"])
+      ),
+      activeIngredients: stringList(
+        firstDefined(raw, ["active_ingredients", "activeIngredients"], []),
+        "product.activeIngredients"
+      ),
+      activeIngredientDetails: normalizeIngredientDetails(
+        firstDefined(raw, ["active_ingredient_details", "activeIngredientDetails"], []),
+        "product.activeIngredientDetails"
+      ),
+      concentration: optionalText(raw.concentration),
+      dosageForm: optionalText(firstDefined(raw, ["dosage_form", "dosageForm"])),
+      routes: stringList(raw.routes || [], "product.routes"),
+      routeDescriptions: stringList(
+        firstDefined(raw, ["route_descriptions", "routeDescriptions"], []),
+        "product.routeDescriptions"
+      ),
+      defaultRoute: optionalText(firstDefined(raw, ["default_route", "defaultRoute"])),
+      authorisationNumber: optionalText(
+        firstDefined(raw, ["authorisation_number", "authorisationNumber"])
+      ),
+      authorisationStatus: optionalText(
+        firstDefined(raw, ["authorisation_status", "authorisationStatus"])
+      ),
+      applicationArea: optionalText(
+        firstDefined(raw, ["application_area", "applicationArea"])
+      ),
+      aliases: stringList(raw.aliases || [], "product.aliases"),
+      classifications: stringList(
+        raw.classifications || [],
+        "product.classifications"
+      ),
+      isHidden: booleanValue(firstDefined(raw, ["is_hidden", "isHidden"]), false),
+      isCustom: booleanValue(firstDefined(raw, ["is_custom", "isCustom"]), false),
+      isModified: booleanValue(
+        firstDefined(raw, ["is_modified", "isModified"]),
+        false
+      )
+    };
+    if (includeOriginal) {
+      const originalRaw = firstDefined(raw, ["original"]);
+      product.original = originalRaw && typeof originalRaw === "object" && !Array.isArray(originalRaw) ? normalizeProductInternal(originalRaw, {
+        includeOriginal: false,
+        inheritedDatabaseId: databaseId,
+        inheritedKind: kind
+      }) : null;
+    }
+    return product;
+  }
+  function normalizeProduct(rawValue) {
+    return normalizeProductInternal(rawValue);
+  }
+  function normalizeViews(value) {
+    const raw = value == null ? {} : asRecord(value, "productState.views");
+    return {
+      dewormingDatabaseId: optionalText(
+        firstDefined(raw, ["deworming_database_id", "dewormingDatabaseId"])
+      ),
+      swissmedicDatabaseId: optionalText(
+        firstDefined(raw, ["swissmedic_database_id", "swissmedicDatabaseId"])
+      )
+    };
+  }
+  function normalizeProductState(rawValue) {
+    const raw = asRecord(rawValue, "productState");
+    return {
+      databases: asArray(raw.databases, "productState.databases").map(
+        normalizeProductDatabase
+      ),
+      products: asArray(raw.products, "productState.products").map(normalizeProduct),
+      mergedProducts: asArray(
+        firstDefined(raw, ["merged_products", "mergedProducts"], []),
+        "productState.mergedProducts"
+      ).map(normalizeProduct),
+      views: normalizeViews(raw.views)
+    };
+  }
+
+  // custom_components/animal_health/frontend/src/api/normalizers/treatments.js
+  function normalizeTreatmentComponent(rawValue) {
+    const raw = asRecord(rawValue, "treatmentComponent");
+    return {
+      type: requiredText(raw.type, "treatmentComponent.type"),
+      name: requiredText(raw.name, "treatmentComponent.name"),
+      dose: numberValue(raw.dose, null, "treatmentComponent.dose"),
+      unit: optionalText(raw.unit),
+      route: optionalText(raw.route),
+      instructions: optionalText(raw.instructions)
+    };
+  }
+  function normalizeTreatmentPlan(rawValue) {
+    const raw = asRecord(rawValue, "treatmentPlan");
+    return {
+      id: requiredText(firstDefined(raw, ["id", "plan_id", "planId"]), "treatmentPlan.id"),
+      name: requiredText(firstDefined(raw, ["name", "title"]), "treatmentPlan.name"),
+      speciesId: optionalText(firstDefined(raw, ["species_id", "speciesId"])),
+      listAs: optionalText(firstDefined(raw, ["list_as", "listAs"])),
+      description: optionalText(raw.description),
+      defaultUnit: optionalText(firstDefined(raw, ["default_unit", "defaultUnit"])),
+      defaultRoute: optionalText(firstDefined(raw, ["default_route", "defaultRoute"])),
+      components: asArray(raw.components, "treatmentPlan.components").map(
+        normalizeTreatmentComponent
+      )
+    };
+  }
+  function normalizeStatusChange(rawValue) {
+    const raw = asRecord(rawValue, "statusChange");
+    return {
+      id: requiredText(firstDefined(raw, ["id", "status_change_id", "statusChangeId"]), "statusChange.id"),
+      animalId: requiredText(firstDefined(raw, ["animal_id", "animalId"]), "statusChange.animalId"),
+      animalName: optionalText(firstDefined(raw, ["animal_name", "animalName"])),
+      targetStatus: requiredText(
+        firstDefined(raw, ["target_status", "targetStatus"]),
+        "statusChange.targetStatus"
+      ),
+      plannedFor: dateTime(
+        firstDefined(raw, ["planned_for", "plannedFor"]),
+        "statusChange.plannedFor"
+      ),
+      state: requiredText(firstDefined(raw, ["state"], "scheduled"), "statusChange.state"),
+      notes: optionalText(raw.notes),
+      createdAt: dateTime(firstDefined(raw, ["created_at", "createdAt"]), "statusChange.createdAt"),
+      updatedAt: dateTime(firstDefined(raw, ["updated_at", "updatedAt"]), "statusChange.updatedAt"),
+      resolvedAt: dateTime(firstDefined(raw, ["resolved_at", "resolvedAt"]), "statusChange.resolvedAt")
+    };
+  }
+  function normalizeTreatmentState(rawValue) {
+    const raw = asRecord(rawValue, "treatmentState");
+    return {
+      offLabelMode: optionalText(
+        firstDefined(raw, ["off_label_mode", "offLabelMode"])
+      ),
+      treatmentPlans: asArray(
+        firstDefined(raw, ["treatment_plans", "treatmentPlans"], []),
+        "treatmentState.treatmentPlans"
+      ).map(normalizeTreatmentPlan),
+      statusChanges: asArray(
+        firstDefined(raw, ["status_changes", "statusChanges"], []),
+        "treatmentState.statusChanges"
+      ).map(normalizeStatusChange)
+    };
+  }
+
+  // custom_components/animal_health/frontend/src/api/normalizers/settings.js
+  function normalizeMasterItem(rawValue) {
+    const raw = asRecord(rawValue, "masterItem");
+    return {
+      kind: requiredText(raw.kind, "masterItem.kind"),
+      id: requiredText(firstDefined(raw, ["id", "item_id", "itemId"]), "masterItem.id"),
+      baseLabelDe: optionalText(firstDefined(raw, ["base_label_de", "baseLabelDe"])),
+      baseLabelEn: optionalText(firstDefined(raw, ["base_label_en", "baseLabelEn"])),
+      label: requiredText(firstDefined(raw, ["label", "base_label_de", "baseLabelDe"]), "masterItem.label"),
+      overrideLabel: optionalText(
+        firstDefined(raw, ["override_label", "overrideLabel"])
+      ),
+      storageValue: requiredText(
+        firstDefined(raw, ["storage_value", "storageValue", "id"]),
+        "masterItem.storageValue"
+      ),
+      isCustom: booleanValue(firstDefined(raw, ["is_custom", "isCustom"]), false),
+      isHidden: booleanValue(firstDefined(raw, ["is_hidden", "isHidden"]), false),
+      isModified: booleanValue(
+        firstDefined(raw, ["is_modified", "isModified"]),
+        false
+      )
+    };
+  }
+  function normalizeMasterDataState(rawValue) {
+    const raw = asRecord(rawValue, "masterDataState");
+    return {
+      entryTypes: asArray(
+        firstDefined(raw, ["entry_types", "entryTypes"], []),
+        "masterDataState.entryTypes"
+      ).map(normalizeMasterItem),
+      symptoms: asArray(raw.symptoms, "masterDataState.symptoms").map(
+        normalizeMasterItem
+      )
+    };
+  }
+  function normalizeSettingsState(treatmentValue, masterDataValue) {
+    const treatment = normalizeTreatmentState(treatmentValue);
+    const masterData = normalizeMasterDataState(masterDataValue);
+    return {
+      ...treatment,
+      ...masterData
+    };
+  }
+
+  // custom_components/animal_health/frontend/src/platform/transport.js
+  var REQUIRED_METHODS = Object.freeze([
+    "request",
+    "callService",
+    "download",
+    "notify"
+  ]);
+  function isPlainObject(value) {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      return false;
+    }
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  }
+  function requireName(value, path) {
+    if (typeof value !== "string" || !value.trim()) {
+      throw validationError(`${path} must be a non-empty string`, path);
+    }
+    return value.trim();
+  }
+  function requirePayload(value, path = "payload") {
+    if (value === void 0) return {};
+    if (!isPlainObject(value)) {
+      throw validationError(`${path} must be a plain object`, path);
+    }
+    return { ...value };
+  }
+  function assertTransport(value) {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      throw validationError("transport must be an object", "transport");
+    }
+    const missing = REQUIRED_METHODS.filter(
+      (method) => typeof value[method] !== "function"
+    );
+    if (missing.length) {
+      throw validationError(
+        `transport is missing required methods: ${missing.join(", ")}`,
+        "transport",
+        { missing }
+      );
+    }
+    return value;
+  }
+
+  // custom_components/animal_health/frontend/src/api/client.js
+  function domainError(error, operation) {
+    const normalized = normalizeError(error, { operation });
+    if (normalized.operation === operation) return normalized;
+    return new AnimalHealthError(normalized.message, {
+      code: normalized.code,
+      operation,
+      details: {
+        ...normalized.details,
+        ...normalized.operation ? { transportOperation: normalized.operation } : {}
+      },
+      cause: normalized
+    });
+  }
+  function attachmentRecords(rawValue) {
+    const raw = asRecord(rawValue, "attachmentsResponse");
+    return asArray(
+      firstDefined(raw, ["attachments"], []),
+      "attachmentsResponse.attachments"
+    );
+  }
+  var AnimalHealthClient = class {
+    constructor(transport) {
+      this.transport = assertTransport(transport);
+    }
+    async _request(command, payload, operation) {
+      try {
+        return await this.transport.request(command, payload);
+      } catch (error) {
+        throw domainError(error, operation);
+      }
+    }
+    async getDashboard() {
+      return normalizeDashboard(
+        await this._request(COMMANDS.dashboard, {}, "getDashboard")
+      );
+    }
+    async getCatalog() {
+      return normalizeCatalog(
+        await this._request(COMMANDS.catalog, {}, "getCatalog")
+      );
+    }
+    async getFeatureState() {
+      const [features, tagState] = await Promise.all([
+        this._request(COMMANDS.features, {}, "getFeatureState.features"),
+        this._request(COMMANDS.tagState, {}, "getFeatureState.tags")
+      ]);
+      return normalizeFeatureState(features, tagState);
+    }
+    async getAnimalDirectory() {
+      const [dashboard, catalog, features, tagState] = await Promise.all([
+        this._request(COMMANDS.dashboard, {}, "getAnimalDirectory.dashboard"),
+        this._request(COMMANDS.catalog, {}, "getAnimalDirectory.catalog"),
+        this._request(COMMANDS.features, {}, "getAnimalDirectory.features"),
+        this._request(COMMANDS.tagState, {}, "getAnimalDirectory.tags")
+      ]);
+      return normalizeAnimalDirectory({ dashboard, catalog, features, tagState });
+    }
+    async getAnimalDetail(animalId, { eventLimit = 300, today = null } = {}) {
+      const id = requiredText(animalId, "animalId");
+      const limit = Number(eventLimit);
+      if (!Number.isInteger(limit) || limit < 1 || limit > 500) {
+        throw domainError(
+          {
+            code: "validation",
+            message: "eventLimit must be an integer from 1 to 500",
+            details: { path: "eventLimit" }
+          },
+          "getAnimalDetail"
+        );
+      }
+      const [detail, attachmentResponse] = await Promise.all([
+        this._request(
+          COMMANDS.animalDetail,
+          { animal_id: id, event_limit: limit },
+          "getAnimalDetail.detail"
+        ),
+        this._request(
+          COMMANDS.attachmentsList,
+          { animal_id: id },
+          "getAnimalDetail.attachments"
+        )
+      ]);
+      return normalizeAnimalDetail(
+        {
+          ...asRecord(detail, "animalDetailResponse"),
+          attachments: attachmentRecords(attachmentResponse)
+        },
+        { today }
+      );
+    }
+    async listAttachments({ animalId = null, eventId = null } = {}) {
+      const payload = {};
+      if (animalId != null) payload.animal_id = requiredText(animalId, "animalId");
+      if (eventId != null) payload.event_id = requiredText(eventId, "eventId");
+      return attachmentRecords(
+        await this._request(
+          COMMANDS.attachmentsList,
+          payload,
+          "listAttachments"
+        )
+      ).map(normalizeAttachment);
+    }
+    async getTreatmentState() {
+      return normalizeTreatmentState(
+        await this._request(
+          COMMANDS.treatmentState,
+          {},
+          "getTreatmentState"
+        )
+      );
+    }
+    async getMasterDataState() {
+      return normalizeMasterDataState(
+        await this._request(
+          COMMANDS.masterDataState,
+          {},
+          "getMasterDataState"
+        )
+      );
+    }
+    async getSettingsState() {
+      const [treatments, masterData] = await Promise.all([
+        this._request(
+          COMMANDS.treatmentState,
+          {},
+          "getSettingsState.treatments"
+        ),
+        this._request(
+          COMMANDS.masterDataState,
+          {},
+          "getSettingsState.masterData"
+        )
+      ]);
+      return normalizeSettingsState(treatments, masterData);
+    }
+    async getProductState() {
+      return normalizeProductState(
+        await this._request(COMMANDS.productState, {}, "getProductState")
+      );
+    }
+    async requestDownload({ kind, resourceId = null } = {}) {
+      const payload = { kind: requiredText(kind, "kind") };
+      if (resourceId != null) {
+        payload.resource_id = requiredText(resourceId, "resourceId");
+      }
+      return this._request(COMMANDS.download, payload, "requestDownload");
+    }
+    async callService(service, payload = {}, options = {}) {
+      const name = requiredText(service, "service");
+      try {
+        return await this.transport.callService(
+          name,
+          requirePayload(payload),
+          requirePayload(options, "options")
+        );
+      } catch (error) {
+        throw domainError(error, `callService:${name}`);
+      }
+    }
+    async download(resource) {
+      try {
+        return await this.transport.download(requirePayload(resource, "resource"));
+      } catch (error) {
+        throw domainError(error, "download");
+      }
+    }
+    notify(message, options = {}) {
+      try {
+        return this.transport.notify(
+          requiredText(message, "message"),
+          requirePayload(options, "options")
+        );
+      } catch (error) {
+        throw domainError(error, "notify");
+      }
+    }
+  };
+
+  // custom_components/animal_health/frontend/src/app/controller.js
+  function assertDependency(value, name, methods) {
+    if (value === null || typeof value !== "object") {
+      throw validationError(`${name} must be an object`, name);
+    }
+    for (const method of methods) {
+      if (typeof value[method] !== "function") {
+        throw validationError(`${name}.${method} must be a function`, `${name}.${method}`);
+      }
+    }
+    return value;
+  }
+  function operationError(error, operation) {
+    const normalized = normalizeError(error, { operation });
+    if (normalized.operation === operation) return normalized;
+    return new AnimalHealthError(normalized.message, {
+      code: normalized.code,
+      operation,
+      details: normalized.details,
+      cause: normalized
+    });
+  }
+  function parseDatasetRecord(value, path) {
+    if (value === void 0 || value === null || value === "") return {};
+    let parsed;
+    try {
+      parsed = JSON.parse(String(value));
+    } catch (error) {
+      throw validationError(`${path} must contain valid JSON`, path, {
+        cause: error instanceof Error ? error.message : String(error)
+      });
+    }
+    if (!isPlainObject(parsed)) {
+      throw validationError(`${path} must contain a JSON object`, path);
+    }
+    return parsed;
+  }
+  function actionTarget(event) {
+    if (event === null || typeof event !== "object") return null;
+    const path = typeof event.composedPath === "function" ? event.composedPath() : [event.target];
+    if (!Array.isArray(path)) return null;
+    return path.find(
+      (candidate) => candidate && candidate.dataset && typeof candidate.dataset.action === "string" && candidate.dataset.action.trim()
+    ) || null;
+  }
+  function eventContext(event, target) {
+    const dataset = { ...target.dataset };
+    const context = {
+      event,
+      target,
+      dataset
+    };
+    if (dataset.route) {
+      context.route = {
+        name: dataset.route,
+        params: parseDatasetRecord(
+          dataset.routeParams,
+          "data-route-params"
+        )
+      };
+    }
+    if (dataset.dialogType) {
+      context.dialogType = dataset.dialogType;
+      context.data = parseDatasetRecord(
+        dataset.dialogData,
+        "data-dialog-data"
+      );
+    }
+    return context;
+  }
+  function createController({ store, router, client, actions = {} } = {}) {
+    const actualStore = assertDependency(store, "store", [
+      "getState",
+      "update",
+      "beginRequest",
+      "commitRequest",
+      "failRequest"
+    ]);
+    const actualRouter = assertDependency(router, "router", [
+      "navigate",
+      "back",
+      "openDialog",
+      "closeDialog"
+    ]);
+    if (!isPlainObject(actions)) {
+      throw validationError("actions must be a plain object", "actions");
+    }
+    const registry = /* @__PURE__ */ new Map();
+    function register(name, handler) {
+      const actionName = requireName(name, "action.name");
+      if (typeof handler !== "function") {
+        throw validationError("action handler must be a function", "action.handler");
+      }
+      if (registry.has(actionName)) {
+        throw new AnimalHealthError(`Action already registered: ${actionName}`, {
+          code: ERROR_CODES.CONFLICT,
+          operation: "registerAction",
+          details: { action: actionName }
+        });
+      }
+      registry.set(actionName, handler);
+      return handler;
+    }
+    function unregister(name) {
+      return registry.delete(requireName(name, "action.name"));
+    }
+    function recordActionFailure(name, error) {
+      const key = `action:${name}`;
+      const normalized = operationError(error, key);
+      const token = actualStore.beginRequest(key);
+      actualStore.failRequest(token, normalized);
+      return normalized;
+    }
+    async function dispatch(name, context = {}) {
+      const actionName = requireName(name, "action.name");
+      if (!isPlainObject(context)) {
+        throw validationError("action context must be a plain object", "action.context");
+      }
+      const handler = registry.get(actionName);
+      if (!handler) return false;
+      try {
+        return await handler(context);
+      } catch (error) {
+        throw recordActionFailure(actionName, error);
+      }
+    }
+    async function handleEvent(event) {
+      const target = actionTarget(event);
+      if (!target) return false;
+      const name = requireName(target.dataset.action, "action.name");
+      if (event.type === "submit") event.preventDefault?.();
+      let context;
+      try {
+        context = eventContext(event, target);
+      } catch (error) {
+        throw recordActionFailure(name, error);
+      }
+      return dispatch(name, context);
+    }
+    async function runLatest(key, operation, applyResult) {
+      const requestKey = requireName(key, "request.key");
+      if (typeof operation !== "function") {
+        throw validationError("request operation must be a function", "operation");
+      }
+      if (typeof applyResult !== "function") {
+        throw validationError("result applicator must be a function", "applyResult");
+      }
+      const token = actualStore.beginRequest(requestKey);
+      try {
+        const result = await operation({
+          client,
+          store: actualStore,
+          router: actualRouter,
+          token
+        });
+        const applied = actualStore.commitRequest(token, (state) => {
+          const next = applyResult(state, result);
+          if (!isPlainObject(next)) {
+            throw validationError(
+              "result applicator must return a plain object",
+              "applyResult"
+            );
+          }
+          return next;
+        });
+        return { applied, result };
+      } catch (error) {
+        const normalized = operationError(error, `request:${requestKey}`);
+        const applied = actualStore.failRequest(token, normalized);
+        if (!applied) return { applied: false, error: normalized };
+        throw normalized;
+      }
+    }
+    register("app.navigate", ({ route }) => actualRouter.navigate(route));
+    register("app.back", () => actualRouter.back());
+    register(
+      "dialog.open",
+      ({ dialogType, data = {} }) => actualRouter.openDialog(dialogType, data)
+    );
+    register("dialog.close", () => actualRouter.closeDialog());
+    for (const [name, handler] of Object.entries(actions)) register(name, handler);
+    return Object.freeze({
+      register,
+      unregister,
+      dispatch,
+      handleEvent,
+      runLatest
+    });
+  }
+
+  // custom_components/animal_health/frontend/src/app/state.js
+  var RESOURCE_SLICE = Object.freeze({
+    status: "idle",
+    items: [],
+    error: null
+  });
+  var BASE_STATE = Object.freeze({
+    platform: {
+      kind: "unknown",
+      available: false,
+      metadata: {}
+    },
+    language: {
+      code: "de",
+      locale: "de-CH"
+    },
+    navigation: {
+      current: { name: "overview", params: {} },
+      stack: [],
+      revision: 0
+    },
+    dialog: {
+      open: false,
+      type: null,
+      data: {}
+    },
+    animals: RESOURCE_SLICE,
+    timeline: RESOURCE_SLICE,
+    tasks: RESOURCE_SLICE,
+    products: RESOURCE_SLICE,
+    treatments: RESOURCE_SLICE,
+    settings: {
+      status: "idle",
+      data: null,
+      error: null
+    },
+    drafts: {},
+    requests: {},
+    notifications: []
+  });
+  var STATE_KEYS = new Set(Object.keys(BASE_STATE));
+  function cloneValue(value, path = "value") {
+    if (Array.isArray(value)) {
+      return value.map((item, index) => cloneValue(item, `${path}[${index}]`));
+    }
+    if (isPlainObject(value)) {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, item]) => [
+          key,
+          cloneValue(item, `${path}.${key}`)
+        ])
+      );
+    }
+    if (value === null || value === void 0 || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      return value;
+    }
+    throw validationError(`${path} must contain JSON-compatible values`, path);
+  }
+  function mergeValue(base, override, path) {
+    if (override === void 0) return cloneValue(base, path);
+    if (isPlainObject(base) && isPlainObject(override)) {
+      const result = {};
+      for (const key of /* @__PURE__ */ new Set([
+        ...Object.keys(base),
+        ...Object.keys(override)
+      ])) {
+        result[key] = mergeValue(base[key], override[key], `${path}.${key}`);
+      }
+      return result;
+    }
+    return cloneValue(override, path);
+  }
+  function nonNegativeInteger(value, path) {
+    const number = Number(value);
+    if (!Number.isInteger(number) || number < 0) {
+      throw validationError(`${path} must be a non-negative integer`, path);
+    }
+    return number;
+  }
+  function createRoute(value = { name: "overview", params: {} }) {
+    const route = typeof value === "string" ? { name: value, params: {} } : value;
+    if (!isPlainObject(route)) {
+      throw validationError("route must be a plain object or route name", "route");
+    }
+    const params = route.params === void 0 ? {} : route.params;
+    if (!isPlainObject(params)) {
+      throw validationError("route.params must be a plain object", "route.params");
+    }
+    return {
+      name: requireName(route.name, "route.name"),
+      params: cloneValue(params, "route.params")
+    };
+  }
+  function createInitialState(overrides = {}) {
+    if (!isPlainObject(overrides)) {
+      throw validationError("state overrides must be a plain object", "state");
+    }
+    for (const key of Object.keys(overrides)) {
+      if (!STATE_KEYS.has(key)) {
+        throw validationError(`Unknown application state slice: ${key}`, `state.${key}`);
+      }
+    }
+    const state = mergeValue(BASE_STATE, overrides, "state");
+    if (!isPlainObject(state.navigation)) {
+      throw validationError("state.navigation must be a plain object", "state.navigation");
+    }
+    state.navigation.current = createRoute(state.navigation.current);
+    if (!Array.isArray(state.navigation.stack)) {
+      throw validationError(
+        "state.navigation.stack must be an array",
+        "state.navigation.stack"
+      );
+    }
+    state.navigation.stack = state.navigation.stack.map((route) => createRoute(route));
+    state.navigation.revision = nonNegativeInteger(
+      state.navigation.revision,
+      "state.navigation.revision"
+    );
+    if (!Array.isArray(state.notifications)) {
+      throw validationError(
+        "state.notifications must be an array",
+        "state.notifications"
+      );
+    }
+    if (!isPlainObject(state.requests)) {
+      throw validationError("state.requests must be a plain object", "state.requests");
+    }
+    if (!isPlainObject(state.drafts)) {
+      throw validationError("state.drafts must be a plain object", "state.drafts");
+    }
+    return state;
+  }
+
+  // custom_components/animal_health/frontend/src/app/router.js
+  function closedDialog() {
+    return {
+      open: false,
+      type: null,
+      data: {}
+    };
+  }
+  function equalValue(left, right) {
+    if (Object.is(left, right)) return true;
+    if (Array.isArray(left) || Array.isArray(right)) {
+      if (!Array.isArray(left) || !Array.isArray(right)) return false;
+      if (left.length !== right.length) return false;
+      return left.every((item, index) => equalValue(item, right[index]));
+    }
+    if (isPlainObject(left) || isPlainObject(right)) {
+      if (!isPlainObject(left) || !isPlainObject(right)) return false;
+      const leftKeys = Object.keys(left).sort();
+      const rightKeys = Object.keys(right).sort();
+      if (!equalValue(leftKeys, rightKeys)) return false;
+      return leftKeys.every((key) => equalValue(left[key], right[key]));
+    }
+    return false;
+  }
+  function assertStore(store) {
+    if (store === null || typeof store !== "object") {
+      throw validationError("store must be an object", "store");
+    }
+    for (const method of ["getState", "update"]) {
+      if (typeof store[method] !== "function") {
+        throw validationError(`store.${method} must be a function`, `store.${method}`);
+      }
+    }
+    return store;
+  }
+  function requireRouteValue(value) {
+    if (value === void 0 || value === null) {
+      throw validationError("route is required", "route");
+    }
+    return value;
+  }
+  function createRouter(storeValue) {
+    const store = assertStore(storeValue);
+    function current() {
+      return store.getState().navigation.current;
+    }
+    function navigate(routeValue, options = {}) {
+      if (!isPlainObject(options)) {
+        throw validationError("navigation options must be a plain object", "options");
+      }
+      const next = createRoute(requireRouteValue(routeValue));
+      const state = store.getState();
+      if (equalValue(state.navigation.current, next)) {
+        return state.navigation.current;
+      }
+      const replace2 = options.replace === true;
+      store.update((active) => ({
+        ...active,
+        navigation: {
+          current: next,
+          stack: replace2 ? active.navigation.stack : [...active.navigation.stack, active.navigation.current],
+          revision: active.navigation.revision + 1
+        },
+        dialog: closedDialog(),
+        requests: {}
+      }));
+      return store.getState().navigation.current;
+    }
+    function replace(routeValue) {
+      return navigate(requireRouteValue(routeValue), { replace: true });
+    }
+    function back() {
+      const state = store.getState();
+      const stack = state.navigation.stack;
+      if (!stack.length) return state.navigation.current;
+      const previous = createRoute(stack[stack.length - 1]);
+      store.update((active) => ({
+        ...active,
+        navigation: {
+          current: previous,
+          stack: active.navigation.stack.slice(0, -1),
+          revision: active.navigation.revision + 1
+        },
+        dialog: closedDialog(),
+        requests: {}
+      }));
+      return store.getState().navigation.current;
+    }
+    function openDialog(type, data = {}) {
+      const dialogType = requireName(type, "dialog.type");
+      if (!isPlainObject(data)) {
+        throw validationError("dialog.data must be a plain object", "dialog.data");
+      }
+      const next = {
+        open: true,
+        type: dialogType,
+        data: cloneValue(data, "dialog.data")
+      };
+      const state = store.getState();
+      if (equalValue(state.dialog, next)) return state.dialog;
+      store.update({ dialog: next });
+      return store.getState().dialog;
+    }
+    function closeDialog() {
+      const state = store.getState();
+      if (!state.dialog.open && state.dialog.type === null) return state.dialog;
+      store.update({ dialog: closedDialog() });
+      return store.getState().dialog;
+    }
+    return Object.freeze({
+      current,
+      navigate,
+      replace,
+      back,
+      openDialog,
+      closeDialog
+    });
+  }
+
+  // custom_components/animal_health/frontend/src/app/store.js
+  function applyUpdate(current, updateOrPatch, path = "state update") {
+    if (typeof updateOrPatch === "function") {
+      const next = updateOrPatch(current);
+      if (!isPlainObject(next)) {
+        throw validationError(`${path} must return a plain object`, path);
+      }
+      return next;
+    }
+    if (!isPlainObject(updateOrPatch)) {
+      throw validationError(`${path} must be a function or plain object`, path);
+    }
+    const entries = Object.entries(updateOrPatch);
+    if (entries.every(([key, value]) => Object.is(current[key], value))) {
+      return current;
+    }
+    return { ...current, ...updateOrPatch };
+  }
+  function errorRecord(error) {
+    const normalized = normalizeError(error);
+    return {
+      code: normalized.code,
+      message: normalized.message,
+      operation: normalized.operation,
+      details: { ...normalized.details }
+    };
+  }
+  function createStore(initialState2 = {}) {
+    let state = createInitialState(initialState2);
+    const listeners = /* @__PURE__ */ new Set();
+    let requestSequence = 0;
+    function replaceState(next) {
+      if (next === state) return state;
+      if (!isPlainObject(next)) {
+        throw validationError("application state must be a plain object", "state");
+      }
+      const previous = state;
+      state = next;
+      for (const listener of [...listeners]) listener(state, previous);
+      return state;
+    }
+    function getState() {
+      return state;
+    }
+    function update(updateOrPatch) {
+      return replaceState(applyUpdate(state, updateOrPatch));
+    }
+    function subscribe(listener) {
+      if (typeof listener !== "function") {
+        throw validationError("store listener must be a function", "listener");
+      }
+      listeners.add(listener);
+      let active = true;
+      return () => {
+        if (!active) return;
+        active = false;
+        listeners.delete(listener);
+      };
+    }
+    function beginRequest(key) {
+      const requestKey = requireName(key, "request.key");
+      const token = Object.freeze({
+        key: requestKey,
+        id: ++requestSequence,
+        navigationRevision: state.navigation.revision
+      });
+      update((current) => ({
+        ...current,
+        requests: {
+          ...current.requests,
+          [requestKey]: {
+            ...token,
+            status: "pending",
+            error: null
+          }
+        }
+      }));
+      return token;
+    }
+    function isCurrentRequest(token) {
+      if (!token || typeof token !== "object") return false;
+      const active = state.requests[token.key];
+      return Boolean(
+        active && active.id === token.id && active.navigationRevision === token.navigationRevision && state.navigation.revision === token.navigationRevision
+      );
+    }
+    function commitRequest(token, updateOrPatch = {}) {
+      if (!isCurrentRequest(token)) return false;
+      const active = state.requests[token.key];
+      const updated = applyUpdate(state, updateOrPatch, "request result update");
+      const updatedRequests = isPlainObject(updated.requests) ? updated.requests : state.requests;
+      replaceState({
+        ...updated,
+        requests: {
+          ...updatedRequests,
+          [token.key]: {
+            ...active,
+            status: "success",
+            error: null
+          }
+        }
+      });
+      return true;
+    }
+    function failRequest(token, error) {
+      if (!isCurrentRequest(token)) return false;
+      const active = state.requests[token.key];
+      update((current) => ({
+        ...current,
+        requests: {
+          ...current.requests,
+          [token.key]: {
+            ...active,
+            status: "error",
+            error: errorRecord(error)
+          }
+        }
+      }));
+      return true;
+    }
+    return Object.freeze({
+      getState,
+      update,
+      subscribe,
+      beginRequest,
+      commitRequest,
+      failRequest,
+      isCurrentRequest
+    });
+  }
+
+  // custom_components/animal_health/frontend/src/platform/home-assistant-adapter.js
+  var DOMAIN = "animal_health";
+  function requireHass(getHass, operation) {
+    if (typeof getHass !== "function") {
+      throw validationError("getHass must be a function", "getHass");
+    }
+    const hass = getHass();
+    if (hass === null || typeof hass !== "object") {
+      throw new AnimalHealthError("Home Assistant is not available", {
+        code: ERROR_CODES.UNAVAILABLE,
+        operation
+      });
+    }
+    return hass;
+  }
+  async function run(operation, callback) {
+    try {
+      return await callback();
+    } catch (error) {
+      throw normalizeError(error, { operation });
+    }
+  }
+  function createHomeAssistantTransport({
+    getHass,
+    downloadHandler = null,
+    notificationHandler = null
+  } = {}) {
+    const transport = {
+      async request(command, payload = {}) {
+        const name = requireName(command, "command");
+        const data = requirePayload(payload);
+        return run(`request:${name}`, async () => {
+          const hass = requireHass(getHass, `request:${name}`);
+          if (typeof hass.callWS !== "function") {
+            throw new AnimalHealthError("Home Assistant WebSocket API is unavailable", {
+              code: ERROR_CODES.UNAVAILABLE,
+              operation: `request:${name}`
+            });
+          }
+          return hass.callWS({ ...data, type: name });
+        });
+      },
+      async callService(service, payload = {}, options = {}) {
+        const name = requireName(service, "service");
+        const data = requirePayload(payload);
+        const settings = requirePayload(options, "options");
+        return run(`service:${name}`, async () => {
+          const hass = requireHass(getHass, `service:${name}`);
+          if (settings.response === true) {
+            if (typeof hass.callWS !== "function") {
+              throw new AnimalHealthError(
+                "Home Assistant response service API is unavailable",
+                {
+                  code: ERROR_CODES.UNAVAILABLE,
+                  operation: `service:${name}`
+                }
+              );
+            }
+            return hass.callWS({
+              type: "call_service",
+              domain: DOMAIN,
+              service: name,
+              service_data: data,
+              return_response: true
+            });
+          }
+          if (typeof hass.callService !== "function") {
+            throw new AnimalHealthError("Home Assistant service API is unavailable", {
+              code: ERROR_CODES.UNAVAILABLE,
+              operation: `service:${name}`
+            });
+          }
+          return hass.callService(DOMAIN, name, data);
+        });
+      },
+      async download(resource) {
+        const value = requirePayload(resource, "resource");
+        if (typeof downloadHandler !== "function") {
+          throw new AnimalHealthError("Download handling is unavailable", {
+            code: ERROR_CODES.UNAVAILABLE,
+            operation: "download"
+          });
+        }
+        return run("download", () => downloadHandler(value));
+      },
+      notify(message, options = {}) {
+        const text2 = requireName(message, "message");
+        const settings = requirePayload(options, "options");
+        if (typeof notificationHandler !== "function") {
+          throw new AnimalHealthError("Notification handling is unavailable", {
+            code: ERROR_CODES.UNAVAILABLE,
+            operation: "notify"
+          });
+        }
+        try {
+          return notificationHandler(text2, settings);
+        } catch (error) {
+          throw normalizeError(error, { operation: "notify" });
+        }
+      }
+    };
+    return assertTransport(transport);
+  }
+
+  // custom_components/animal_health/frontend/src/ui/read-only/i18n.js
+  var DE = Object.freeze({
+    overview: "Übersicht",
+    animals: "Tiere",
+    tasks: "Aufgaben",
+    calendar: "Kalender",
+    timeline: "Chronik",
+    refresh: "Aktualisieren",
+    loading: "Animal Health wird geladen …",
+    retry: "Erneut versuchen",
+    activeAnimals: "Aktive Tiere",
+    overdue: "Überfällig",
+    today: "Heute",
+    dueToday: "Heute fällig",
+    openTasks: "Offene Aufgaben",
+    upcoming: "Demnächst",
+    closed: "Abgeschlossen",
+    recent: "Letzte Einträge",
+    recentRecords: "Letzte Chronikeinträge",
+    noAnimals: "Keine Tiere vorhanden.",
+    noTasks: "Keine Aufgaben vorhanden.",
+    noEvents: "Keine Chronikeinträge vorhanden.",
+    createAnimal: "Tier anlegen",
+    createTask: "Aufgabe anlegen",
+    recordWeight: "Gewicht erfassen",
+    recordSymptom: "Symptom erfassen",
+    edit: "Bearbeiten",
+    changeStatus: "Status ändern",
+    archive: "Archivieren",
+    restore: "Wiederherstellen",
+    search: "Suchen",
+    searchAnimals: "Tiere suchen",
+    currentWeight: "Aktuelles Gewicht",
+    birthDate: "Geburtsdatum",
+    arrivalDate: "Eintrittsdatum",
+    technicalId: "Technische ID",
+    masterData: "Stammdaten",
+    group: "Tiergruppe",
+    groups: "Tiergruppen",
+    tags: "Tags",
+    ungrouped: "Ohne Tiergruppe",
+    noGroup: "Keine Tiergruppe",
+    allAnimals: "Alle Tiere",
+    allTags: "Alle Tags",
+    includeArchived: "Archivierte anzeigen",
+    hideArchived: "Archivierte ausblenden",
+    showArchived: "Archivierte anzeigen",
+    resetFilters: "Alle Tierfilter zurücksetzen",
+    filterGroups: "Nach Tiergruppe filtern",
+    filterTags: "Nach Tag filtern",
+    species: "Tierart",
+    breed: "Rasse",
+    color: "Farbe",
+    sex: "Geschlecht",
+    status: "Status",
+    notes: "Notizen",
+    quickActions: "Schnellaktionen",
+    tasksForAnimal: "Aufgaben dieses Tiers",
+    fromTask: "Aus Aufgabe",
+    groupAction: "Gruppenaktion",
+    due: "Fällig",
+    loadError: "Daten konnten nicht geladen werden.",
+    animalDetail: "Tierdetails",
+    back: "Zurück",
+    active: "Aktiv",
+    missing: "Vermisst",
+    sold: "Verkauft",
+    rehomed: "Weitervermittelt",
+    deceased: "Verstorben",
+    other_departure: "Anderer Abgang",
+    archived: "Archiviert",
+    male: "Männlich",
+    female: "Weiblich",
+    other: "Andere",
+    pending: "Offen",
+    completed: "Erledigt",
+    skipped: "Übersprungen",
+    cancelled: "Abgebrochen",
+    reminder: "Erinnerung",
+    weight: "Gewicht",
+    medication: "Medikament",
+    vaccination: "Impfung",
+    health_check: "Gesundheitskontrolle",
+    care: "Pflege",
+    veterinary_visit: "Tierarztbesuch",
+    observation: "Beobachtung",
+    symptom: "Symptom",
+    diagnosis: "Diagnose",
+    treatment: "Behandlung",
+    status_change: "Statusänderung",
+    general: "Allgemein",
+    unknown: "Unbekannt"
+  });
+  var EN = Object.freeze({
+    overview: "Overview",
+    animals: "Animals",
+    tasks: "Tasks",
+    calendar: "Calendar",
+    timeline: "Timeline",
+    refresh: "Refresh",
+    loading: "Loading Animal Health …",
+    retry: "Try again",
+    activeAnimals: "Active animals",
+    overdue: "Overdue",
+    today: "Today",
+    dueToday: "Due today",
+    openTasks: "Open tasks",
+    upcoming: "Upcoming",
+    closed: "Completed",
+    recent: "Recent records",
+    recentRecords: "Recent timeline records",
+    noAnimals: "No animals available.",
+    noTasks: "No tasks available.",
+    noEvents: "No timeline records available.",
+    createAnimal: "Create animal",
+    createTask: "Create task",
+    recordWeight: "Record weight",
+    recordSymptom: "Record symptom",
+    edit: "Edit",
+    changeStatus: "Change status",
+    archive: "Archive",
+    restore: "Restore",
+    search: "Search",
+    searchAnimals: "Search animals",
+    currentWeight: "Current weight",
+    birthDate: "Birth date",
+    arrivalDate: "Arrival date",
+    technicalId: "Technical ID",
+    masterData: "Master data",
+    group: "Animal group",
+    groups: "Animal groups",
+    tags: "Tags",
+    ungrouped: "Without animal group",
+    noGroup: "No animal group",
+    allAnimals: "All animals",
+    allTags: "All tags",
+    includeArchived: "Show archived",
+    hideArchived: "Hide archived",
+    showArchived: "Show archived",
+    resetFilters: "Reset all animal filters",
+    filterGroups: "Filter by animal group",
+    filterTags: "Filter by tag",
+    species: "Species",
+    breed: "Breed",
+    color: "Colour",
+    sex: "Sex",
+    status: "Status",
+    notes: "Notes",
+    quickActions: "Quick actions",
+    tasksForAnimal: "Tasks for this animal",
+    fromTask: "From task",
+    groupAction: "Group action",
+    due: "Due",
+    loadError: "Data could not be loaded.",
+    animalDetail: "Animal details",
+    back: "Back",
+    active: "Active",
+    missing: "Missing",
+    sold: "Sold",
+    rehomed: "Rehomed",
+    deceased: "Deceased",
+    other_departure: "Other departure",
+    archived: "Archived",
+    male: "Male",
+    female: "Female",
+    other: "Other",
+    pending: "Open",
+    completed: "Completed",
+    skipped: "Skipped",
+    cancelled: "Cancelled",
+    reminder: "Reminder",
+    weight: "Weight",
+    medication: "Medication",
+    vaccination: "Vaccination",
+    health_check: "Health check",
+    care: "Care",
+    veterinary_visit: "Veterinary visit",
+    observation: "Observation",
+    symptom: "Symptom",
+    diagnosis: "Diagnosis",
+    treatment: "Treatment",
+    status_change: "Status change",
+    general: "General",
+    unknown: "Unknown"
+  });
+  var MESSAGES = Object.freeze({ de: DE, en: EN });
+  function languageKey(value) {
+    return String(value ?? "en").toLocaleLowerCase().startsWith("de") ? "de" : "en";
+  }
+  function createTranslator(languageCode = "en") {
+    const dictionary = MESSAGES[languageKey(languageCode)];
+    return (key, replacements = {}) => {
+      const template = dictionary[key] ?? String(key);
+      return Object.entries(replacements).reduce(
+        (text2, [name, value]) => text2.replaceAll(`{${name}}`, String(value)),
+        template
+      );
+    };
+  }
+
+  // custom_components/animal_health/frontend/src/domain/animals/selectors.js
+  var TIMING_ORDER = Object.freeze({
+    overdue: 0,
+    today: 1,
+    upcoming: 2,
+    closed: 3
+  });
+  function stateSlice(state, name) {
+    if (state === null || typeof state !== "object") {
+      throw validationError("state must be an object", "state");
+    }
+    const slice = state[name];
+    return slice && typeof slice === "object" ? slice : {};
+  }
+  function values(value) {
+    return Array.isArray(value) ? value : [];
+  }
+  function text(value) {
+    return String(value ?? "").trim();
+  }
+  function folded(value) {
+    return text(value).toLocaleLowerCase();
+  }
+  function compareText(left, right) {
+    return text(left).localeCompare(text(right), void 0, {
+      sensitivity: "base",
+      numeric: true
+    });
+  }
+  function compareAnimal(left, right) {
+    const archived = Number(Boolean(left?.isArchived)) - Number(Boolean(right?.isArchived));
+    if (archived) return archived;
+    return compareText(left?.name, right?.name) || compareText(left?.id, right?.id);
+  }
+  function occurrenceSortKey(occurrence) {
+    return [
+      TIMING_ORDER[occurrence?.timing] ?? 9,
+      text(occurrence?.dueDate) || "9999-12-31",
+      text(occurrence?.scheduledAt) || "9999-12-31T23:59:59Z",
+      text(occurrence?.id)
+    ];
+  }
+  function compareOccurrence(left, right) {
+    const a = occurrenceSortKey(left);
+    const b = occurrenceSortKey(right);
+    for (let index = 0; index < a.length; index += 1) {
+      if (typeof a[index] === "number") {
+        const difference = a[index] - b[index];
+        if (difference) return difference;
+      } else {
+        const difference = compareText(a[index], b[index]);
+        if (difference) return difference;
+      }
+    }
+    return 0;
+  }
+  function targetsAnimal(occurrence, animalId) {
+    const id = text(animalId);
+    if (!id) return false;
+    const target = occurrence?.target || {};
+    return text(target.animalId) === id || values(target.animalIds).map(text).includes(id) || values(target.memberSnapshot).map(text).includes(id);
+  }
+  function filterState(state) {
+    const filters = stateSlice(state, "animals").filters || {};
+    return {
+      query: folded(filters.query),
+      groupId: text(filters.groupId) || "all",
+      tagId: text(filters.tagId) || "all",
+      includeArchived: filters.includeArchived !== false
+    };
+  }
+  function animalSearchHaystack(state, animal) {
+    const group = selectGroupById(state, animal?.groupId);
+    const tags = values(stateSlice(state, "animals").tags).filter((tag) => values(animal?.tagIds).map(text).includes(text(tag?.id))).map((tag) => tag?.name);
+    return [
+      animal?.id,
+      animal?.name,
+      animal?.species,
+      animal?.breed,
+      animal?.color,
+      animal?.status,
+      group?.name,
+      ...tags
+    ].map(folded).filter(Boolean).join(" ");
+  }
+  function selectAnimalById(state, animalId) {
+    const id = text(animalId);
+    if (!id) return null;
+    return values(stateSlice(state, "animals").items).find(
+      (animal) => text(animal?.id) === id
+    ) || null;
+  }
+  function selectGroupById(state, groupId) {
+    const id = text(groupId);
+    if (!id) return null;
+    return values(stateSlice(state, "animals").groups).find(
+      (group) => text(group?.id) === id
+    ) || null;
+  }
+  function selectVisibleAnimals(state) {
+    const filters = filterState(state);
+    const queryTokens = filters.query.split(/\s+/).filter(Boolean);
+    return values(stateSlice(state, "animals").items).filter((animal) => {
+      if (!filters.includeArchived && animal?.isArchived) return false;
+      if (filters.groupId === "ungrouped" && text(animal?.groupId)) return false;
+      if (filters.groupId !== "all" && filters.groupId !== "ungrouped" && text(animal?.groupId) !== filters.groupId) {
+        return false;
+      }
+      if (filters.tagId !== "all" && !values(animal?.tagIds).map(text).includes(filters.tagId)) {
+        return false;
+      }
+      if (queryTokens.length) {
+        const haystack = animalSearchHaystack(state, animal);
+        if (!queryTokens.every((token) => haystack.includes(token))) return false;
+      }
+      return true;
+    }).slice().sort(compareAnimal);
+  }
+  function selectGroupedAnimals(state) {
+    const animals = selectVisibleAnimals(state);
+    const result = [];
+    const groups = values(stateSlice(state, "animals").groups).slice().sort(
+      (left, right) => compareText(left?.name, right?.name) || compareText(left?.id, right?.id)
+    );
+    for (const group of groups) {
+      const members = animals.filter(
+        (animal) => text(animal?.groupId) === text(group?.id)
+      );
+      if (members.length) {
+        result.push({
+          id: text(group.id),
+          name: text(group.name) || null,
+          group,
+          animals: members
+        });
+      }
+    }
+    const ungrouped = animals.filter((animal) => !text(animal?.groupId));
+    if (ungrouped.length) {
+      result.push({
+        id: "ungrouped",
+        name: null,
+        group: null,
+        animals: ungrouped
+      });
+    }
+    return result;
+  }
+  function selectOpenOccurrencesForAnimal(state, animalId) {
+    return values(stateSlice(state, "tasks").occurrences).filter(
+      (occurrence) => occurrence?.status === "pending" && targetsAnimal(occurrence, animalId)
+    ).slice().sort(compareOccurrence);
+  }
+  function selectNextOccurrenceForAnimal(state, animalId) {
+    return selectOpenOccurrencesForAnimal(state, animalId)[0] || null;
+  }
+  function selectUrgentOccurrences(state) {
+    return values(stateSlice(state, "tasks").occurrences).filter(
+      (occurrence) => occurrence?.status === "pending" && (occurrence?.timing === "overdue" || occurrence?.timing === "today")
+    ).slice().sort(compareOccurrence);
+  }
+  function selectRecentEvents(state, limit = 10) {
+    const count = Number(limit);
+    if (!Number.isFinite(count) || count <= 0) return [];
+    return values(stateSlice(state, "timeline").items).slice().sort((left, right) => {
+      const leftDate = text(left?.occurredAt);
+      const rightDate = text(right?.occurredAt);
+      if (leftDate && !rightDate) return -1;
+      if (!leftDate && rightDate) return 1;
+      return compareText(rightDate, leftDate) || compareText(left?.id, right?.id);
+    }).slice(0, Math.floor(count));
+  }
+
+  // custom_components/animal_health/frontend/src/ui/read-only/format.js
+  var DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+  var DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/;
+  function escapeHtml(value) {
+    return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+  }
+  function escapeAttribute(value) {
+    return escapeHtml(value);
+  }
+  function dateParts(value) {
+    const match = DATE_ONLY.exec(String(value ?? "").trim());
+    if (!match) return null;
+    const [, year, month, day] = match;
+    return { year, month, day };
+  }
+  function formatDateOnly(value, locale = "en-GB") {
+    if (value === null || value === void 0 || value === "") return "–";
+    const parts = dateParts(value);
+    if (!parts) return String(value);
+    return languageKey(locale) === "de" ? `${parts.day}.${parts.month}.${parts.year}` : `${parts.day}/${parts.month}/${parts.year}`;
+  }
+  function formatDateTime(value, locale = "en-GB", timeZone = null) {
+    if (value === null || value === void 0 || value === "") return "–";
+    const source = String(value).trim();
+    if (timeZone) {
+      const parsed2 = new Date(source);
+      if (!Number.isNaN(parsed2.getTime())) {
+        try {
+          return new Intl.DateTimeFormat(locale, {
+            dateStyle: "medium",
+            timeStyle: "short",
+            timeZone
+          }).format(parsed2);
+        } catch (_error) {
+        }
+      }
+    }
+    const match = DATE_TIME.exec(source);
+    if (match) {
+      const [, year, month, day, hour, minute] = match;
+      return `${formatDateOnly(`${year}-${month}-${day}`, locale)} · ${hour}:${minute}`;
+    }
+    const parsed = new Date(source);
+    if (Number.isNaN(parsed.getTime())) return source;
+    return new Intl.DateTimeFormat(locale, {
+      dateStyle: "medium",
+      timeStyle: "short"
+    }).format(parsed);
+  }
+  function formatNumber(value, locale = "en-GB", digits = 2) {
+    if (value === null || value === void 0 || value === "") return "–";
+    const number = Number(value);
+    if (!Number.isFinite(number)) return String(value);
+    const maximumFractionDigits = Number.isInteger(digits) && digits >= 0 ? digits : 2;
+    return new Intl.NumberFormat(locale, {
+      maximumFractionDigits
+    }).format(number);
+  }
+  function formatEnum(value, translate) {
+    if (value === null || value === void 0 || value === "") return "–";
+    const key = String(value);
+    const translated = typeof translate === "function" ? translate(key) : key;
+    return translated === key ? key.replaceAll("_", " ") : translated;
+  }
+  function speciesRecord(state, speciesId) {
+    const items = state?.animals?.catalog?.species;
+    if (!Array.isArray(items)) return null;
+    return items.find((item) => String(item?.id ?? "") === String(speciesId ?? "")) || null;
+  }
+  function speciesLabel(animal, state, translate, language = "en") {
+    const id = String(animal?.species ?? "").trim();
+    if (!id) return "–";
+    const item = speciesRecord(state, id);
+    if (item) {
+      const german = item.nameDe;
+      const english = item.nameEn;
+      const selected = languageKey(language) === "de" ? german || english : english || german;
+      if (selected) return String(selected);
+    }
+    return formatEnum(id, translate);
+  }
+  function formatWeight(weight, locale = "en-GB") {
+    if (!weight) return "–";
+    const value = weight.originalValue ?? weight.valueKg;
+    const unit = weight.originalUnit ?? (weight.valueKg != null ? "kg" : null);
+    if (value === null || value === void 0 || value === "") return "–";
+    return `${formatNumber(value, locale, unit === "kg" ? 2 : 0)}${unit ? ` ${unit}` : ""}`;
+  }
+
+  // custom_components/animal_health/frontend/src/ui/read-only/styles.js
+  var READ_ONLY_STYLES = `
+:host{display:block;min-height:100%;color:var(--primary-text-color);background:var(--primary-background-color);font-family:system-ui,sans-serif}*{box-sizing:border-box}button,input{font:inherit}button{min-height:40px;padding:8px 12px;color:inherit;background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:10px;cursor:pointer}button:hover,button:focus-visible{border-color:var(--primary-color);outline:none}button.primary{color:var(--text-primary-color,#fff);background:var(--primary-color);border-color:var(--primary-color)}button.icon{display:grid;place-items:center;width:42px;min-width:42px;padding:0}button.on{color:var(--primary-color);border-color:var(--primary-color)}header{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px 16px;background:var(--card-background-color);border-bottom:1px solid var(--divider-color)}header .brand{display:flex;align-items:center;gap:8px;font-weight:700}header .brand ha-icon{color:var(--primary-color)}header nav{display:flex;justify-content:center;gap:5px;overflow:auto}header nav button{display:flex;align-items:center;gap:6px;white-space:nowrap;background:transparent;border-color:transparent}header nav button.on{background:var(--secondary-background-color);border-color:var(--divider-color)}main{display:grid;gap:16px;max-width:1440px;margin:0 auto;padding:18px}.heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.heading h1{margin:0;font-size:clamp(1.45rem,3vw,2rem)}.actions,.quick,.filterBar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.quick{overflow:auto;flex-wrap:nowrap}.quick button{display:flex;align-items:center;gap:6px;white-space:nowrap}.search{display:flex;align-items:center;gap:7px;min-height:42px;padding:0 10px;background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:10px}.search input{min-width:150px;padding:8px 0;color:inherit;background:transparent;border:0;outline:0}.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.stat{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:10px;padding:14px;text-align:left;background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:13px}.stat ha-icon{width:30px;height:30px;color:var(--primary-color)}.stat strong{display:block;font-size:1.4rem}.stat span{display:block;color:var(--secondary-text-color);font-size:.88rem}.stat.bad ha-icon,.stat.bad strong{color:var(--error-color)}.cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}.card{min-width:0;padding:15px;background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:13px}.card h2{margin:0 0 11px;font-size:1.18rem}.cardHead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:11px}.cardHead h2{margin:0}.row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--divider-color)}.row:last-child{border-bottom:0}.row>ha-icon{color:var(--primary-color)}.row>div{min-width:0}.row span,.row small{display:block;margin-top:3px;color:var(--secondary-text-color);line-height:1.35}.row.over{padding-inline-start:8px;border-inline-start:3px solid var(--error-color)}.badge{display:inline-flex!important;align-items:center;width:max-content;margin:4px 4px 0 0!important;padding:3px 7px;background:var(--secondary-background-color);border-radius:999px;font-size:.77rem!important}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}.animal{overflow:hidden;background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:13px}.animal.muted{opacity:.72}.animalHead{display:grid;width:100%;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:11px;padding:14px;text-align:left;background:transparent;border:0;border-radius:0}.animalHead>ha-icon{width:33px;height:33px;color:var(--primary-color)}.animalHead h3{margin:0}.animalHead span{display:block;margin-top:3px;color:var(--secondary-text-color)}.animalMeta{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--divider-color);border-top:1px solid var(--divider-color)}.animalMeta>span{display:grid;gap:3px;padding:9px 12px;color:var(--secondary-text-color);background:var(--card-background-color);font-size:.8rem}.animalMeta b{color:var(--primary-text-color);font-size:.92rem}.filterOptions{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:7px;margin-top:9px}.filterOptions button{display:flex;align-items:center;justify-content:space-between;text-align:left}.animalGroups{display:grid;gap:12px}.animalGroup{display:grid;gap:8px}.animalGroupHead{display:flex;align-items:center;justify-content:space-between}.animalTiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(82px,1fr));gap:7px}.animalTile{display:grid;justify-items:center;gap:6px;min-width:0;padding:9px 6px;text-align:center;background:var(--secondary-background-color)}.animalTile ha-icon{width:35px;height:35px;color:var(--primary-color)}.animalTile span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.hero{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:15px;padding:17px;background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:13px}.hero>ha-icon{width:50px;height:50px;color:var(--primary-color)}.hero h1{margin:0}.hero p{margin:4px 0 0;color:var(--secondary-text-color)}.hero .actions{justify-content:flex-end}dl{display:grid;gap:8px;margin:0}dl>div{display:grid;grid-template-columns:minmax(115px,.4fr) minmax(0,1fr);gap:11px;padding-bottom:7px;border-bottom:1px solid var(--divider-color)}dt{color:var(--secondary-text-color)}dd{margin:0}.empty,.loading,.errorState{display:grid;place-items:center;align-content:center;min-height:125px;gap:9px;text-align:center;color:var(--secondary-text-color)}.errorState ha-icon{width:35px;height:35px;color:var(--error-color)}.version{text-align:right;color:var(--secondary-text-color);font-size:.74rem}[hidden]{display:none!important}@media(max-width:900px){header .brand span{display:none}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.cols{grid-template-columns:1fr}.hero{grid-template-columns:auto minmax(0,1fr)}.hero .actions{grid-column:1/-1;justify-content:flex-start}}@media(max-width:620px){header{padding:8px 10px}header nav button span{display:none}.heading{align-items:flex-start;flex-direction:column}.heading .actions{width:100%}.search{flex:1}.search input{width:100%;min-width:0}.grid{grid-template-columns:1fr}.animalTiles{grid-template-columns:repeat(4,minmax(0,1fr))}.hero{grid-template-columns:1fr;text-align:center;justify-items:center}.hero .actions{justify-content:center}main{padding:12px;gap:12px}}
+`;
+
+  // custom_components/animal_health/frontend/src/ui/read-only/components.js
+  var ICONS = Object.freeze({
+    reminder: "mdi:bell-outline",
+    weight: "mdi:scale-bathroom",
+    medication: "mdi:pill",
+    vaccination: "mdi:needle",
+    health_check: "mdi:stethoscope",
+    care: "mdi:hand-heart",
+    veterinary_visit: "mdi:hospital-box-outline",
+    observation: "mdi:eye-outline",
+    symptom: "mdi:alert-circle-outline",
+    diagnosis: "mdi:clipboard-pulse-outline",
+    treatment: "mdi:medical-bag",
+    status_change: "mdi:swap-horizontal",
+    other: "mdi:dots-horizontal-circle-outline"
+  });
+  function iconFor(value) {
+    return ICONS[value] || ICONS.other;
+  }
+  function translator(context) {
+    return typeof context?.translate === "function" ? context.translate : (key) => String(key);
+  }
+  function routeIsActive(context, route) {
+    const current = context?.routeName === "animal-detail" ? "animals" : context?.routeName;
+    return current === route;
+  }
+  function buttonView(route, icon, context) {
+    const t = translator(context);
+    return `<button data-view="${escapeAttribute(route)}" class="${routeIsActive(context, route) ? "on" : ""}" aria-label="${escapeAttribute(t(route))}"><ha-icon icon="${icon}"></ha-icon><span>${escapeHtml(t(route))}</span></button>`;
+  }
+  function renderHeader(context = {}) {
+    const t = translator(context);
+    return `<header><div class="brand"><ha-icon icon="mdi:paw"></ha-icon><span>Animal Health</span></div><nav>${buttonView("overview", "mdi:view-dashboard", context)}${buttonView("animals", "mdi:paw", context)}${buttonView("tasks", "mdi:clipboard-check-outline", context)}${buttonView("calendar", "mdi:calendar-month", context)}${buttonView("timeline", "mdi:timeline-clock", context)}</nav><button class="icon" data-action="refresh" aria-label="${escapeAttribute(t("refresh"))}" title="${escapeAttribute(t("refresh"))}"><ha-icon icon="mdi:refresh"></ha-icon></button></header>`;
+  }
+  function renderHeading(title, actions = "") {
+    return `<div class="heading"><h1>${escapeHtml(title)}</h1><div class="actions">${actions}</div></div>`;
+  }
+  function actionButton(action, icon, label, id = null, primary = false) {
+    const idAttribute = id == null ? "" : ` data-id="${escapeAttribute(id)}"`;
+    return `<button${primary ? ' class="primary"' : ""} data-action="${escapeAttribute(action)}"${idAttribute}><ha-icon icon="${icon}"></ha-icon>${escapeHtml(label)}</button>`;
+  }
+  function renderQuickActions(animalId = "", translate = (key) => key) {
+    const id = String(animalId ?? "");
+    return `<div class="quick" aria-label="${escapeAttribute(translate("quickActions"))}">${actionButton("create-animal", "mdi:plus-circle-outline", translate("createAnimal"))}${actionButton("create-task", "mdi:clipboard-plus", translate("createTask"))}${actionButton("record-weight", "mdi:scale", translate("recordWeight"), id)}${actionButton("record-symptom", "mdi:alert-plus", translate("recordSymptom"), id)}</div>`;
+  }
+  function renderStats(items = []) {
+    return `<section class="stats">${items.map((item) => {
+      const bad = item?.bad ? " bad" : "";
+      return `<div class="stat${bad}"><ha-icon icon="${escapeAttribute(item?.icon || "mdi:information-outline")}"></ha-icon><div><strong>${escapeHtml(item?.value ?? "–")}</strong><span>${escapeHtml(item?.label ?? "")}</span></div></div>`;
+    }).join("")}</section>`;
+  }
+  function animalSecondary(animal, context) {
+    const t = translator(context);
+    const species = speciesLabel(animal, context?.state, t, context?.language);
+    return [species, animal?.breed].filter(Boolean).join(" · ");
+  }
+  function canonicalTags(animal, context) {
+    const tagIds = Array.isArray(animal?.tagIds) ? animal.tagIds.map(String) : [];
+    const tags = Array.isArray(context?.state?.animals?.tags) ? context.state.animals.tags : [];
+    return tags.filter((tag) => tagIds.includes(String(tag?.id))).map((tag) => tag?.name).filter(Boolean);
+  }
+  function canonicalGroup(animal, context) {
+    const groups = Array.isArray(context?.state?.animals?.groups) ? context.state.animals.groups : [];
+    return groups.find((group) => String(group?.id) === String(animal?.groupId ?? "")) || null;
+  }
+  function renderAnimalTile(animal, context = {}) {
+    return `<button class="animalTile" data-action="animal-detail" data-id="${escapeAttribute(animal?.id)}" title="${escapeAttribute(animal?.name)}"><ha-icon icon="mdi:paw"></ha-icon><span>${escapeHtml(animal?.name)}</span></button>`;
+  }
+  function renderAnimalCard(animal, context = {}) {
+    const t = translator(context);
+    const group = canonicalGroup(animal, context);
+    const tags = canonicalTags(animal, context);
+    const next = context?.nextOccurrence || null;
+    const status = animal?.isArchived ? t("archived") : formatEnum(animal?.status, t);
+    const groupAndTags = [group?.name, ...tags.map((tag) => `#${tag}`)].filter(Boolean).join(" · ");
+    return `<article class="animal${animal?.isArchived ? " muted" : ""}"><button class="animalHead" data-action="animal-detail" data-id="${escapeAttribute(animal?.id)}"><ha-icon icon="mdi:paw"></ha-icon><div><h3>${escapeHtml(animal?.name)}</h3><span>${escapeHtml(animalSecondary(animal, context))}${groupAndTags ? ` · ${escapeHtml(groupAndTags)}` : ""}</span></div><b>${escapeHtml(status)}</b></button><div class="animalMeta"><span>${escapeHtml(t("currentWeight"))}<b>${escapeHtml(formatWeight(animal?.latestWeight, context?.locale))}</b></span><span>${escapeHtml(t("upcoming"))}<b>${escapeHtml(next?.title || "–")}</b></span></div></article>`;
+  }
+  function occurrenceWhen(occurrence, context) {
+    const t = translator(context);
+    const timing = formatEnum(occurrence?.timing, t);
+    const date = occurrence?.dueDate ? formatDateOnly(occurrence.dueDate, context?.locale) : formatDateTime(occurrence?.scheduledLocal || occurrence?.scheduledAt, context?.locale, context?.timeZone);
+    return [timing, date].filter((value) => value && value !== "–").join(" · ");
+  }
+  function renderOccurrenceRow(occurrence, context = {}) {
+    const t = translator(context);
+    const kind = occurrence?.planned?.taskKind || occurrence?.kind || "reminder";
+    const secondary = [
+      occurrence?.animalName || (occurrence?.target?.scope === "general" ? t("general") : null),
+      occurrenceWhen(occurrence, context),
+      formatEnum(occurrence?.status, t)
+    ].filter(Boolean).join(" · ");
+    const overdueClass = occurrence?.timing === "overdue" ? " over" : "";
+    const execute = occurrence?.status === "pending" && context?.showTaskActions ? `<div class="rowAside"><button class="primary" data-action="execute" data-id="${escapeAttribute(occurrence?.id)}">${escapeHtml(t("edit"))}</button></div>` : "";
+    return `<div class="row${overdueClass}"><ha-icon icon="${iconFor(kind)}"></ha-icon><div><b>${escapeHtml(occurrence?.title)}</b><span>${escapeHtml(secondary)}</span>${occurrence?.timing === "overdue" ? `<small class="badge bad">${escapeHtml(t("overdue"))}</small>` : ""}</div>${execute}</div>`;
+  }
+  function renderEventRow(event, context = {}) {
+    const t = translator(context);
+    const sourceBadges = [];
+    if (event?.source?.kind === "task") sourceBadges.push(t("fromTask"));
+    if (event?.target?.scope === "group") sourceBadges.push(t("groupAction"));
+    const secondary = [
+      event?.animalName,
+      formatEnum(event?.type, t),
+      formatDateTime(event?.occurredAt, context?.locale, context?.timeZone)
+    ].filter(Boolean).join(" · ");
+    const badges = sourceBadges.map((label) => `<small class="badge">${escapeHtml(label)}</small>`).join("");
+    const value = event?.value != null ? `<strong>${escapeHtml(`${formatNumber(event.value, context?.locale)}${event?.unit ? ` ${event.unit}` : ""}`)}</strong>` : "";
+    return `<div class="row"><ha-icon icon="${iconFor(event?.type)}"></ha-icon><div><b>${escapeHtml(event?.title)}</b><span>${escapeHtml(secondary)}</span>${badges}${event?.notes ? `<small>${escapeHtml(event.notes)}</small>` : ""}</div>${value}</div>`;
+  }
+  function renderEmpty(message) {
+    return `<div class="empty">${escapeHtml(message)}</div>`;
+  }
+  function renderLoading(message) {
+    return `<div class="loading"><ha-icon icon="mdi:paw"></ha-icon><p>${escapeHtml(message)}</p></div>`;
+  }
+  function renderError(error, retryAction, context = {}) {
+    const t = translator(context);
+    const message = error?.message || t("loadError");
+    return `<div class="errorState"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><p>${escapeHtml(message)}</p><button data-action="${escapeAttribute(retryAction)}">${escapeHtml(t("retry"))}</button></div>`;
+  }
+  function renderShell(content, context = {}) {
+    const route = context?.routeName || "overview";
+    return `<style>${READ_ONLY_STYLES}</style><div data-modern-route="${escapeAttribute(route)}">${renderHeader(context)}<main>${content}<div class="version">${escapeHtml(context?.integrationVersion || "")}</div></main></div>`;
+  }
+
+  // custom_components/animal_health/frontend/src/ui/views/animal-detail.js
+  function viewContext(state, context) {
+    return {
+      ...context,
+      state,
+      routeName: "animal-detail",
+      timeZone: context?.timeZone || state?.animals?.directoryMeta?.timeZone
+    };
+  }
+  function groupFor(state, animal) {
+    const groups = Array.isArray(state?.animals?.groups) ? state.animals.groups : [];
+    return groups.find((group) => String(group?.id) === String(animal?.groupId ?? "")) || null;
+  }
+  function tagsFor(state, animal) {
+    const ids = Array.isArray(animal?.tagIds) ? animal.tagIds.map(String) : [];
+    const tags = Array.isArray(state?.animals?.tags) ? state.animals.tags : [];
+    return tags.filter((tag) => ids.includes(String(tag?.id)));
+  }
+  function definitionList(items, context) {
+    const t = context.translate;
+    return `<dl>${items.map(([key, value]) => `<div><dt>${escapeHtml(t(key))}</dt><dd>${escapeHtml(value ?? "–")}</dd></div>`).join("")}</dl>`;
+  }
+  function hero(animal, state, context) {
+    const t = context.translate;
+    const group = groupFor(state, animal);
+    const tags = tagsFor(state, animal);
+    const metadata = [
+      speciesLabel(animal, state, t, context.language),
+      animal?.breed,
+      formatEnum(animal?.status, t),
+      group?.name,
+      ...tags.map((tag) => `#${tag.name}`)
+    ].filter(Boolean).join(" · ");
+    const archiveAction = animal?.isArchived ? "restore" : "archive";
+    const archiveLabel = animal?.isArchived ? t("restore") : t("archive");
+    return `<section class="hero"><ha-icon icon="mdi:paw"></ha-icon><div><h1>${escapeHtml(animal?.name)}</h1><p>${escapeHtml(metadata)}</p></div><div class="actions"><button data-action="edit-animal" data-id="${escapeAttribute(animal?.id)}">${escapeHtml(t("edit"))}</button><button data-action="animal-status" data-id="${escapeAttribute(animal?.id)}">${escapeHtml(t("changeStatus"))}</button><button data-action="${archiveAction}" data-id="${escapeAttribute(animal?.id)}">${escapeHtml(archiveLabel)}</button></div></section>`;
+  }
+  function renderAnimalDetail(state, context = {}) {
+    const active = viewContext(state, context);
+    const t = active.translate;
+    const animalId = state?.navigation?.current?.params?.animalId;
+    const directoryAnimal = selectAnimalById(state, animalId);
+    const detailState = state?.animals?.detail || {};
+    const detail = detailState.status === "ready" ? detailState.data : null;
+    const animal = detail?.animal || directoryAnimal;
+    const back = `<button data-view="animals" aria-label="${escapeAttribute(t("back"))}"><ha-icon icon="mdi:arrow-left"></ha-icon>${escapeHtml(t("back"))}</button>`;
+    if (!animal) {
+      const content2 = `${renderHeading(t("animalDetail"), back)}${detailState.status === "error" ? renderError(detailState.error, "detail-refresh", active) : renderLoading(t("loading"))}`;
+      return renderShell(content2, active);
+    }
+    const top = `${renderHeading(t("animals"), back)}${hero(animal, state, active)}`;
+    if (detailState.status !== "ready" || !detail) {
+      const status = detailState.status === "error" ? renderError(detailState.error, "detail-refresh", active) : renderLoading(t("loading"));
+      return renderShell(`${top}${status}`, active);
+    }
+    const group = groupFor(state, animal);
+    const tags = tagsFor(state, animal);
+    const occurrenceState = {
+      ...state,
+      tasks: {
+        ...state.tasks,
+        occurrences: Array.isArray(detail.occurrences) ? detail.occurrences : []
+      }
+    };
+    const openOccurrences = selectOpenOccurrencesForAnimal(occurrenceState, animal.id);
+    const occurrenceRows = openOccurrences.map((occurrence) => renderOccurrenceRow(occurrence, active)).join("") || renderEmpty(t("noTasks"));
+    const events = Array.isArray(detail.events) ? detail.events : [];
+    const eventRows = events.map((event) => renderEventRow(event, active)).join("") || renderEmpty(t("noEvents"));
+    const groupAndTags = [group?.name, ...tags.map((tag) => `#${tag.name}`)].filter(Boolean).join(" · ") || t("noGroup");
+    const masterData = definitionList([
+      ["species", speciesLabel(animal, state, t, active.language)],
+      ["breed", animal.breed || "–"],
+      ["color", animal.color || "–"],
+      ["sex", formatEnum(animal.sex, t)],
+      ["birthDate", formatDateOnly(animal.birthDate, active.locale)],
+      ["arrivalDate", formatDateOnly(animal.arrivalDate, active.locale)],
+      ["status", animal.isArchived ? t("archived") : formatEnum(animal.status, t)],
+      ["group", groupAndTags]
+    ], active);
+    const content = [
+      top,
+      renderQuickActions(animal.id, t),
+      renderStats([
+        { icon: "mdi:scale", value: formatWeight(animal.latestWeight, active.locale), label: t("currentWeight") },
+        { icon: "mdi:clipboard", value: openOccurrences.length, label: t("openTasks") },
+        { icon: "mdi:calendar", value: formatDateOnly(animal.birthDate, active.locale), label: t("birthDate") },
+        { icon: "mdi:identifier", value: animal.id, label: t("technicalId") }
+      ]),
+      `<section class="cols"><article class="card"><h2>${escapeHtml(t("masterData"))}</h2>${masterData}</article><article class="card"><h2>${escapeHtml(t("tasksForAnimal"))}</h2>${occurrenceRows}</article></section>`,
+      `<section class="card"><h2>${escapeHtml(t("recentRecords"))}</h2>${eventRows}</section>`
+    ].join("");
+    return renderShell(content, active);
+  }
+
+  // custom_components/animal_health/frontend/src/ui/views/animals.js
+  function viewContext2(state, context) {
+    return {
+      ...context,
+      state,
+      routeName: "animals",
+      timeZone: context?.timeZone || state?.animals?.directoryMeta?.timeZone
+    };
+  }
+  function renderAnimals(state, context = {}) {
+    const active = viewContext2(state, context);
+    const t = active.translate;
+    const allAnimals = Array.isArray(state?.animals?.items) ? state.animals.items : [];
+    if ((state?.animals?.status === "idle" || state?.animals?.status === "loading") && !allAnimals.length) {
+      return renderShell(renderLoading(t("loading")), active);
+    }
+    if (state?.animals?.status === "error" && !allAnimals.length) {
+      return renderShell(renderError(state.animals.error, "refresh", active), active);
+    }
+    const filters = state?.animals?.filters || {};
+    const search = `<label class="search"><ha-icon icon="mdi:magnify"></ha-icon><input data-action="animals-filter" value="${escapeAttribute(filters.query || "")}" placeholder="${escapeAttribute(t("searchAnimals"))}" autocomplete="off"></label>`;
+    const archivedLabel = filters.includeArchived === false ? t("showArchived") : t("hideArchived");
+    const archived = `<button data-action="animals-toggle-archived"><ha-icon icon="mdi:archive-outline"></ha-icon>${escapeHtml(archivedLabel)}</button>`;
+    const create = `<button class="primary" data-action="create-animal"><ha-icon icon="mdi:plus-circle-outline"></ha-icon>${escapeHtml(t("createAnimal"))}</button>`;
+    const animals = selectVisibleAnimals(state);
+    const cards = animals.map((animal) => renderAnimalCard(animal, {
+      ...active,
+      nextOccurrence: selectNextOccurrenceForAnimal(state, animal.id)
+    })).join("") || renderEmpty(t("noAnimals"));
+    const content = `${renderHeading(t("animals"), `${search}${archived}${create}`)}<section class="grid">${cards}</section>`;
+    return renderShell(content, active);
+  }
+
+  // custom_components/animal_health/frontend/src/ui/views/overview.js
+  function viewContext3(state, context) {
+    return {
+      ...context,
+      state,
+      routeName: "overview",
+      timeZone: context?.timeZone || state?.animals?.directoryMeta?.timeZone
+    };
+  }
+  function filterControls(state, context) {
+    const t = context.translate;
+    const filters = state.animals?.filters || {};
+    const groups = Array.isArray(state.animals?.groups) ? state.animals.groups : [];
+    const tags = Array.isArray(state.animals?.tags) ? state.animals.tags : [];
+    const groupActive = filters.groupId && filters.groupId !== "all";
+    const tagActive = filters.tagId && filters.tagId !== "all";
+    const queryActive = Boolean(String(filters.query || "").trim());
+    const filtered = groupActive || tagActive || queryActive || filters.includeArchived === false;
+    const toolbar = `<div class="filterBar"><button class="icon${filters.openPanel === "group" || groupActive ? " on" : ""}" data-action="home-group-toggle" title="${escapeAttribute(t("filterGroups"))}"><ha-icon icon="mdi:account-group-outline"></ha-icon></button><button class="icon${filters.openPanel === "tag" || tagActive ? " on" : ""}" data-action="home-tag-toggle" title="${escapeAttribute(t("filterTags"))}"><ha-icon icon="mdi:tag-multiple-outline"></ha-icon></button><button class="icon${filters.searchOpen || queryActive ? " on" : ""}" data-action="home-search-toggle" title="${escapeAttribute(t("searchAnimals"))}"><ha-icon icon="mdi:magnify"></ha-icon></button>${filtered ? `<button class="icon" data-action="home-filter-reset" title="${escapeAttribute(t("resetFilters"))}"><ha-icon icon="mdi:close-circle-outline"></ha-icon></button>` : ""}</div>`;
+    const groupOptions = filters.openPanel === "group" ? `<div class="filterOptions"><button class="${filters.groupId === "all" ? "on" : ""}" data-action="home-group-select" data-id="all"><span>${escapeHtml(t("allAnimals"))}</span></button><button class="${filters.groupId === "ungrouped" ? "on" : ""}" data-action="home-group-select" data-id="ungrouped"><span>${escapeHtml(t("ungrouped"))}</span></button>${groups.map((group) => `<button class="${String(filters.groupId) === String(group.id) ? "on" : ""}" data-action="home-group-select" data-id="${escapeAttribute(group.id)}"><span>${escapeHtml(group.name)}</span></button>`).join("")}</div>` : "";
+    const tagOptions = filters.openPanel === "tag" ? `<div class="filterOptions"><button class="${filters.tagId === "all" ? "on" : ""}" data-action="home-tag-select" data-id="all"><span>${escapeHtml(t("allTags"))}</span></button>${tags.map((tag) => `<button class="${String(filters.tagId) === String(tag.id) ? "on" : ""}" data-action="home-tag-select" data-id="${escapeAttribute(tag.id)}"><span>#${escapeHtml(tag.name)}</span></button>`).join("")}</div>` : "";
+    const search = filters.searchOpen ? `<label class="search"><ha-icon icon="mdi:magnify"></ha-icon><input data-action="home-search" value="${escapeAttribute(filters.query || "")}" placeholder="${escapeAttribute(t("searchAnimals"))}" autocomplete="off"></label>` : "";
+    return { toolbar, groupOptions, tagOptions, search };
+  }
+  function animalOverview(state, context) {
+    const t = context.translate;
+    const groups = selectGroupedAnimals(state);
+    const controls = filterControls(state, context);
+    const body = groups.map((group) => {
+      const name = group.id === "ungrouped" ? t("ungrouped") : group.name;
+      return `<section class="animalGroup"><div class="animalGroupHead"><b>${escapeHtml(name)}</b><small>${group.animals.length}</small></div><div class="animalTiles">${group.animals.map((animal) => renderAnimalTile(animal, context)).join("")}</div></section>`;
+    }).join("") || renderEmpty(t("noAnimals"));
+    return `<section class="card"><div class="cardHead"><h2>${escapeHtml(t("animals"))}</h2>${controls.toolbar}</div>${controls.groupOptions}${controls.tagOptions}${controls.search}<div class="animalGroups">${body}</div></section>`;
+  }
+  function renderOverview(state, context = {}) {
+    const active = viewContext3(state, context);
+    const t = active.translate;
+    const items = Array.isArray(state?.animals?.items) ? state.animals.items : [];
+    if ((state?.animals?.status === "idle" || state?.animals?.status === "loading") && !items.length) {
+      return renderShell(renderLoading(t("loading")), active);
+    }
+    if (state?.animals?.status === "error" && !items.length) {
+      return renderShell(renderError(state.animals.error, "refresh", active), active);
+    }
+    const summary = state?.animals?.directoryMeta?.summary || {};
+    const urgent = selectUrgentOccurrences(state).slice(0, 12);
+    const events = selectRecentEvents(state, 10);
+    const taskRows = urgent.map((item) => renderOccurrenceRow(item, active)).join("") || renderEmpty(t("noTasks"));
+    const eventRows = events.map((item) => renderEventRow(item, active)).join("") || renderEmpty(t("noEvents"));
+    const content = [
+      renderHeading(t("overview")),
+      renderQuickActions("", t),
+      renderStats([
+        { icon: "mdi:paw", value: summary.activeAnimals ?? items.filter((animal) => !animal.isArchived).length, label: t("activeAnimals") },
+        { icon: "mdi:alert", value: summary.overdueTasks ?? urgent.filter((item) => item.timing === "overdue").length, label: t("overdue"), bad: true },
+        { icon: "mdi:calendar-today", value: summary.todayTasks ?? urgent.filter((item) => item.timing === "today").length, label: t("dueToday") },
+        { icon: "mdi:clipboard-clock", value: summary.pendingTasks ?? state?.tasks?.occurrences?.filter((item) => item.status === "pending").length ?? 0, label: t("openTasks") }
+      ]),
+      animalOverview(state, active),
+      `<section class="cols"><article class="card"><h2>${escapeHtml(t("dueToday"))}</h2>${taskRows}</article><article class="card"><h2>${escapeHtml(t("recentRecords"))}</h2>${eventRows}</article></section>`
+    ].join("");
+    return renderShell(content, active);
+  }
+
+  // custom_components/animal_health/frontend/src/app/read-only-animals.js
+  var MIGRATED_READ_ROUTES = Object.freeze([
+    "overview",
+    "animals",
+    "animal-detail"
+  ]);
+  var MODERN_ACTIONS = /* @__PURE__ */ new Set([
+    "refresh",
+    "read.refresh",
+    "detail-refresh",
+    "animal-detail",
+    "home-group-toggle",
+    "home-group-select",
+    "home-tag-toggle",
+    "home-tag-select",
+    "home-search-toggle",
+    "home-search",
+    "home-filter-reset",
+    "animals-filter",
+    "animals-toggle-archived"
+  ]);
+  var TEXT_FILTER_ACTIONS = /* @__PURE__ */ new Set([
+    "home-search",
+    "animals-filter"
+  ]);
+  function migrated(routeName) {
+    return MIGRATED_READ_ROUTES.includes(String(routeName ?? ""));
+  }
+  function languageFromPanel(panel) {
+    return String(panel?.h?.language || "en").toLocaleLowerCase().startsWith("de") ? { code: "de", locale: "de-CH" } : { code: "en", locale: "en-GB" };
+  }
+  function targetFromEvent(event) {
+    if (!event || typeof event !== "object") return null;
+    const path = typeof event.composedPath === "function" ? event.composedPath() : [event.target];
+    return Array.isArray(path) ? path.find((candidate) => candidate?.dataset && (candidate.dataset.action || candidate.dataset.view)) || null : null;
+  }
+  function requiredPanel(panel) {
+    if (!panel || typeof panel !== "object") {
+      throw validationError("panel must be an object", "panel");
+    }
+    if (!panel.shadowRoot || typeof panel.shadowRoot !== "object") {
+      throw validationError("panel.shadowRoot must be available", "panel.shadowRoot");
+    }
+    return panel;
+  }
+  function requiredLegacy(legacy) {
+    if (!legacy || typeof legacy !== "object") {
+      throw validationError("legacy methods must be an object", "legacy");
+    }
+    for (const method of ["load", "render", "loadDetail", "handleClick", "handleInput"]) {
+      if (typeof legacy[method] !== "function") {
+        throw validationError(`legacy.${method} must be a function`, `legacy.${method}`);
+      }
+    }
+    return legacy;
+  }
+  function initialState(panel) {
+    const language = languageFromPanel(panel);
+    const routeName = migrated(panel.view) ? panel.view : "overview";
+    const animalId = routeName === "animal-detail" ? panel.detail?.animal?.id || null : null;
+    return {
+      platform: {
+        kind: panel.h?.standalone ? "android" : "home-assistant",
+        available: Boolean(panel.h),
+        metadata: {}
+      },
+      language,
+      navigation: {
+        current: {
+          name: routeName,
+          params: animalId ? { animalId: String(animalId) } : {}
+        },
+        stack: [],
+        revision: 0
+      },
+      animals: {
+        status: "idle",
+        items: [],
+        groups: [],
+        tags: [],
+        catalog: {},
+        directoryMeta: {
+          version: null,
+          generatedAt: null,
+          timeZone: null,
+          today: null,
+          summary: {},
+          exports: {}
+        },
+        filters: {
+          query: "",
+          groupId: "all",
+          tagId: "all",
+          includeArchived: true,
+          openPanel: null,
+          searchOpen: false
+        },
+        detail: {
+          status: "idle",
+          animalId,
+          data: null,
+          error: null
+        },
+        error: null
+      },
+      tasks: {
+        status: "idle",
+        definitions: [],
+        occurrences: [],
+        error: null
+      },
+      timeline: {
+        status: "idle",
+        items: [],
+        error: null
+      }
+    };
+  }
+  function applyDirectory(state, directory) {
+    return {
+      ...state,
+      animals: {
+        ...state.animals,
+        status: "ready",
+        items: [...directory.animals],
+        groups: [...directory.groups],
+        tags: [...directory.tags],
+        catalog: { ...directory.catalog },
+        directoryMeta: {
+          version: directory.version,
+          generatedAt: directory.generatedAt,
+          timeZone: directory.timeZone,
+          today: directory.today,
+          summary: { ...directory.summary },
+          exports: { ...directory.exports || {} }
+        },
+        error: null
+      },
+      tasks: {
+        ...state.tasks,
+        status: "ready",
+        definitions: [...directory.tasks],
+        occurrences: [...directory.occurrences],
+        error: null
+      },
+      timeline: {
+        ...state.timeline,
+        status: "ready",
+        items: [...directory.events],
+        error: null
+      }
+    };
+  }
+  function mergeDirectoryIdentity(state, detail) {
+    const id = String(detail?.animal?.id ?? "");
+    const directoryAnimal = state.animals.items.find((animal) => String(animal.id) === id);
+    if (!directoryAnimal) return detail;
+    return {
+      ...detail,
+      animal: {
+        ...directoryAnimal,
+        ...detail.animal,
+        groupId: detail.animal.groupId ?? directoryAnimal.groupId,
+        tagIds: detail.animal.tagIds?.length ? detail.animal.tagIds : directoryAnimal.tagIds,
+        profileAttachmentId: detail.animal.profileAttachmentId ?? directoryAnimal.profileAttachmentId
+      }
+    };
+  }
+  function routeContext(state, context = {}) {
+    const language = context.language || state?.language?.code || "en";
+    const locale = context.locale || state?.language?.locale || (language === "de" ? "de-CH" : "en-GB");
+    return {
+      ...context,
+      language,
+      locale,
+      translate: context.translate || createTranslator(language),
+      routeName: state?.navigation?.current?.name || "overview",
+      timeZone: context.timeZone || state?.animals?.directoryMeta?.timeZone || null
+    };
+  }
+  function renderReadOnlyAnimalsRoute(state, context = {}) {
+    const routeName = state?.navigation?.current?.name;
+    const active = routeContext(state, context);
+    if (routeName === "overview") return renderOverview(state, active);
+    if (routeName === "animals") return renderAnimals(state, active);
+    if (routeName === "animal-detail") return renderAnimalDetail(state, active);
+    throw validationError(`Route is not migrated: ${routeName}`, "route.name", {
+      routeName
+    });
+  }
+  function createReadOnlyAnimalsRuntime({
+    panel: panelValue,
+    legacy: legacyValue,
+    client: clientValue = null,
+    integrationVersion = "unknown"
+  } = {}) {
+    const panel = requiredPanel(panelValue);
+    const legacy = requiredLegacy(legacyValue);
+    const client = clientValue || new AnimalHealthClient(
+      createHomeAssistantTransport({ getHass: () => panel.h })
+    );
+    for (const method of ["getAnimalDirectory", "getAnimalDetail"]) {
+      if (typeof client[method] !== "function") {
+        throw validationError(`client.${method} must be a function`, `client.${method}`);
+      }
+    }
+    const store = createStore(initialState(panel));
+    const router = createRouter(store);
+    let legacyLoad = null;
+    let destroyed = false;
+    function requestRender() {
+      if (!destroyed && migrated(panel.view) && !panel.modal && typeof panel.render === "function") {
+        panel.render();
+      }
+    }
+    const unsubscribe = store.subscribe(requestRender);
+    function updateFilters(patch) {
+      if (!isPlainObject(patch)) {
+        throw validationError("filter update must be a plain object", "filters");
+      }
+      store.update((state) => ({
+        ...state,
+        animals: {
+          ...state.animals,
+          filters: {
+            ...state.animals.filters,
+            ...patch
+          }
+        }
+      }));
+    }
+    function restoreTextInput(action, selectionStart, selectionEnd) {
+      if (typeof panel.shadowRoot.querySelector !== "function") return;
+      const replacement = panel.shadowRoot.querySelector(
+        `[data-action="${action}"]`
+      );
+      if (!replacement) return;
+      replacement.focus?.();
+      if (Number.isInteger(selectionStart) && typeof replacement.setSelectionRange === "function") {
+        replacement.setSelectionRange(
+          selectionStart,
+          Number.isInteger(selectionEnd) ? selectionEnd : selectionStart
+        );
+      }
+    }
+    async function load({ force = false } = {}) {
+      const current = store.getState();
+      if (!force && current.animals.status === "ready") return current;
+      store.update((state) => ({
+        ...state,
+        animals: { ...state.animals, status: "loading", error: null },
+        tasks: { ...state.tasks, status: "loading", error: null },
+        timeline: { ...state.timeline, status: "loading", error: null }
+      }));
+      try {
+        const outcome = await controller.runLatest(
+          "animal-directory",
+          () => client.getAnimalDirectory(),
+          applyDirectory
+        );
+        if (outcome.applied) return store.getState();
+        return outcome;
+      } catch (error) {
+        const normalized = normalizeError(error, { operation: "loadAnimalDirectory" });
+        store.update((state) => ({
+          ...state,
+          animals: { ...state.animals, status: "error", error: normalized },
+          tasks: { ...state.tasks, status: "error", error: normalized },
+          timeline: { ...state.timeline, status: "error", error: normalized }
+        }));
+        throw normalized;
+      }
+    }
+    async function loadDetail(animalId, { force = false } = {}) {
+      const id = requireName(animalId, "animalId");
+      if (store.getState().animals.status !== "ready") await load();
+      const current = store.getState().animals.detail;
+      if (!force && current.status === "ready" && current.animalId === id) {
+        return current.data;
+      }
+      store.update((state) => ({
+        ...state,
+        animals: {
+          ...state.animals,
+          detail: {
+            status: "loading",
+            animalId: id,
+            data: current.animalId === id ? current.data : null,
+            error: null
+          }
+        }
+      }));
+      try {
+        const outcome = await controller.runLatest(
+          "animal-detail",
+          () => client.getAnimalDetail(id, {
+            today: store.getState().animals.directoryMeta.today
+          }),
+          (state, detail) => ({
+            ...state,
+            animals: {
+              ...state.animals,
+              detail: {
+                status: "ready",
+                animalId: id,
+                data: mergeDirectoryIdentity(state, detail),
+                error: null
+              }
+            }
+          })
+        );
+        return outcome.applied ? store.getState().animals.detail.data : outcome;
+      } catch (error) {
+        const normalized = normalizeError(error, { operation: "loadAnimalDetail" });
+        const active = store.getState();
+        if (active.navigation.current.name === "animal-detail" && active.navigation.current.params.animalId === id) {
+          store.update((state) => ({
+            ...state,
+            animals: {
+              ...state.animals,
+              detail: {
+                status: "error",
+                animalId: id,
+                data: state.animals.detail.animalId === id ? state.animals.detail.data : null,
+                error: normalized
+              }
+            }
+          }));
+        }
+        throw normalized;
+      }
+    }
+    async function refreshCurrentRoute() {
+      const directoryResult = await load({ force: true });
+      if (directoryResult?.applied === false) return directoryResult;
+      const route = router.current();
+      if (route.name === "animal-detail" && route.params?.animalId) {
+        return loadDetail(route.params.animalId, { force: true });
+      }
+      return store.getState();
+    }
+    async function openAnimal(animalId) {
+      const id = requireName(animalId, "animalId");
+      if (store.getState().animals.status !== "ready") await load();
+      panel.view = "animal-detail";
+      router.navigate({ name: "animal-detail", params: { animalId: id } });
+      return loadDetail(id);
+    }
+    async function ensureLegacyReady() {
+      if (panel.d) return panel.d;
+      if (!legacyLoad) {
+        legacyLoad = Promise.resolve(legacy.load.call(panel)).finally(() => {
+          legacyLoad = null;
+        });
+      }
+      await legacyLoad;
+      return panel.d;
+    }
+    async function navigate(routeName) {
+      const name = requireName(routeName, "route.name");
+      if (migrated(name)) {
+        panel.view = name;
+        router.navigate({ name, params: {} });
+        if (store.getState().animals.status === "idle") await load();
+        render();
+        return { mode: "new", route: router.current() };
+      }
+      panel.view = name;
+      panel.detail = null;
+      await ensureLegacyReady();
+      legacy.render.call(panel);
+      return { mode: "legacy", route: name };
+    }
+    const controller = createController({
+      store,
+      router,
+      client,
+      actions: {
+        "read.refresh": () => refreshCurrentRoute(),
+        refresh: () => refreshCurrentRoute(),
+        "detail-refresh": () => loadDetail(router.current().params.animalId, { force: true }),
+        "animal-detail": ({ id }) => openAnimal(id),
+        "home-group-toggle": () => {
+          const filters = store.getState().animals.filters;
+          updateFilters({ openPanel: filters.openPanel === "group" ? null : "group" });
+        },
+        "home-group-select": ({ id }) => updateFilters({ groupId: id || "all", openPanel: null }),
+        "home-tag-toggle": () => {
+          const filters = store.getState().animals.filters;
+          updateFilters({ openPanel: filters.openPanel === "tag" ? null : "tag" });
+        },
+        "home-tag-select": ({ id }) => updateFilters({ tagId: id || "all", openPanel: null }),
+        "home-search-toggle": () => {
+          const filters = store.getState().animals.filters;
+          updateFilters({ searchOpen: !filters.searchOpen });
+        },
+        "home-search": ({ value }) => updateFilters({ query: String(value ?? "") }),
+        "home-filter-reset": () => updateFilters({
+          query: "",
+          groupId: "all",
+          tagId: "all",
+          includeArchived: true,
+          openPanel: null,
+          searchOpen: false
+        }),
+        "animals-filter": ({ value }) => updateFilters({ query: String(value ?? "") }),
+        "animals-toggle-archived": () => {
+          const filters = store.getState().animals.filters;
+          updateFilters({ includeArchived: !filters.includeArchived });
+        }
+      }
+    });
+    function modernActionAllowed(action) {
+      if (action === "animal-detail") return true;
+      return migrated(panel.view) && MODERN_ACTIONS.has(action);
+    }
+    function handlesEvent(event) {
+      const target = targetFromEvent(event);
+      if (!target) return false;
+      if (target.dataset.view) return true;
+      return modernActionAllowed(String(target.dataset.action || ""));
+    }
+    async function handleEvent(event) {
+      const target = targetFromEvent(event);
+      if (!target) return false;
+      const action = String(target.dataset.action || "");
+      if (!target.dataset.view && !modernActionAllowed(action)) return false;
+      const restoreFocus = TEXT_FILTER_ACTIONS.has(action);
+      const selectionStart = Number.isInteger(target.selectionStart) ? target.selectionStart : null;
+      const selectionEnd = Number.isInteger(target.selectionEnd) ? target.selectionEnd : selectionStart;
+      try {
+        const result = target.dataset.view ? await navigate(target.dataset.view) : await controller.dispatch(action, {
+          event,
+          target,
+          id: target.dataset.id || null,
+          value: target.value
+        });
+        if (restoreFocus) {
+          restoreTextInput(action, selectionStart, selectionEnd);
+        }
+        return result;
+      } catch (error) {
+        return {
+          applied: false,
+          error: normalizeError(error, {
+            operation: target.dataset.view ? `navigate:${target.dataset.view}` : `event:${action}`
+          })
+        };
+      }
+    }
+    function render() {
+      const language = languageFromPanel(panel);
+      const state = store.getState();
+      const html = renderReadOnlyAnimalsRoute(state, {
+        language: language.code,
+        locale: language.locale,
+        translate: createTranslator(language.code),
+        routeName: state.navigation.current.name,
+        integrationVersion,
+        narrow: typeof panel.hasAttribute === "function" && panel.hasAttribute("narrow"),
+        timeZone: state.animals.directoryMeta.timeZone
+      });
+      panel.shadowRoot.innerHTML = html;
+      return html;
+    }
+    function destroy() {
+      if (destroyed) return;
+      destroyed = true;
+      unsubscribe();
+    }
+    return Object.freeze({
+      store,
+      router,
+      controller,
+      client,
+      load,
+      loadDetail,
+      refreshCurrentRoute,
+      openAnimal,
+      navigate,
+      ensureLegacyReady,
+      handlesEvent,
+      handleEvent,
+      render,
+      destroy
+    });
+  }
+
+  // custom_components/animal_health/frontend/src/legacy/compatibility-bridge.js
+  var INSTALLED_PANEL_CLASSES = /* @__PURE__ */ new WeakSet();
+  var PANEL_STATES = /* @__PURE__ */ new WeakMap();
+  function requireDelegate(value, path) {
+    if (typeof value !== "function") {
+      throw validationError(`${path} must be a function`, path);
+    }
+    return value;
+  }
+  function isMigratedRoute(routeName) {
+    return MIGRATED_READ_ROUTES.includes(String(routeName ?? ""));
+  }
+  function requirePanelClass(value) {
+    if (typeof value !== "function" || !value.prototype) {
+      throw validationError(
+        "LegacyPanelClass must be a constructor",
+        "LegacyPanelClass"
+      );
+    }
+    return value;
+  }
+  function captureLegacyMethods(prototype) {
+    const result = {};
+    for (const method of [
+      "render",
+      "load",
+      "loadDetail",
+      "handleClick",
+      "handleInput",
+      "handleSubmit"
+    ]) {
+      result[method] = requireDelegate(
+        prototype[method],
+        `LegacyPanelClass.prototype.${method}`
+      );
+    }
+    return Object.freeze(result);
+  }
+  function panelState(panel) {
+    let state = PANEL_STATES.get(panel);
+    if (!state) {
+      state = {
+        runtime: null,
+        legacyDepth: 0
+      };
+      PANEL_STATES.set(panel, state);
+    }
+    return state;
+  }
+  function mustUseLegacy(panel, state) {
+    return Boolean(
+      state.legacyDepth > 0 || panel.modal || !isMigratedRoute(panel.view)
+    );
+  }
+  async function withLegacyInteraction(panel, state, runtimeFor, callback, { ensureReady = false, refreshAfter = false } = {}) {
+    state.legacyDepth += 1;
+    let succeeded = false;
+    try {
+      if (ensureReady) await runtimeFor(panel, state).ensureLegacyReady();
+      const result = await callback();
+      succeeded = true;
+      return result;
+    } finally {
+      state.legacyDepth -= 1;
+      if (succeeded && refreshAfter && state.legacyDepth === 0 && !panel.modal && isMigratedRoute(panel.view)) {
+        await Promise.resolve(
+          runtimeFor(panel, state).refreshCurrentRoute()
+        ).catch(() => void 0);
+      }
+    }
+  }
+  function installLegacyReadOnlyAnimalsSlice(LegacyPanelClassValue, options = {}) {
+    const LegacyPanelClass = requirePanelClass(LegacyPanelClassValue);
+    if (!isPlainObject(options)) {
+      throw validationError("bridge options must be a plain object", "options");
+    }
+    if (INSTALLED_PANEL_CLASSES.has(LegacyPanelClass)) return false;
+    const prototype = LegacyPanelClass.prototype;
+    const legacy = captureLegacyMethods(prototype);
+    const runtimeFactory = requireDelegate(
+      options.runtimeFactory ?? createReadOnlyAnimalsRuntime,
+      "runtimeFactory"
+    );
+    const integrationVersion = String(options.integrationVersion ?? "unknown");
+    function runtimeFor(panel, state = panelState(panel)) {
+      if (!state.runtime) {
+        state.runtime = runtimeFactory({
+          panel,
+          legacy,
+          integrationVersion
+        });
+      }
+      return state.runtime;
+    }
+    prototype.render = function renderPhase4Route() {
+      const state = panelState(this);
+      if (mustUseLegacy(this, state)) return legacy.render.call(this);
+      return runtimeFor(this, state).render();
+    };
+    prototype.load = function loadPhase4Route(optionsValue = {}) {
+      const state = panelState(this);
+      if (mustUseLegacy(this, state)) return legacy.load.call(this);
+      const settings = isPlainObject(optionsValue) ? optionsValue : {};
+      return runtimeFor(this, state).load(settings);
+    };
+    prototype.loadDetail = function loadPhase4Detail(animalId, ...args) {
+      const state = panelState(this);
+      if (mustUseLegacy(this, state)) {
+        return legacy.loadDetail.call(this, animalId, ...args);
+      }
+      return runtimeFor(this, state).openAnimal(animalId);
+    };
+    prototype.handleClick = function handlePhase4Click(event) {
+      const state = panelState(this);
+      if (state.legacyDepth > 0) return legacy.handleClick.call(this, event);
+      if (this.modal) {
+        return withLegacyInteraction(
+          this,
+          state,
+          runtimeFor,
+          () => legacy.handleClick.call(this, event),
+          { refreshAfter: true }
+        );
+      }
+      const runtime = runtimeFor(this, state);
+      if (runtime.handlesEvent(event)) return runtime.handleEvent(event);
+      return withLegacyInteraction(
+        this,
+        state,
+        runtimeFor,
+        () => legacy.handleClick.call(this, event),
+        { ensureReady: true, refreshAfter: true }
+      );
+    };
+    prototype.handleInput = function handlePhase4Input(event) {
+      const state = panelState(this);
+      if (state.legacyDepth > 0 || this.modal) {
+        return legacy.handleInput.call(this, event);
+      }
+      const runtime = runtimeFor(this, state);
+      return runtime.handlesEvent(event) ? runtime.handleEvent(event) : legacy.handleInput.call(this, event);
+    };
+    prototype.handleSubmit = function handlePhase4Submit(event) {
+      const state = panelState(this);
+      return withLegacyInteraction(
+        this,
+        state,
+        runtimeFor,
+        () => legacy.handleSubmit.call(this, event),
+        { refreshAfter: true }
+      );
+    };
+    INSTALLED_PANEL_CLASSES.add(LegacyPanelClass);
+    return true;
+  }
+
+  // custom_components/animal_health/frontend/src/runtime-entry.js
+  installLegacyReadOnlyAnimalsSlice(AnimalHealthPanel, {
+    integrationVersion: typeof V === "string" ? V : "unknown"
+  });
+})();

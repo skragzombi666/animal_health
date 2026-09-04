@@ -1,3 +1,4 @@
+import { build } from "esbuild";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -10,6 +11,7 @@ const FRONTEND = path.join(
   "frontend",
 );
 const MANIFEST = path.join(FRONTEND, "legacy", "manifest.json");
+const RUNTIME_ENTRY = path.join(FRONTEND, "src", "runtime-entry.js");
 const OUTPUT = path.join(FRONTEND, "dist", "animal-health-panel.js");
 const REFERENCE_VERSION = "0.9.41";
 const EXPECTED_PARTS = Array.from(
@@ -17,6 +19,8 @@ const EXPECTED_PARTS = Array.from(
   (_, index) =>
     `../animal-health-panel.part${String(index + 1).padStart(2, "0")}.js`,
 );
+
+export const MODERN_SEPARATOR = "\n/* ANIMAL_HEALTH_MODERN_RUNTIME */\n";
 
 export async function loadManifest() {
   const manifest = JSON.parse(await readFile(MANIFEST, "utf8"));
@@ -47,7 +51,7 @@ export async function loadManifest() {
   return manifest;
 }
 
-export async function buildBundle() {
+export async function buildLegacyPrelude() {
   const manifest = await loadManifest();
   const manifestDirectory = path.dirname(MANIFEST);
   const sources = await Promise.all(
@@ -66,6 +70,33 @@ export async function buildBundle() {
   return sources.join("");
 }
 
+export async function buildModernRuntime() {
+  const result = await build({
+    entryPoints: [RUNTIME_ENTRY],
+    bundle: true,
+    write: false,
+    format: "iife",
+    platform: "browser",
+    target: ["es2022"],
+    legalComments: "none",
+    minify: false,
+    sourcemap: false,
+    charset: "utf8",
+    logLevel: "silent",
+  });
+  const output = result.outputFiles?.[0];
+  if (!output) throw new Error("esbuild did not produce a frontend runtime");
+  return output.text;
+}
+
+export async function buildBundle() {
+  const [legacyPrelude, modernRuntime] = await Promise.all([
+    buildLegacyPrelude(),
+    buildModernRuntime(),
+  ]);
+  return `${legacyPrelude}${MODERN_SEPARATOR}${modernRuntime}`;
+}
+
 export async function writeOrCheckBundle({ check = false } = {}) {
   const bundle = await buildBundle();
   if (check) {
@@ -75,14 +106,14 @@ export async function writeOrCheckBundle({ check = false } = {}) {
     } catch (error) {
       if (error?.code === "ENOENT") {
         throw new Error(
-          "Frontend dist bundle is missing. Run: node scripts/build_frontend.mjs",
+          "Frontend dist bundle is missing. Run: npm run build:frontend",
         );
       }
       throw error;
     }
     if (current !== bundle) {
       throw new Error(
-        "Frontend dist bundle is stale. Run: node scripts/build_frontend.mjs",
+        "Frontend dist bundle is stale. Run: npm run build:frontend",
       );
     }
     console.log(
