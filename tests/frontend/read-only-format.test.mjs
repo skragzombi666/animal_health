@@ -48,7 +48,7 @@ test("all read-only translation keys exist in German and English", () => {
 });
 
 test("dynamic HTML and attribute content is escaped", () => {
-  const raw = '<b title="x">&\'</b>';
+  const raw = `<b title="x">&'</b>`;
   assert.equal(
     escapeHtml(raw),
     "&lt;b title=&quot;x&quot;&gt;&amp;&#039;&lt;/b&gt;",
