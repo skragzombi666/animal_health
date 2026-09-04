@@ -7,6 +7,8 @@ ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "custom_components" / "animal_health"
 FRONTEND = INTEGRATION / "frontend"
 MANIFEST = INTEGRATION / "manifest.json"
+LEGACY_MANIFEST = FRONTEND / "legacy" / "manifest.json"
+DIST = FRONTEND / "dist" / "animal-health-panel.js"
 ANDROID = ROOT / "android" / "app" / "build.gradle.kts"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 RELEASE_NOTES = ROOT / "docs" / "version-0.9.41.md"
@@ -15,25 +17,24 @@ RELEASE_NOTES = ROOT / "docs" / "version-0.9.41.md"
 def test_041_release_metadata_is_complete_and_consistent() -> None:
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     assert manifest["version"] == "0.9.41"
-    first_part = (FRONTEND / "animal-health-panel.part01.js").read_text(
-        encoding="utf-8"
-    )
-    assert 'const V="0.9.41"' in first_part
+    assert 'const V="0.9.41"' in DIST.read_text(encoding="utf-8")
     assert RELEASE_NOTES.is_file()
     assert RELEASE_NOTES.read_text(encoding="utf-8").startswith(
         "# Animal Health 0.9.41"
     )
 
 
-def test_041_frontend_part_count_and_android_freeze_are_explicit() -> None:
-    parts = sorted(FRONTEND.glob("animal-health-panel.part*.js"))
+def test_041_legacy_reference_and_android_version_are_explicit() -> None:
+    legacy_manifest = json.loads(LEGACY_MANIFEST.read_text(encoding="utf-8"))
+    parts = legacy_manifest["parts"]
+    assert legacy_manifest["reference_version"] == "0.9.41"
     assert len(parts) == 99
-    assert parts[-1].name == "animal-health-panel.part99.js"
+    assert parts[0].endswith("animal-health-panel.part01.js")
+    assert parts[-1].endswith("animal-health-panel.part99.js")
+
     android = ANDROID.read_text(encoding="utf-8")
     assert 'val animalHealthVersion = "0.9.0-alpha.7"' in android
     assert "versionCode = 900007" in android
-    assert "ordered.size == 99" in android
-    assert "Expected 99 Animal Health frontend parts" in android
 
 
 def test_041_repository_contains_no_temporary_probe_files() -> None:

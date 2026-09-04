@@ -24,7 +24,7 @@ PANEL_BRAND_URL = f"/api/{DOMAIN}/frontend/animal-health-brand.png"
 PANEL_LEGACY_BRAND_URL = f"/api/{DOMAIN}/frontend/animal-health-brand.svg"
 _PANEL_STATE_KEY = f"{DOMAIN}_panel"
 _FRONTEND_DIR = Path(__file__).parent / "frontend"
-_FRONTEND_PARTS = tuple(sorted(_FRONTEND_DIR.glob("animal-health-panel.part*.js")))
+_FRONTEND_BUNDLE_PATH = _FRONTEND_DIR / "dist" / "animal-health-panel.js"
 _BRAND_MASTER_PATH = Path(__file__).parent / "brand" / "icon.png"
 _BRAND_UI_PATH = _FRONTEND_DIR / "animal-health-brand.svg"
 _NO_STORE_HEADERS = {
@@ -44,9 +44,9 @@ def _integration_version() -> str:
 
 
 def _frontend_source() -> str:
-    if not _FRONTEND_PARTS:
-        raise RuntimeError("Animal Health frontend source parts are missing")
-    source = "".join(path.read_text(encoding="utf-8") for path in _FRONTEND_PARTS)
+    if not _FRONTEND_BUNDLE_PATH.is_file():
+        raise RuntimeError("Animal Health frontend bundle is missing")
+    source = _FRONTEND_BUNDLE_PATH.read_text(encoding="utf-8")
     version = _integration_version()
     return re.sub(
         r'const V="[^"]+",D="animal_health";',
@@ -78,7 +78,7 @@ class AnimalHealthPanelView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request: web.Request) -> web.Response:
-        """Return the assembled frontend module."""
+        """Return the checked-in frontend bundle."""
         source = await request.app[KEY_HASS].async_add_executor_job(_frontend_source)
         return web.Response(
             text=source,
