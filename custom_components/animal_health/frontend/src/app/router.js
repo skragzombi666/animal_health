@@ -39,6 +39,13 @@ function assertStore(store) {
   return store;
 }
 
+function requireRouteValue(value) {
+  if (value === undefined || value === null) {
+    throw validationError("route is required", "route");
+  }
+  return value;
+}
+
 export function createRouter(storeValue) {
   const store = assertStore(storeValue);
 
@@ -50,7 +57,7 @@ export function createRouter(storeValue) {
     if (!isPlainObject(options)) {
       throw validationError("navigation options must be a plain object", "options");
     }
-    const next = createRoute(routeValue);
+    const next = createRoute(requireRouteValue(routeValue));
     const state = store.getState();
     if (equalValue(state.navigation.current, next)) {
       return state.navigation.current;
@@ -66,12 +73,13 @@ export function createRouter(storeValue) {
         revision: active.navigation.revision + 1,
       },
       dialog: closedDialog(),
+      requests: {},
     }));
     return store.getState().navigation.current;
   }
 
   function replace(routeValue) {
-    return navigate(routeValue, { replace: true });
+    return navigate(requireRouteValue(routeValue), { replace: true });
   }
 
   function back() {
@@ -87,6 +95,7 @@ export function createRouter(storeValue) {
         revision: active.navigation.revision + 1,
       },
       dialog: closedDialog(),
+      requests: {},
     }));
     return store.getState().navigation.current;
   }
