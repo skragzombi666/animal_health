@@ -33,7 +33,10 @@ export {
   selectUrgentOccurrences,
   selectVisibleAnimals,
 } from "./domain/animals/selectors.js";
-export { createCompatibilityBridge } from "./legacy/compatibility-bridge.js";
+export {
+  createCompatibilityBridge,
+  installLegacyReadOnlyAnimalsSlice,
+} from "./legacy/compatibility-bridge.js";
 export { createAndroidTransport } from "./platform/android-adapter.js";
 export { createHomeAssistantTransport } from "./platform/home-assistant-adapter.js";
 export {
