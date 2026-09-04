@@ -19,13 +19,20 @@ PART_NAME_PATTERN = re.compile(r"animal-health-panel\.part(\d+)\.js$")
 PROTOTYPE_ALIAS_PATTERN = re.compile(
     r"\bconst\s+(AH[A-Za-z0-9_$]*)\s*=\s*AnimalHealthPanel\.prototype\s*;"
 )
+SOURCE_PROTOTYPE_ALIAS_PATTERN = re.compile(
+    r"\b(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)"
+    r"\s*=\s*AnimalHealthPanel\.prototype\s*;"
+)
 DIRECT_PROTOTYPE_PATTERN = re.compile(
     r"\bAnimalHealthPanel\.prototype\.([A-Za-z_$][A-Za-z0-9_$]*)\s*=(?!=)"
 )
-FORBIDDEN_SOURCE_PATTERNS = {
-    "direct_prototype_patch": re.compile(r"AnimalHealthPanel\.prototype\s*\.") ,
-    "shadow_root_append": re.compile(r"shadowRoot\.innerHTML\s*\+="),
-}
+DIRECT_PROTOTYPE_ACCESS_PATTERN = re.compile(
+    r"\bAnimalHealthPanel\.prototype\s*\."
+)
+DIRECT_PROTOTYPE_OBJECT_ASSIGN_PATTERN = re.compile(
+    r"\bObject\.assign\(\s*AnimalHealthPanel\.prototype\s*,"
+)
+SHADOW_ROOT_APPEND_PATTERN = re.compile(r"shadowRoot\.innerHTML\s*\+=")
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -64,6 +71,88 @@ def _assignment_kind(text: str, offset: int) -> str:
     return "value"
 
 
+def _violation_records(
+    relative: str,
+    pattern_name: str,
+    positions: Iterable[int],
+) -> list[dict[str, Any]]:
+    return [
+        {"path": relative, "pattern": pattern_name, "ordinal": ordinal}
+        for ordinal, _position in enumerate(sorted(positions), start=1)
+    ]
+
+
+def find_frontend_source_violations(
+    text: str,
+    relative: str,
+) -> list[dict[str, Any]]:
+    """Return forbidden architecture patterns in one new frontend source file."""
+    violations: list[dict[str, Any]] = []
+    is_legacy_bridge = relative.endswith(
+        "frontend/src/legacy/compatibility-bridge.js"
+    )
+
+    if not is_legacy_bridge:
+        violations.extend(
+            _violation_records(
+                relative,
+                "direct_prototype_patch",
+                (match.start() for match in DIRECT_PROTOTYPE_ACCESS_PATTERN.finditer(text)),
+            )
+        )
+        violations.extend(
+            _violation_records(
+                relative,
+                "prototype_object_assign",
+                (
+                    match.start()
+                    for match in DIRECT_PROTOTYPE_OBJECT_ASSIGN_PATTERN.finditer(text)
+                ),
+            )
+        )
+
+        aliases = sorted(set(SOURCE_PROTOTYPE_ALIAS_PATTERN.findall(text)))
+        alias_assignment_positions: list[int] = []
+        alias_object_assign_positions: list[int] = []
+        for alias in aliases:
+            assignment = re.compile(
+                rf"\b{re.escape(alias)}\.([A-Za-z_$][A-Za-z0-9_$]*)\s*=(?!=)"
+            )
+            object_assign = re.compile(
+                rf"\bObject\.assign\(\s*{re.escape(alias)}\s*,"
+            )
+            alias_assignment_positions.extend(
+                match.start() for match in assignment.finditer(text)
+            )
+            alias_object_assign_positions.extend(
+                match.start() for match in object_assign.finditer(text)
+            )
+
+        violations.extend(
+            _violation_records(
+                relative,
+                "prototype_alias_patch",
+                alias_assignment_positions,
+            )
+        )
+        violations.extend(
+            _violation_records(
+                relative,
+                "prototype_object_assign",
+                alias_object_assign_positions,
+            )
+        )
+
+    violations.extend(
+        _violation_records(
+            relative,
+            "shadow_root_append",
+            (match.start() for match in SHADOW_ROOT_APPEND_PATTERN.finditer(text)),
+        )
+    )
+    return sorted(violations, key=_stable_key)
+
+
 def _frontend_inventory(root: Path) -> dict[str, Any]:
     frontend = root / FRONTEND_RELATIVE_PATH
     parts = sorted(
@@ -77,7 +166,7 @@ def _frontend_inventory(root: Path) -> dict[str, Any]:
     dialogs: set[str] = set()
     websocket_commands: set[str] = set()
     services: set[str] = set()
-    translation_keys: set[str] = set()
+    translation_keys: set[Any] = set()
     style_block_count = 0
 
     for path in parts:
@@ -182,23 +271,15 @@ def _frontend_inventory(root: Path) -> dict[str, Any]:
         if quoted or bare
     }
 
-    new_source_forbidden_patterns: list[dict[str, str]] = []
+    new_source_forbidden_patterns: list[dict[str, Any]] = []
     source_root = frontend / "src"
     if source_root.exists():
         for path in sorted(source_root.rglob("*.js")):
             relative = _relative(root, path)
-            if relative.endswith("frontend/src/legacy/compatibility-bridge.js"):
-                allowed = {"direct_prototype_patch"}
-            else:
-                allowed = set()
             text = path.read_text(encoding="utf-8")
-            for name, pattern in FORBIDDEN_SOURCE_PATTERNS.items():
-                if name in allowed:
-                    continue
-                for occurrence, _match in enumerate(pattern.finditer(text), start=1):
-                    new_source_forbidden_patterns.append(
-                        {"path": relative, "pattern": name, "ordinal": occurrence}
-                    )
+            new_source_forbidden_patterns.extend(
+                find_frontend_source_violations(text, relative)
+            )
 
     return {
         "part_count": len(part_records),
@@ -286,7 +367,12 @@ def _backend_inventory(root: Path) -> dict[str, Any]:
                     }
                 )
 
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "setattr" and len(node.args) >= 2:
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "setattr"
+                and len(node.args) >= 2
+            ):
                 owner = _dotted_name(node.args[0])
                 attribute = (
                     node.args[1].value
@@ -295,12 +381,17 @@ def _backend_inventory(root: Path) -> dict[str, Any]:
                     else None
                 )
                 if owner and attribute:
-                    segment = ast.get_source_segment(text, node) or f"setattr({owner},{attribute})"
+                    segment = (
+                        ast.get_source_segment(text, node)
+                        or f"setattr({owner},{attribute})"
+                    )
                     runtime_method_assignments.append(
                         {
                             "path": relative,
                             "target": f"{owner}.{attribute}",
-                            "statement_sha256": _sha256(_collapse(segment).encode())[:16],
+                            "statement_sha256": _sha256(
+                                _collapse(segment).encode()
+                            )[:16],
                         }
                     )
 
@@ -309,9 +400,14 @@ def _backend_inventory(root: Path) -> dict[str, Any]:
     init_tree = ast.parse(init_text, filename=_relative(root, init_path))
     patch_registration_order: list[str] = []
     for node in init_tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "_apply_all_patches":
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == "_apply_all_patches"
+        ):
             for statement in node.body:
-                if not isinstance(statement, ast.Expr) or not isinstance(statement.value, ast.Call):
+                if not isinstance(statement, ast.Expr) or not isinstance(
+                    statement.value, ast.Call
+                ):
                     continue
                 called = _dotted_name(statement.value.func)
                 if called:
