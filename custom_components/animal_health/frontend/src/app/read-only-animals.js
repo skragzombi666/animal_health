@@ -32,6 +32,11 @@ const MODERN_ACTIONS = new Set([
   "animals-toggle-archived",
 ]);
 
+const TEXT_FILTER_ACTIONS = new Set([
+  "home-search",
+  "animals-filter",
+]);
+
 function migrated(routeName) {
   return MIGRATED_READ_ROUTES.includes(String(routeName ?? ""));
 }
@@ -261,6 +266,24 @@ export function createReadOnlyAnimalsRuntime({
     }));
   }
 
+  function restoreTextInput(action, selectionStart, selectionEnd) {
+    if (typeof panel.shadowRoot.querySelector !== "function") return;
+    const replacement = panel.shadowRoot.querySelector(
+      `[data-action="${action}"]`,
+    );
+    if (!replacement) return;
+    replacement.focus?.();
+    if (
+      Number.isInteger(selectionStart) &&
+      typeof replacement.setSelectionRange === "function"
+    ) {
+      replacement.setSelectionRange(
+        selectionStart,
+        Number.isInteger(selectionEnd) ? selectionEnd : selectionStart,
+      );
+    }
+  }
+
   async function load({ force = false } = {}) {
     const current = store.getState();
     if (!force && current.animals.status === "ready") return current;
@@ -355,6 +378,16 @@ export function createReadOnlyAnimalsRuntime({
     }
   }
 
+  async function refreshCurrentRoute() {
+    const directoryResult = await load({ force: true });
+    if (directoryResult?.applied === false) return directoryResult;
+    const route = router.current();
+    if (route.name === "animal-detail" && route.params?.animalId) {
+      return loadDetail(route.params.animalId, { force: true });
+    }
+    return store.getState();
+  }
+
   async function openAnimal(animalId) {
     const id = requireName(animalId, "animalId");
     if (store.getState().animals.status !== "ready") await load();
@@ -380,6 +413,7 @@ export function createReadOnlyAnimalsRuntime({
       panel.view = name;
       router.navigate({ name, params: {} });
       if (store.getState().animals.status === "idle") await load();
+      render();
       return { mode: "new", route: router.current() };
     }
     panel.view = name;
@@ -394,11 +428,8 @@ export function createReadOnlyAnimalsRuntime({
     router,
     client,
     actions: {
-      "read.refresh": () => load({ force: true }),
-      refresh: () =>
-        router.current().name === "animal-detail"
-          ? loadDetail(router.current().params.animalId, { force: true })
-          : load({ force: true }),
+      "read.refresh": () => refreshCurrentRoute(),
+      refresh: () => refreshCurrentRoute(),
       "detail-refresh": () =>
         loadDetail(router.current().params.animalId, { force: true }),
       "animal-detail": ({ id }) => openAnimal(id),
@@ -448,15 +479,38 @@ export function createReadOnlyAnimalsRuntime({
   async function handleEvent(event) {
     const target = targetFromEvent(event);
     if (!target) return false;
-    if (target.dataset.view) return navigate(target.dataset.view);
     const action = String(target.dataset.action || "");
-    if (!modernActionAllowed(action)) return false;
-    return controller.dispatch(action, {
-      event,
-      target,
-      id: target.dataset.id || null,
-      value: target.value,
-    });
+    if (!target.dataset.view && !modernActionAllowed(action)) return false;
+    const restoreFocus = TEXT_FILTER_ACTIONS.has(action);
+    const selectionStart = Number.isInteger(target.selectionStart)
+      ? target.selectionStart
+      : null;
+    const selectionEnd = Number.isInteger(target.selectionEnd)
+      ? target.selectionEnd
+      : selectionStart;
+    try {
+      const result = target.dataset.view
+        ? await navigate(target.dataset.view)
+        : await controller.dispatch(action, {
+            event,
+            target,
+            id: target.dataset.id || null,
+            value: target.value,
+          });
+      if (restoreFocus) {
+        restoreTextInput(action, selectionStart, selectionEnd);
+      }
+      return result;
+    } catch (error) {
+      return {
+        applied: false,
+        error: normalizeError(error, {
+          operation: target.dataset.view
+            ? `navigate:${target.dataset.view}`
+            : `event:${action}`,
+        }),
+      };
+    }
   }
 
   function render() {
@@ -488,6 +542,7 @@ export function createReadOnlyAnimalsRuntime({
     client,
     load,
     loadDetail,
+    refreshCurrentRoute,
     openAnimal,
     navigate,
     ensureLegacyReady,

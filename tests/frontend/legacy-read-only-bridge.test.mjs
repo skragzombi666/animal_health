@@ -72,6 +72,10 @@ function setup() {
         calls.push(["load", options]);
         return "modern-load";
       },
+      async refreshCurrentRoute() {
+        calls.push(["refreshCurrentRoute"]);
+        return "modern-refresh";
+      },
       async openAnimal(id) {
         calls.push(["openAnimal", id]);
         panel.view = "animal-detail";
@@ -206,7 +210,7 @@ test("write actions load Legacy data before invoking the original handler", asyn
   assert.equal(panel.shadowRoot.innerHTML, "<legacy>overview</legacy>");
 });
 
-test("legacy submit refreshes Legacy state internally then the modern directory", async () => {
+test("legacy submit refreshes Legacy state internally then the complete modern route", async () => {
   const { LegacyPanel, legacyCalls, runtimes, runtimeFactory } = setup();
   installLegacyReadOnlyAnimalsSlice(LegacyPanel, { runtimeFactory });
   const panel = new LegacyPanel();
@@ -220,7 +224,7 @@ test("legacy submit refreshes Legacy state internally then the modern directory"
     ["load", "overview"],
     ["render", "overview", false],
   ]);
-  assert.deepEqual(runtimes[0].calls, [["load", { force: true }]]);
+  assert.deepEqual(runtimes[0].calls, [["refreshCurrentRoute"]]);
 });
 
 test("modal interactions and ordinary Legacy inputs never enter the modern runtime", async () => {

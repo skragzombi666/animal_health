@@ -146,7 +146,9 @@ async function withLegacyInteraction(
       !panel.modal &&
       isMigratedRoute(panel.view)
     ) {
-      await runtimeFor(panel, state).load({ force: true }).catch(() => undefined);
+      await Promise.resolve(
+        runtimeFor(panel, state).refreshCurrentRoute(),
+      ).catch(() => undefined);
     }
   }
 }
