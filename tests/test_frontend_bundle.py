@@ -9,6 +9,17 @@ FRONTEND = ROOT / "custom_components" / "animal_health" / "frontend"
 LEGACY_MANIFEST = FRONTEND / "legacy" / "manifest.json"
 DIST = FRONTEND / "dist" / "animal-health-panel.js"
 BUILD_SCRIPT = ROOT / "scripts" / "build_frontend.mjs"
+MODERN_SEPARATOR = "\n/* ANIMAL_HEALTH_MODERN_RUNTIME */\n"
+
+
+def _legacy_prelude() -> str:
+    manifest = json.loads(LEGACY_MANIFEST.read_text(encoding="utf-8"))
+    return "".join(
+        (LEGACY_MANIFEST.parent / relative)
+        .resolve()
+        .read_text(encoding="utf-8")
+        for relative in manifest["parts"]
+    )
 
 
 def test_phase1_manifest_names_exactly_the_frozen_99_parts() -> None:
@@ -23,7 +34,7 @@ def test_phase1_manifest_names_exactly_the_frozen_99_parts() -> None:
     }
 
 
-def test_phase1_dist_bundle_is_reproducible_and_valid_javascript() -> None:
+def test_active_dist_bundle_is_reproducible_and_valid_javascript() -> None:
     check = subprocess.run(
         ["node", str(BUILD_SCRIPT), "--check"],
         cwd=ROOT,
@@ -35,15 +46,13 @@ def test_phase1_dist_bundle_is_reproducible_and_valid_javascript() -> None:
     subprocess.run(["node", "--check", str(DIST)], check=True)
 
 
-def test_phase1_dist_is_exact_legacy_concatenation() -> None:
-    manifest = json.loads(LEGACY_MANIFEST.read_text(encoding="utf-8"))
-    expected = "".join(
-        (LEGACY_MANIFEST.parent / relative)
-        .resolve()
-        .read_text(encoding="utf-8")
-        for relative in manifest["parts"]
-    )
-    assert DIST.read_text(encoding="utf-8") == expected
+def test_active_dist_starts_with_the_exact_legacy_concatenation() -> None:
+    legacy = _legacy_prelude()
+    bundle = DIST.read_text(encoding="utf-8")
+    assert bundle.startswith(legacy)
+    assert bundle[len(legacy) :].startswith(MODERN_SEPARATOR)
+    assert bundle.count("ANIMAL_HEALTH_MODERN_RUNTIME") == 1
+    assert "installLegacyReadOnlyAnimalsSlice" in bundle[len(legacy) :]
 
 
 def test_phase1_home_assistant_and_android_reference_only_the_dist_bundle() -> None:
