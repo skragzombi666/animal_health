@@ -1,156 +1,131 @@
 # Animal Health – Zielarchitektur und Migrationsgrenzen
 
-**Status:** Entwurf zur Freigabe  
+**Status:** Fachlich freigegeben; Umsetzung beginnt mit Phase 0 und Phase 1  
 **Referenzstand:** Animal Health 0.9.41  
 **Referenz-Commit:** `4df86bc382b99db3a4276cb451edfacc0eaf502d`  
 **Geltungsbereich:** Home-Assistant-Integration, gemeinsames Web-Frontend und eigenständige Android-App
 
 ## 1. Zweck
 
-Diese Spezifikation legt die verbindliche Zielarchitektur und die Migrationsgrenzen für die Konsolidierung von Animal Health fest. Sie ersetzt noch keinen Produktivcode. Sie definiert, wie der Funktionsstand von 0.9.41 ohne fachliche Regressionen aus der historischen Frontend-Fragmentkette und den Backend-Runtime-Patches in eine nachvollziehbare, modular testbare Architektur überführt wird.
+Diese Spezifikation legt die verbindliche Zielarchitektur für die Konsolidierung von Animal Health fest. Der Funktionsstand von 0.9.41 wird kontrolliert in eine fach- und komponentenbasierte Architektur überführt, ohne bestehende Nutzdaten, öffentliche Verträge oder fachliche Regeln unnötig zu verändern.
 
-Die Konsolidierung erfolgt schrittweise. Zu keinem Zeitpunkt darf ein vollständiger Neuaufbau erzwungen werden, der nur als Ganzes ausgeliefert oder geprüft werden kann.
+Die Konsolidierung ist kein Fortführen der 99 nummerierten Frontend-Fragmente. Sie ist ein systematischer Neuaufbau der aktuellen Implementierung nach fachlichen Objekten und Anwendungsfällen. Die alten Fragmente bleiben nur vorübergehend als unveränderlicher Referenzstand erhalten, damit bestehendes Verhalten verglichen, getestet und einzeln ersetzt werden kann.
 
 ## 2. Ausgangslage
 
-Der aktuelle Stand weist zwei gekoppelte historische Architekturen auf:
+Das aktuelle Frontend wird aus 99 nummerierten JavaScript-Dateien zusammengesetzt. Diese Dateien sind keine 99 Komponenten, sondern eine historische Überschreibungskette derselben globalen Klasse `AnimalHealthPanel`. Das aktive Verhalten ergibt sich aus Dateireihenfolge, Prototypänderungen, nachträglichen HTML-Manipulationen und CSS-Reihenfolge.
 
-1. Das Frontend wird aus 99 nummerierten JavaScript-Dateien lexikografisch zusammengesetzt. Diese Dateien überschreiben wiederholt Methoden derselben globalen Klasse `AnimalHealthPanel`.
-2. Das Backend aktiviert beim Start eine lange Folge versionsgebundener Patchfunktionen, die unter anderem Methoden zentraler Klassen wie `TaskRecordStore` ersetzen.
+Das Backend verwendet parallel zahlreiche versionsgebundene Runtime-Patches. Zentrale Methoden wie `TaskRecordStore.execute` werden nacheinander ersetzt oder erweitert. Echte Datenmigrationen und laufendes Produktverhalten sind dadurch nicht ausreichend getrennt.
 
-Beide Mechanismen funktionieren derzeit nur aufgrund ihrer impliziten Reihenfolge. Das aktive Verhalten einer Methode ist nicht lokal an ihrer Klassendefinition erkennbar. Dieselben fachlichen Daten werden im Frontend teilweise aus mehreren historischen Zustandscontainern gelesen. Home Assistant und Android verwenden dieselbe zusammengesetzte Oberfläche und sind damit beide an diese Struktur gekoppelt.
+Home Assistant und Android verwenden dieselbe zusammengesetzte Oberfläche. Die aktuelle Android-Konfiguration erwartet exakt 99 Fragmente. Eine weitere Datei `part100.js` würde zugleich die Buildprüfung brechen und wegen lexikografischer Sortierung an der falschen Stelle ausgeführt.
 
-Die Grenze von 99 Frontend-Fragmenten ist erreicht. Eine Datei `part100.js` würde lexikografisch zwischen `part10.js` und `part11.js` geladen und zugleich die aktuell hart codierte Android-Prüfung auf 99 Teile brechen.
+## 3. Verbindliche Grundentscheidung
 
-## 3. Ziele
+### 3.1 Die 99 Fragmente sind nur ein Legacy-Snapshot
 
-Die Konsolidierung muss folgende Ergebnisse erreichen:
+Die 99 vorhandenen Dateien werden:
+
+- einmalig als Referenzstand von 0.9.41 eingefroren,
+- während der Übergangsphase reproduzierbar gebündelt,
+- nicht konsolidiert oder zu einer neuen Architektur erklärt,
+- nicht um neue Funktionen erweitert,
+- nicht eins zu eins in neue Modulnamen übertragen,
+- nach vollständiger Ablösung restlos entfernt.
+
+Das temporäre Manifest beschreibt ausschliesslich die Reihenfolge des eingefrorenen Referenzstands. Es ist kein dauerhafter Bestandteil der Zielarchitektur.
+
+### 3.2 Die neue Oberfläche entsteht unabhängig davon
+
+Die neue Oberfläche wird unter `custom_components/animal_health/frontend/src/` fach- und komponentenbasiert aufgebaut. Ihre Grenzen orientieren sich an Verantwortlichkeiten wie Tiere, Gruppen, Chronik, Aufgaben, Produkte, Behandlungspläne, Anhänge und Einstellungen.
+
+Neue Module dürfen keine Methoden der alten Panelklasse überschreiben. Sie erhalten explizite Abhängigkeiten, kanonische DTOs und eigene Tests.
+
+### 3.3 Migration erfolgt bereichsweise
+
+Ein Bereich wird vollständig nach folgendem Muster migriert:
+
+```text
+bestehendes Verhalten charakterisieren
+→ fachlichen Vertrag festlegen
+→ neue Implementierung erstellen
+→ Alt- und Neuverhalten vergleichen
+→ vollständige Route oder vollständigen Anwendungsfall umschalten
+→ zugehörige Legacy-Nutzung entfernen
+```
+
+Es werden keine einzelnen Methoden quer durch eine Ansicht halb migriert. Bevorzugt werden ganze Routen und vollständige vertikale Anwendungsfälle.
+
+### 3.4 Kein Big-Bang-Rewrite
+
+Der Neuaufbau erfolgt systematisch, aber nicht als einmaliger vollständiger Rewrite. In den alten Dateien steckt implizites Verhalten, das noch nicht vollständig durch Browser- und Vertragstests beschrieben ist. Ein sofortiges Löschen würde Funktionsverluste schwer erkennbar machen.
+
+Der Legacy-Stand dient daher als Vergleichsobjekt und Rückfallpunkt, nicht als Fundament des neuen Codes.
+
+## 4. Ziele
 
 - Pro fachlicher Funktion existiert genau eine aktuelle Implementierung.
-- Frontend-Quellcode ist nach fachlichen Verantwortlichkeiten und nicht nach Releasehistorie gegliedert.
-- Das ausgelieferte Frontend bleibt ein einziges selbstenthaltenes Bundle für Home Assistant und Android.
-- Die Bundle-Reihenfolge wird durch einen Buildprozess und nicht durch Dateinamen bestimmt.
-- Die Benutzeroberfläche greift nur auf einen kanonischen Anwendungszustand und kanonische DTOs zu.
-- Navigation, Rendering, Aktionen, Formulare, Übersetzungen und Styles besitzen jeweils eine eindeutige Zuständigkeit.
-- Backend-APIs rufen kanonische Anwendungsservices auf; Runtime-Monkey-Patches entfallen.
-- Historische Datenbankmigrationen bleiben erhalten, idempotent und getrennt von Runtime-Verhalten.
-- Die fachlichen Regeln aus 0.9.41, insbesondere für Serien und einzelne Fälligkeiten, bleiben unverändert.
-- Jede Migrationsetappe ist einzeln testbar, auslieferbar und durch Revert rücksetzbar.
+- Frontend-Quellcode ist nach fachlichen Verantwortlichkeiten gegliedert.
+- Home Assistant und Android verwenden dasselbe selbstenthaltene Bundle.
+- Die Bundle-Reihenfolge wird durch einen deterministischen Build bestimmt.
+- Die UI verwendet einen kanonischen Zustand und kanonische DTOs.
+- Navigation, Rendering, Aktionen, Formulare, Übersetzungen und Styles besitzen eindeutige Zuständigkeiten.
+- Backend-APIs rufen kanonische Anwendungsservices auf.
+- Runtime-Monkey-Patches werden vollständig entfernt.
+- Echte historische Datenmigrationen bleiben erhalten und idempotent.
+- Jede Migrationsetappe ist einzeln testbar, auslieferbar und rücksetzbar.
+- Die fachlichen Regeln aus 0.9.41 bleiben erhalten.
 
-## 4. Nichtziele
+## 5. Nichtziele
 
-Die Konsolidierung umfasst ausdrücklich nicht:
+Die Konsolidierung umfasst nicht:
 
 - neue fachliche Funktionen,
 - ein visuelles Redesign,
-- eine Änderung der medizinischen oder dokumentarischen Logik,
-- eine Änderung bestehender IDs oder gespeicherter Nutzdaten,
+- eine Änderung medizinischer oder dokumentarischer Regeln,
+- neue IDs oder eine unnötige Änderung gespeicherter Nutzdaten,
 - eine native Neuentwicklung der Android-Oberfläche,
-- eine Framework-Migration als Selbstzweck,
-- eine neue öffentliche API-Version ohne zwingenden Grund,
-- die Entfernung historischer Datenbankmigrationen,
-- die gleichzeitige Bereinigung aller Altlasten in einem einzelnen Pull Request.
+- die gleichzeitige Einführung eines neuen UI-Frameworks,
+- die Entfernung echter historischer Datenmigrationen,
+- eine Bereinigung aller Bereiche in einem einzigen Pull Request.
 
-Funktionsänderungen werden getrennt von Architekturänderungen geplant und umgesetzt.
+## 6. Technische Zielentscheidung
 
-## 5. Architekturentscheidung
+### 6.1 Frontend-Technik
 
-### 5.1 Gewählter Ansatz
+- ES-Module unter `frontend/src/`
+- JSDoc-Typen und statische JavaScript-Prüfung
+- ein deterministischer Build über `scripts/build_frontend.mjs`
+- ein eingechecktes Laufzeitartefakt unter `frontend/dist/animal-health-panel.js`
+- vorhandene Web-Component- und Shadow-DOM-Grundlagen
+- kein neues UI-Framework während der Konsolidierung
+- `esbuild` erst ab dem ersten tatsächlich migrierten ES-Modul als fest gepinnte Entwicklungsabhängigkeit
 
-Gewählt wird eine **schrittweise Strangler-Migration auf fachliche ES-Module mit einem deterministischen Build und genau einer befristeten Legacy-Brücke**.
+Die erste Bundle-Etappe benötigt keine neue externe Abhängigkeit. Sie reproduziert zunächst nur den eingefrorenen Legacy-Stand anhand eines expliziten Manifests.
 
-Die aktuelle 0.9.41-Oberfläche bleibt zunächst als eingefrorene Legacy-Referenz bestehen. Ein Buildskript erzeugt daraus ein deterministisches Bundle. Neue kanonische Module werden danach nicht als weitere nummerierte Fragmente angelegt, sondern unter `frontend/src/` entwickelt und über einen expliziten Einstiegspunkt gebündelt.
+### 6.2 Eine befristete Legacy-Brücke
 
-Während der Übergangsphase darf genau eine Datei, `frontend/src/legacy/compatibility-bridge.js`, auf die alte `AnimalHealthPanel`-Klasse zugreifen. Sie delegiert migrierte Routen und Aktionen an neue Module und unmigrierte Bereiche an den eingefrorenen Legacy-Stand. Kein Fachmodul darf selbst den globalen Prototyp verändern.
+Während der Übergangsphase darf genau eine Datei auf die alte `AnimalHealthPanel`-Klasse zugreifen:
 
-Nach Migration aller Bereiche wird die Legacy-Brücke zusammen mit den 99 Fragmenten entfernt. Der endgültige Einstiegspunkt definiert die Custom-Element-Klasse direkt.
-
-### 5.2 Technologiewahl
-
-Die Zielarchitektur verwendet:
-
-- modernes JavaScript als ES-Module,
-- JSDoc-Typen und statische Prüfung über `checkJs`,
-- `scripts/build_frontend.mjs` als einzigen Build-Einstieg,
-- zunächst eine dependency-freie Manifestverkettung des eingefrorenen Legacy-Prelude,
-- ab dem ersten neuen ES-Modul `esbuild` als fest gepinnte reine Entwicklungsabhängigkeit,
-- ein selbstenthaltenes JavaScript-Bundle als Laufzeitartefakt,
-- vorhandene Web-Component- und Shadow-DOM-Grundlagen,
-- keine neue UI-Framework-Abhängigkeit in der Konsolidierungsphase.
-
-Die Wahl gegen eine sofortige TypeScript- oder Framework-Neuentwicklung reduziert den Umfang der Verhaltensänderung. Typisierung und klare Modulgrenzen werden dennoch verbindlich eingeführt. Eine spätere TypeScript-Konvertierung bleibt möglich, ist aber kein Bestandteil dieser Migration.
-
-### 5.3 Verworfene Ansätze
-
-#### Vollständiger Neuaufbau
-
-Ein Big-Bang-Rewrite würde die implizit gewachsene Fachlogik gleichzeitig neu implementieren. Die vorhandenen Tests decken nicht jede visuelle und interaktive Kombination ab. Das Risiko stiller Funktionsverluste ist daher zu hoch.
-
-#### Zusammenführen in eine einzelne gepflegte Riesendatei
-
-Das reine Zusammenkopieren der 99 Fragmente würde die Dateireihenfolge sichtbar beseitigen, aber weiterhin dieselbe globale Klasse, dieselben Überschreibungsketten und dieselben parallelen Zustände enthalten. Es wäre keine fachliche Konsolidierung.
-
-#### Einführung eines UI-Frameworks während der Migration
-
-Lit, React oder ein anderes Framework könnten langfristig geeignet sein, würden aber zusätzlich zur Architekturänderung das Renderingmodell austauschen. Diese zweite Veränderungsachse wird bewusst vermieden.
-
-## 6. Verbindliche Architekturprinzipien
-
-### 6.1 Eine Quelle pro fachlicher Wahrheit
-
-Jede fachliche Information besitzt genau eine kanonische Quelle im Frontendzustand. Container wie `v0912`, `v0918`, `v0924` oder ähnliche versionsbezogene Zustände dürfen im Zielzustand nicht existieren.
-
-Rohdaten verschiedener bestehender Endpunkte werden an der API-Grenze normalisiert. Fachmodule erhalten nur kanonische DTOs.
-
-### 6.2 Eine Implementierung pro Anwendungsfall
-
-Ein Anwendungsfall wie „Aufgabeninstanz erledigen“, „Tier laden“ oder „Behandlungsplan darstellen“ besitzt genau einen aktuellen Service beziehungsweise Handler. Historische Kompatibilität wird an einem Adapter oder einer Migration gekapselt, nicht durch mehrere nacheinander ausgeführte Implementierungen.
-
-### 6.3 Fachlogik ausserhalb des DOM
-
-Berechnungen zu Status, Fälligkeit, Gruppierung, Zielbereich, Dosisdarstellung, Serien oder Chronikherkunft werden in testbaren Funktionen beziehungsweise Anwendungsservices ausgeführt. DOM-Funktionen formatieren und binden Ergebnisse, entscheiden aber nicht über fachliche Wahrheit.
-
-### 6.4 Explizite Abhängigkeiten
-
-Module importieren ihre Abhängigkeiten. Globale Variablen und zufällig zuvor definierte Konstanten sind unzulässig. Zulässige globale Integrationspunkte sind auf den Custom-Element-Namen und den vom Host bereitgestellten Plattformadapter begrenzt.
-
-### 6.5 Keine stillen Fallback-Ketten
-
-Ein Fachmodul darf nicht mehrere historische Felder oder Container nacheinander durchsuchen, bis ein Wert gefunden wird. Kompatibilitätsübersetzungen erfolgen einmalig im Normalisierer und werden dort mit Tests abgesichert.
-
-### 6.6 Refactoring und Funktionsänderung trennen
-
-Ein Pull Request migriert vorhandenes Verhalten oder ändert vorhandenes Verhalten, niemals beides gleichzeitig. Eine unvermeidbare fachliche Korrektur wird zuerst als eigener Bugfix mit Regressionstest auf dem Referenzstand umgesetzt.
-
-
-## 7. Laufzeit- und Buildübersicht
-
-```mermaid
-flowchart LR
-    HA[Home Assistant] --> HAA[Home-Assistant-Adapter]
-    AND[Android-App] --> ADA[Android-Adapter]
-    HAA --> CLIENT[AnimalHealthClient]
-    ADA --> CLIENT
-    CLIENT --> CTRL[Controller und Store]
-    CTRL --> FEATURES[Fachmodule]
-    FEATURES --> UI[Views und gemeinsame Komponenten]
-    CLIENT --> API[WebSocket- und Service-API]
-    API --> APP[Anwendungsservices]
-    APP --> REPO[Repositories]
-    REPO --> DB[(SQLite und Dateien)]
+```text
+frontend/src/legacy/compatibility-bridge.js
 ```
 
-```mermaid
-flowchart LR
-    LEGACY[Explizites Legacy-Manifest] --> BUILD[scripts/build_frontend.mjs]
-    SRC[frontend/src/entry.js und ES-Module] --> ESBUILD[esbuild]
-    ESBUILD --> BUILD
-    BUILD --> DIST[frontend/dist/animal-health-panel.js]
-    DIST --> HA2[Home Assistant]
-    DIST --> AND2[Android-App]
-```
+Die Brücke darf nur:
 
-## 8. Zielstruktur des Frontends
+- vollständige migrierte Routen oder Anwendungsfälle an neue Module delegieren,
+- nicht migrierte Bereiche an den eingefrorenen Legacy-Stand weiterreichen,
+- den Migrationsstatus eines Bereichs abbilden.
+
+Sie darf nicht:
+
+- neue Fachlogik aufnehmen,
+- alte und neue Zustände dauerhaft synchronisieren,
+- Daten aus mehreren historischen Containern zusammensuchen,
+- zu einer neuen Patchdatei werden.
+
+Nach Migration des letzten Bereichs werden Brücke, Manifest und alle 99 Fragmente entfernt.
+
+## 7. Zielstruktur des Frontends
 
 ```text
 custom_components/animal_health/frontend/
@@ -174,11 +149,12 @@ custom_components/animal_health/frontend/
     │   └── android-adapter.js
     ├── api/
     │   ├── client.js
+    │   ├── contracts.js
     │   ├── errors.js
-    │   ├── normalizers.js
-    │   └── contracts.js
+    │   └── normalizers.js
     ├── domain/
     │   ├── animals/
+    │   ├── groups/
     │   ├── timeline/
     │   ├── attachments/
     │   ├── products/
@@ -187,153 +163,73 @@ custom_components/animal_health/frontend/
     │   ├── capture/
     │   ├── settings/
     │   └── ai/
-    ├── ui/
-    │   ├── components/
-    │   ├── forms/
-    │   ├── icons/
-    │   ├── i18n/
-    │   └── styles/
-    └── legacy/
-        └── compatibility-bridge.js
+    └── ui/
+        ├── components/
+        ├── forms/
+        ├── dialogs/
+        ├── icons/
+        ├── i18n/
+        └── styles/
 ```
 
-Die konkrete Zahl kleiner Dateien ist nicht normativ. Normativ sind fachliche Verantwortlichkeiten, explizite Imports und eine eindeutige aktuelle Implementierung.
+Die konkrete Zahl der neuen Dateien ist nicht normativ. Entscheidend sind klare Verantwortlichkeiten, explizite Imports und genau eine aktuelle Implementierung pro Anwendungsfall.
 
-## 9. Frontend-Komponenten
+## 8. Frontend-Verantwortlichkeiten
 
-### 9.1 Einstiegspunkt
+### 8.1 Einstiegspunkt
 
-`entry.js` übernimmt ausschliesslich:
+`entry.js` übernimmt nur:
 
 - Ermitteln des Plattformadapters,
 - Erzeugen von API-Client, Store und Controller,
 - Registrieren des Custom Elements,
-- Bereitstellen der Build- und Versionsinformationen.
+- Bereitstellen von Version und Buildinformationen.
 
-Es enthält keine fachliche Ansicht und keine Formularlogik.
+### 8.2 Panel und Controller
 
-### 9.2 Panel und Controller
+`animal-health-panel.js` verwaltet den Shadow-DOM-Lebenszyklus und bindet die delegierten Ereignisse genau einmal.
 
-`animal-health-panel.js` verwaltet den Shadow-DOM-Lebenszyklus. Es bindet genau einmal die delegierten Ereignisse `click`, `input`, `change` und `submit`.
+`controller.js` ordnet stabile Aktionsnamen expliziten Handlern zu. Es gibt keine Kette wiederholt überschriebener `handleClick`-, `handleChange`-, `handleSubmit`- oder `render`-Methoden.
 
-`controller.js` übersetzt DOM-Aktionen in explizite Anwendungsaktionen. Die Aktionszuordnung ist eine Map und keine Kette wiederholt überschriebener `handleClick`-Methoden.
+### 8.3 Router
 
-Beispielhafte Struktur:
+Der Router verwaltet interne Routen und Dialogzustand. Während der Konsolidierung verwendet er einen eigenen Navigationsstapel statt verdeckter Abhängigkeiten von `window.history`. Home Assistant und Android rufen denselben `router.back()`-Vertrag auf.
 
-```javascript
-const actionHandlers = {
-  "animal.open": openAnimal,
-  "task.execute": executeTaskOccurrence,
-  "attachment.open": openAttachment,
-};
-```
+### 8.4 Store
 
-Jede Aktion besitzt einen stabilen Namen. Fachmodule registrieren Handler über einen definierten Vertrag. Sie verändern keine Methoden des Panels.
+Der projektspezifische Store stellt `getState`, `update` und `subscribe` bereit. Er enthält kanonische Bereiche für Plattform, Sprache, Navigation, Dialog, Tiere, Chronik, Aufgaben, Produkte, Behandlungen, Einstellungen, Entwürfe, Requests und Benachrichtigungen.
 
-### 9.3 Router
+Verspätete asynchrone Antworten dürfen den Zustand einer inzwischen gewechselten Ansicht nicht überschreiben.
 
-Der Router verwaltet interne Routen und Parameter:
+### 8.5 Rendering
 
-```text
-overview
-animals
-animal/:animalId
-tasks
-calendar
-timeline
-settings
-```
-
-Modale Vorgänge werden separat als Dialogzustand geführt und nicht als versteckte Seitenmutation. Während der Konsolidierung schreibt der Router nicht in `window.history`. Er führt einen eigenen kleinen Navigationsstapel. Die Android-Zurücktaste und interne Home-Assistant-Zurückaktionen rufen denselben `router.back()`-Vertrag auf. Eine spätere Browser-History-Anbindung wäre eine getrennte, host-spezifisch getestete Funktionsänderung.
-
-### 9.4 Store und Zustand
-
-Der Store ist klein und projektspezifisch. Er stellt `getState`, `update` und `subscribe` bereit. Es wird kein allgemeines Redux-ähnliches Framework eingeführt.
-
-Der kanonische Zustand enthält mindestens:
-
-```text
-platform
-locale
-version
-navigation
-dialog
-dashboard
-animals
-animalDetails
-timeline
-tasks
-catalog
-products
-treatments
-settings
-drafts
-requests
-notifications
-```
-
-Jeder Bereich besitzt explizite Zustände für `idle`, `loading`, `ready` und `error`. Asynchrone Antworten tragen eine Request-ID oder einen Kontextschlüssel, damit eine verspätete Antwort nicht den Zustand einer inzwischen gewechselten Tieransicht überschreibt.
-
-### 9.5 Rendering
-
-Es gibt genau einen kontrollierten Renderpfad. Styles werden einmal installiert. Verboten sind:
+Es gibt genau einen kontrollierten Renderpfad. Verboten sind im neuen Code:
 
 - `shadowRoot.innerHTML +=`,
 - reguläre Ausdrücke zum nachträglichen Umbau bereits erzeugten Markups,
-- per Renderdurchlauf neu angehängte globale Styles,
-- fachliche Entscheidungen anhand des bereits gerenderten Texts.
+- wiederholt angehängte globale Styles,
+- fachliche Entscheidungen anhand bereits gerenderten Texts.
 
-Views und Komponenten erzeugen ihr Markup direkt aus Zustand und DTOs. Für umfangreiche interaktive Formulare dürfen gezielte DOM-Updates eingesetzt werden, sofern die Zuständigkeit lokal bleibt.
+### 8.6 Gemeinsame Komponenten
 
-### 9.6 Gemeinsame UI-Komponenten
-
-Folgende Elemente werden als gemeinsame Komponenten geführt:
+Mindestens folgende Elemente werden gemeinsam umgesetzt:
 
 - Zielbereich `Gruppe | Tiere | Allgemein`,
 - Tier-Mehrfachauswahl,
 - Dialograhmen,
-- Formularfelder und sichtbare Validierungsfehler,
+- Formularfelder und sichtbare Validierung,
 - Aufgaben- und Fälligkeitszeile,
 - Chronikzeile,
 - Produkt- und Behandlungsplanauswahl,
 - Attachment-Liste und Vorschau,
 - Lade-, Leer- und Fehlerzustände,
-- Toolbar und Suchfeld.
+- Toolbar und Suche.
 
-Fachmodule konfigurieren diese Komponenten über Daten und Callbacks. Sie kopieren deren DOM- oder Zustandslogik nicht.
-
-### 9.7 Übersetzungen
-
-Deutsch und Englisch liegen in je einem vollständigen Wörterbuch. Schlüssel werden nach Fachbereich gruppiert, aber nicht zur Laufzeit über mehrere Versionsdateien erweitert.
-
-CI prüft:
-
-- identische Schlüsselmenge beider Sprachen,
-- keine unbenutzten versionsbezogenen Schlüssel in migrierten Bereichen,
-- keine direkte Benutzerausgabe nicht lokalisierter Fehlertexte.
-
-### 9.8 Styles
-
-Styles werden in folgende Ebenen getrennt:
-
-1. Home-Assistant-Token und projektspezifische Designvariablen,
-2. Grundlayout,
-3. wiederverwendbare Komponenten,
-4. fachbereichsspezifische Styles,
-5. responsive Anpassungen.
-
-Selektoren dürfen nicht auf zufällige DOM-Positionen wie `nth-child` angewiesen sein, wenn eine semantische Klasse möglich ist. Styles werden nicht durch ihre spätere Position als Korrekturmechanismus verwendet.
-
-## 10. Plattform- und API-Grenze
-
-### 10.1 Transportvertrag
+## 9. Plattform- und API-Grenze
 
 Das gemeinsame Frontend kennt Home Assistant und Android nur über einen Transportvertrag:
 
 ```javascript
-/**
- * @interface
- */
 class AnimalHealthTransport {
   request(command, payload) {}
   callService(service, payload, options) {}
@@ -342,13 +238,9 @@ class AnimalHealthTransport {
 }
 ```
 
-Der Home-Assistant-Adapter verwendet `hass.callWS`, `hass.callService` und die vorhandenen Panelereignisse. Der Android-Adapter verwendet die native Bridge. Fachmodule importieren nie direkt `hass` oder Android-JavaScript-Interfaces.
+Der Home-Assistant-Adapter verwendet die vorhandenen Home-Assistant-Schnittstellen. Der Android-Adapter verwendet die native Bridge. Fachmodule greifen weder direkt auf `hass` noch auf Android-JavaScript-Interfaces zu.
 
-Während der Übergangsphase darf der Android-Wrapper weiterhin ein kompatibles `hass`-Objekt bereitstellen. Die neue Oberfläche greift jedoch nur über den Adapter darauf zu.
-
-### 10.2 API-Client
-
-Der API-Client bietet fachliche Methoden statt frei zusammengesetzter Command-Strings, beispielsweise:
+Der API-Client bietet fachliche Methoden wie:
 
 ```text
 getDashboard()
@@ -359,24 +251,11 @@ listProductDatabases()
 saveTreatmentPlan(plan)
 ```
 
-Bestehende WebSocket-Commands und Services bleiben zunächst unverändert. Der Client kapselt deren aktuelle Namen und Payloadformen.
+Bestehende Commands und Services bleiben zunächst unverändert. Aliasfelder und historische Antwortformen werden ausschliesslich in `normalizers.js` in kanonische DTOs übersetzt.
 
-### 10.3 Normalisierung
+## 10. Kanonische Kerndaten
 
-`normalizers.js` übersetzt vorhandene Antworten in kanonische DTOs. Dazu gehören:
-
-- einheitliche Stringdarstellung von IDs im Frontend,
-- explizite `null`-Werte statt wechselnder fehlender Felder,
-- klar getrennte Datums- und Zeitfelder,
-- einheitliche Statuswerte,
-- einheitliche Herkunftsmetadaten,
-- einheitliche Zielart `animal`, `animals`, `group` oder `general`.
-
-Historische Feldnamen werden nur hier ausgewertet. Nach der Normalisierung greifen Views nicht mehr auf alte Aliasfelder zu.
-
-### 10.4 Kanonische DTOs
-
-Die folgenden Kernformen sind verbindlich. Fachbereiche dürfen zusätzliche klar benannte Felder ergänzen.
+### Zielbezug
 
 ```javascript
 /**
@@ -387,7 +266,11 @@ Die folgenden Kernformen sind verbindlich. Fachbereiche dürfen zusätzliche kla
  * @property {string|null} groupId
  * @property {string[]} memberSnapshot
  */
+```
 
+### Aufgabeninstanz
+
+```javascript
 /**
  * @typedef {Object} TaskOccurrenceDto
  * @property {string} id
@@ -401,7 +284,11 @@ Die folgenden Kernformen sind verbindlich. Fachbereiche dürfen zusätzliche kla
  * @property {Object} planned
  * @property {Object|null} completion
  */
+```
 
+### Chronikereignis
+
+```javascript
 /**
  * @typedef {Object} HealthEventDto
  * @property {string} id
@@ -415,79 +302,50 @@ Die folgenden Kernformen sind verbindlich. Fachbereiche dürfen zusätzliche kla
  */
 ```
 
-Datumswerte ohne Uhrzeit werden als `YYYY-MM-DD` behandelt und nicht über eine implizite UTC-Interpretation von `new Date("YYYY-MM-DD")` verschoben. Zeitpunkte sind ISO-8601-Werte mit Offset oder eindeutigem Host-Zeitzonenbezug. Der Backend-Anwendungsservice berechnet `timing`; die UI speichert diesen Wert nicht zurück.
-
-### 10.5 Fehler
-
-Adapter und API-Client ordnen Fehler einem stabilen Fehlercode zu:
-
-```text
-validation
-not_found
-conflict
-permission
-transport
-unavailable
-internal
-```
-
-Die UI zeigt eine lokalisierte Kurzmeldung. Technische Details bleiben für Diagnose und Logs erhalten. Fehler werden nicht durch stilles Ausweichen auf einen älteren Datencontainer verborgen.
+Datumswerte ohne Uhrzeit bleiben `YYYY-MM-DD` und werden nicht implizit als UTC-Zeitpunkt interpretiert. Zeitpunkte tragen einen eindeutigen Offset oder Host-Zeitzonenbezug. Die Fälligkeitsklassifikation wird im Backend berechnet und nicht als dauerhafte UI-Wahrheit zurückgeschrieben.
 
 ## 11. Fachliche Invarianten
-
-Die Konsolidierung darf folgende Regeln nicht verändern.
 
 ### 11.1 Tiere und Gruppen
 
 - Jedes Tier besitzt höchstens eine primäre Tiergruppe.
 - Tags bleiben von der primären Tiergruppe getrennt.
 - Gruppen sind eigenständige fachliche Ziele.
-- Gruppenaktionen speichern `group_id`, Zielart und den damaligen Mitglieder-Snapshot.
-- Einzelne Tierchroniken kennzeichnen gruppenweite Aktionen weiterhin als solche.
+- Gruppenaktionen speichern Zielart, `group_id` und Mitglieder-Snapshot.
+- Einzelne Tierchroniken kennzeichnen gruppenweite Aktionen weiterhin.
 
 ### 11.2 Chronik
 
 - Chronikeinträge sind ereigniszentriert.
-- Herkunft aus einer Aufgabe ist sekundäre Metainformation und ändert nicht die fachliche Grunddarstellung.
+- Herkunft aus einer Aufgabe ist sekundäre Metainformation.
 - Korrekturen überschreiben bestehende Ereignisse nicht.
-- Anhänge bleiben mit dem konkreten Tier und gegebenenfalls dem konkreten Ereignis verknüpft.
+- Anhänge bleiben mit Tier und gegebenenfalls Ereignis verknüpft.
 
 ### 11.3 Aufgaben und Serien
 
 - Serienvorlage und einzelne Fälligkeit sind getrennte Objekte.
-- Jede Fälligkeit besitzt eine eigene unveränderliche ID, `series_id`, geplante Zeit und Status.
-- Eine offene Instanz bleibt beim Tageswechsel bestehen.
-- Die nächste Instanz wird zusätzlich erzeugt.
-- „Überfällig“ wird nicht dauerhaft gespeichert, sondern aus offenem Status und überschrittener Fälligkeit in der Home-Assistant-Zeitzone abgeleitet.
-- Aktionen adressieren immer die konkrete Aufgabeninstanz.
-- Das Erledigen einer älteren Instanz verändert keine andere Instanz derselben Serie.
+- Jede Fälligkeit besitzt eigene ID, `series_id`, geplante Zeit und Status.
+- Offene Instanzen bleiben beim Tageswechsel bestehen.
+- Neue Instanzen werden zusätzlich erzeugt.
+- „Überfällig“ wird aus offenem Status und überschrittener Fälligkeit in der Home-Assistant-Zeitzone abgeleitet.
+- Aktionen adressieren konkrete Aufgabeninstanzen.
+- Die Bearbeitung einer Instanz verändert keine andere Instanz derselben Serie.
 - Offline-Lücken werden ohne Löschen vorhandener Instanzen materialisiert.
 - Routinen ohne Dokumentationspflicht erzeugen keinen künstlichen Überfälligkeitsstau.
-- Die konservative 0.9.41-Bestandskorrektur bleibt idempotent.
+- Die Bestandskorrektur aus 0.9.41 bleibt idempotent.
 
-### 11.4 Medizinische Erfassung
+### 11.4 Medizinische Erfassung und KI
 
-- Die KI erzeugt nur zu prüfende Vorbefüllungen.
+- KI-Ergebnisse sind nur zu prüfende Vorbefüllungen.
 - Die KI stellt keine Diagnose, empfiehlt keine Therapie und berechnet keine Dosis.
-- Speicherung erfolgt erst durch eine ausdrückliche Benutzeraktion.
-- Produktquelle, lokaler Override und erfasste Durchführung bleiben voneinander unterscheidbar.
+- Speicherung erfolgt erst durch ausdrückliche Benutzeraktion.
+- Produktquelle, lokaler Override und dokumentierte Durchführung bleiben unterscheidbar.
 
 ## 12. Zielstruktur des Backends
 
 ```text
 custom_components/animal_health/
-├── __init__.py
-├── runtime.py
 ├── api/
-│   ├── dashboard.py
-│   ├── animals.py
-│   ├── timeline.py
-│   ├── attachments.py
-│   ├── products.py
-│   ├── treatments.py
-│   ├── tasks.py
-│   ├── settings.py
-│   └── ai.py
 ├── application/
 │   ├── animal_service.py
 │   ├── timeline_service.py
@@ -498,409 +356,190 @@ custom_components/animal_health/
 │   ├── task_occurrence_service.py
 │   └── task_execution_service.py
 ├── domain/
-│   ├── models.py
-│   ├── task_recurrence.py
-│   ├── task_policy.py
-│   ├── treatment.py
-│   └── errors.py
 ├── infrastructure/
 │   ├── database.py
 │   ├── repositories/
 │   ├── exports/
 │   └── media/
 └── migrations/
-    ├── v0916.py
-    ├── v0927.py
-    ├── v0941.py
-    └── ...
 ```
 
-Die Struktur ist ein Zielbild. Dateien werden nur verschoben, wenn der betreffende Anwendungsfall vollständig auf den neuen Pfad umgestellt und getestet ist.
+Home-Assistant-Services, WebSocket-Handler und Android-Endpunkte validieren Eingaben, rufen einen Anwendungsservice auf und serialisieren das Ergebnis. Sie enthalten keine eigene Fachlogik.
 
-### 12.1 Anwendungsservices
+`TaskRecordStore.execute` wird im Zielzustand nicht mehr durch mehrere Module ersetzt. Die Ausführung liegt in einem kanonischen `TaskExecutionService`.
 
-Home-Assistant-Services, WebSocket-Handler und Android-Endpunkte enthalten keine eigene Fachlogik. Sie validieren Eingaben, rufen einen Anwendungsservice auf und serialisieren das Ergebnis.
-
-`TaskRecordStore.execute` wird im Zielzustand nicht mehr durch mehrere Module ersetzt. Die Ausführung liegt in einem `TaskExecutionService`, der Transaktion, Chronikerzeugung, Herkunftsmetadaten, Behandlungsplanbestandteile und Statuswechsel vollständig steuert.
-
-### 12.2 Repositories
-
-SQL-Zugriffe werden fachlich gebündelt. Ein Repository stellt Datenzugriff bereit, entscheidet aber nicht über fachliche Abläufe. Transaktionsgrenzen werden vom Anwendungsservice gesetzt.
-
-### 12.3 Migrationen
-
-Historische Schema- und Datenmigrationen bleiben versioniert. Sie dürfen frühere Datenstände erkennen und idempotent aktualisieren.
-
-Nicht als Migration gelten:
-
-- das Ersetzen einer laufenden Klassenmethode,
-- das Registrieren eines alternativen Runtime-Handlers,
-- das Patchen eines aktiven Services nach Import.
-
-Solche Runtime-Patches werden in kanonische Implementierungen überführt und danach entfernt.
+Echte Schema- und Datenmigrationen bleiben unter `migrations/` erhalten. Das Ersetzen laufender Klassenmethoden gilt nicht als Migration und wird entfernt.
 
 ## 13. Übergangsarchitektur
 
-### 13.1 Eingefrorener Legacy-Stand
+### 13.1 Legacy-Isolation
 
-Die 99 Frontend-Fragmente werden zunächst an ihrem bestehenden Ort eingefroren und in `frontend/legacy/manifest.json` vollständig und in exakter Reihenfolge aufgeführt. Erst nachdem Home Assistant, Android und alle Tests ausschliesslich das Dist-Bundle verwenden, dürfen sie in einem separaten reinen Rename-PR nach `frontend/legacy/parts/` verschoben werden. Während der Migration dürfen diese Dateien nur für einen kritischen, separat getesteten Bugfix geändert werden.
+Zunächst bleiben die 99 Dateien an ihrem heutigen Ort, werden aber durch Schutztests eingefroren. Ein explizites Manifest listet exakt diese bestehenden Pfade in der aktuellen Reihenfolge auf.
 
-Neue nummerierte Fragmente sind verboten.
+Erst nachdem Home Assistant, Android und alle Tests ausschliesslich das Dist-Bundle verwenden, werden die Fragmente in einem reinen Verschiebe-Commit nach `frontend/legacy/parts/` verlagert.
 
 ### 13.2 Deterministisches Bundle
 
-`scripts/build_frontend.mjs` erzeugt `frontend/dist/animal-health-panel.js` aus:
+`scripts/build_frontend.mjs` erzeugt `frontend/dist/animal-health-panel.js` aus dem expliziten Manifest. Das Bundle wird eingecheckt, weil HACS keine Node-Buildumgebung voraussetzen darf.
 
-1. dem explizit geordneten Legacy-Prelude,
-2. dem mit `esbuild` als IIFE gebündelten modernen Einstiegspunkt,
-3. Buildmetadaten und Quellhash.
+CI baut das Bundle neu und vergleicht es bytegenau mit dem eingecheckten Artefakt.
 
-In Phase 1 enthält der moderne Teil noch keine aktive Funktion; das Skript verkettet nur das explizite Manifest und benötigt keine externe Abhängigkeit. `esbuild` wird erst mit dem ersten echten ES-Modul eingeführt. Nach Entfernung des Legacy-Prelude erzeugt dasselbe Skript nur noch das moderne Bundle.
+Home Assistant liefert nur das Dist-Bundle aus. Android übernimmt dasselbe Dist-Bundle. Kein Host sortiert oder verkettet zur Laufzeit Quelldateien.
 
-Das Bundle wird im Repository mitgeführt, weil HACS-Installationen keine Node-Buildumgebung voraussetzen dürfen. CI baut das Bundle neu und schlägt fehl, wenn das Ergebnis vom eingecheckten Artefakt abweicht.
+### 13.3 Keine parallelen Schreibpfade
 
-Home Assistant liefert nur das Dist-Bundle aus. Android kopiert dasselbe Dist-Bundle. Kein Host sortiert oder verkettet zur Laufzeit Quelldateien.
+Während der Migration gibt es keine duale Persistenz und keine parallelen alten und neuen Schreibpfade. Ein vollständiger Anwendungsfall wird erst umgeschaltet, wenn seine Tests bestanden sind. Ein Revert stellt den Legacy-Pfad wieder her, ohne Nutzdaten zurückmigrieren zu müssen.
 
-### 13.3 Eine Legacy-Brücke
-
-Nur `compatibility-bridge.js` darf:
-
-- die vorhandene Legacy-Klasse referenzieren,
-- ausgewählte Routen an neue Module delegieren,
-- die verbleibenden Legacy-Handler aufrufen,
-- den Migrationsstatus eines Bereichs festlegen.
-
-Die Brücke darf keine neue Fachlogik enthalten. Ihre Grösse und die Zahl der Legacy-Delegationen müssen mit jeder abgeschlossenen Migrationsetappe sinken.
-
-### 13.4 Rücksetzbarer Wechsel pro Bereich
-
-Eine Route oder ein Anwendungsfall wird erst auf die neue Implementierung geschaltet, wenn seine Charakterisierungs-, Vertrags- und Browsertests bestanden sind. Der Wechsel erfolgt in einem kleinen Registry-Eintrag. Ein Revert dieses Commits stellt den Legacy-Pfad wieder her, ohne Daten zurückmigrieren zu müssen.
-
-Es gibt keine parallelen Schreibpfade und keine duale Persistenz.
-
-## 14. Migrationsreihenfolge
+## 14. Migrationsphasen
 
 ### Phase 0 – Referenzstand und Schutzregeln
 
-**Zweck:** 0.9.41 als überprüfbare Referenz einfrieren.
+- Inventar der 99 Fragmente
+- Inventar aller Frontend-Prototypüberschreibungen
+- Inventar aller Views, Dialoge, Aktionen, Commands, Services, Übersetzungen und CSS-Blöcke
+- Inventar aller Backend-Runtime-Patches und ihrer Reihenfolge
+- Trennung zwischen echter Migration und Runtime-Patch
+- Charakterisierung zentraler Benutzerabläufe
+- CI-Schutz gegen neue Fragmente und neue Patchmuster
 
-**Umfang:**
-
-- vollständige Inventarliste der 99 Fragmente,
-- Inventar aller Frontend-Prototypüberschreibungen,
-- Inventar aller Backend-Runtime-Patches,
-- Charakterisierung zentraler Benutzerabläufe,
-- CI-Regel gegen `part100.js` und weitere nummerierte Fragmente,
-- CI-Regel gegen neue direkte Prototyp-Patches ausserhalb der Legacy-Brücke,
-- CI-Regel gegen neue Runtime-Methodenzuweisungen in `vXXXX`-Modulen,
-- dokumentierte Basisszenarien für Home Assistant und Android.
-
-**Austrittskriterium:** Der Referenzstand lässt sich reproduzierbar bauen, und jede Erweiterung der Altarchitektur führt zu einem CI-Fehler.
+**Austrittskriterium:** Der Stand 0.9.41 ist reproduzierbar beschrieben; jede Erweiterung der Altarchitektur führt zu einem CI-Fehler.
 
 ### Phase 1 – Build- und Auslieferungsgrenze
 
-**Zweck:** Dateisortierung und Laufzeitverkettung beseitigen, ohne Verhalten zu ändern.
+- explizites Legacy-Manifest
+- deterministisches Dist-Bundle
+- `panel.py` liefert ausschliesslich das Dist-Bundle
+- Android übernimmt ausschliesslich dasselbe Dist-Bundle
+- Entfernung der hart codierten Android-Prüfung auf 99 Quelldateien
+- CI-Prüfung der Bundle-Reproduzierbarkeit
+- Beibehaltung des Bundle-Hashes für Cache-Busting
 
-**Umfang:**
-
-- explizites Legacy-Manifest für die bestehenden Dateipfade,
-- reproduzierbares Dist-Bundle,
-- `panel.py` liefert das Dist-Bundle,
-- Android übernimmt dasselbe Dist-Bundle,
-- Validate- und Android-Workflow prüfen die Bundle-Aktualität,
-- Bundle-Hash bleibt Bestandteil der Cache-Busting-URL.
-
-**Austrittskriterium:** Home Assistant und Android verwenden bytegleich dasselbe Artefakt; die 99 Quelldateien werden nur noch vom Buildskript gelesen.
+**Austrittskriterium:** Home Assistant und Android verwenden bytegleich dasselbe Artefakt; die 99 Fragmente werden nur noch vom Buildskript gelesen.
 
 ### Phase 2 – Plattformadapter und API-Normalisierung
 
-**Zweck:** Host- und Datenzugriff von der UI lösen.
+Transportinterface, Plattformadapter, fachlicher API-Client, kanonische Fehler und Normalisierer.
 
-**Umfang:**
+### Phase 3 – Anwendungsshell
 
-- Transportinterface,
-- Home-Assistant- und Android-Adapter,
-- fachlicher API-Client,
-- kanonische Fehler,
-- Normalisierer für Dashboard, Tiere, Chronik, Aufgaben, Produkte und Einstellungen,
-- Vertragsfixtures aus realistischen 0.9.41-Antworten.
-
-**Austrittskriterium:** Neue Module greifen weder direkt auf `hass` noch auf historische Zustandscontainer zu.
-
-### Phase 3 – Anwendungsshell und gemeinsame Infrastruktur
-
-**Zweck:** einen einzigen kontrollierten UI-Lebenszyklus etablieren.
-
-**Umfang:**
-
-- Store,
-- Router,
-- Dialogzustand,
-- Benachrichtigungen,
-- Lade- und Fehlerzustände,
-- gemeinsame Styles,
-- zentrale Übersetzungswörterbücher,
-- Aktionsregistry,
-- gemeinsamer Zielbereichs- und Tierauswahlzustand.
-
-**Austrittskriterium:** Navigation, Dialoge und globale Ereignisbehandlung besitzen eine aktuelle Implementierung und keine Wrapperkette.
+Store, Router, Dialogzustand, Benachrichtigungen, Styles, Übersetzungen, Aktionsregistry und gemeinsame Zielauswahl.
 
 ### Phase 4 – Lesende Tier- und Chronikansichten
 
-**Zweck:** zuerst risikoarme, gut vergleichbare Ansichten migrieren.
+Übersicht, Tierliste, Tierdetail-Grunddaten, Chronikliste, Chronikdetails und Kalender.
 
-**Reihenfolge:**
+### Phase 5 – Formulare, Erfassungen und Anhänge
 
-1. Übersicht,
-2. Tierliste und Gruppenfilter,
-3. Tierdetail-Grunddaten,
-4. Chronikliste,
-5. Chronikdetails,
-6. Kalenderdarstellung.
-
-**Austrittskriterium:** Alle lesenden Hauptansichten verwenden kanonische DTOs und neue Komponenten. Keine migrierte Ansicht liest Legacy-Zustände.
-
-### Phase 5 – Gemeinsame Formulare, Erfassungen und Anhänge
-
-**Zweck:** wiederverwendbare Schreib- und Dateiflüsse konsolidieren.
-
-**Reihenfolge:**
-
-1. Tier anlegen und bearbeiten,
-2. Status ändern,
-3. Gewicht,
-4. Symptom,
-5. allgemeiner Chronikeintrag,
-6. Zielbereich und Mehrfachauswahl,
-7. Attachment-Auswahl, Upload, Vorschau, Download und Löschen.
-
-**Austrittskriterium:** Diese Schreibpfade verwenden einen gemeinsamen Formular- und Fehlervertrag; keine HTML-Nachbearbeitung per regulärem Ausdruck bleibt erforderlich.
+Tierformular, Status, Gewicht, Symptome, allgemeine Chronikeinträge, Zielbereich, Upload, Vorschau und Download.
 
 ### Phase 6 – Produkte, Gaben und Behandlungspläne
 
-**Zweck:** Produktquellen und dokumentierte Durchführung auf eine kanonische Struktur bringen.
-
-**Reihenfolge:**
-
-1. Produktdatenbanken und lokale Overrides,
-2. Medikamente,
-3. Impfstoffe,
-4. Entwurmungen,
-5. Ergänzungen und Futtermittel,
-6. direkte Gabe,
-7. Behandlungen und Behandlungspläne,
-8. Chronikdarstellung der erzeugten Ereignisse.
-
-**Austrittskriterium:** Ein Produkt, ein Behandlungsplan und ein Durchführungssnapshot besitzen je ein kanonisches DTO. Direkte und aus Aufgaben entstandene Einträge teilen dieselbe Darstellungslogik.
+Produktdatenbanken, lokale Overrides, Medikamente, Impfstoffe, Entwurmungen, Ergänzungen, Futtermittel, Gaben und Behandlungspläne.
 
 ### Phase 7 – Aufgaben und Serien
 
-**Zweck:** den komplexesten Fachbereich erst nach Stabilisierung der gemeinsamen Grundlagen migrieren.
-
-**Reihenfolge:**
-
-1. Aufgabendefinition,
-2. Serienvorlage,
-3. Fälligkeitsmaterialisierung,
-4. Gruppierung `Überfällig | Heute | Demnächst`,
-5. Aufgabenübersicht und Tierdialog,
-6. Duplizieren und erneutes Planen,
-7. Ausführung einer konkreten Instanz,
-8. Überspringen und Abbrechen,
-9. Chronikerzeugung,
-10. Offline-Lücken und 0.9.41-Bestandskorrektur.
-
-Frontend und Backend werden hier als vertikale Teilstücke migriert. Eine neue Aufgabenansicht darf nicht auf mehrere alte Backend-Ausführungspfade zeigen.
-
-**Austrittskriterium:** `TaskExecutionService` ist die einzige aktuelle Ausführungslogik; Serien und Instanzen erfüllen alle Invarianten aus Abschnitt 11.3.
+Aufgabendefinition, Serienvorlage, Instanzmaterialisierung, Gruppierung, Übersichten, Duplizieren, Ausführung, Chronikerzeugung, Offline-Lücken und 0.9.41-Bestandskorrektur.
 
 ### Phase 8 – Einstellungen, Administration und KI
 
-**Zweck:** verbleibende querschnittliche Funktionen migrieren.
+Einstellungsnavigation, Stammdaten, Export, Diagnose, Rücksetzungen und KI-Erfassung.
 
-**Reihenfolge:**
+### Phase 9 – Entfernung der Legacy-Laufzeit
 
-1. dreistufige Einstellungsnavigation,
-2. Stammdaten- und Produktkonfiguration,
-3. Export, Backup und Diagnose,
-4. getrennte destruktive Rücksetzungen,
-5. KI-Konfiguration,
-6. KI-Einzelerfassung,
-7. KI-Mehrfacherfassung und Prüfstatus.
-
-**Austrittskriterium:** Einstellungen und KI verwenden denselben Store, API-Client und Formularvertrag wie die übrige Anwendung.
-
-### Phase 9 – Backend-Flattening und Entfernung der Legacy-Laufzeit
-
-**Zweck:** verbleibende historische Runtime-Schichten vollständig beseitigen.
-
-**Umfang:**
-
-- direkte Registrierung kanonischer APIs und Services,
-- Entfernen von `_apply_all_patches`,
-- Entfernen überführter `vXXXX_features.py`- und `vXXXX_patches.py`-Runtime-Module,
-- Erhalt echter Migrationen unter `migrations/`,
-- Entfernen der Frontend-Legacy-Brücke,
-- Entfernen der 99 Fragmente,
-- Entfernen von Tests, die nur alte Dateinamen statt Verhalten absichern,
-- Aktualisieren von README und Architekturdokumentation.
-
-**Austrittskriterium:** Das laufende System benötigt keine historische Patchreihenfolge. Der aktuelle Funktionsstand lässt sich aus den kanonischen Modulen und Migrationen vollständig erklären.
+- direkte Registrierung kanonischer APIs und Services
+- Entfernen von `_apply_all_patches`
+- Entfernen überführter Runtime-Module
+- Erhalt echter Migrationen
+- Entfernen der Legacy-Brücke
+- Entfernen aller 99 Fragmente und des Manifests
+- Entfernen rein strukturgebundener Tests
+- Aktualisieren der Gesamtdokumentation
 
 ## 15. Pull-Request-Grenzen
 
-Jeder Migrations-Pull-Request erfüllt folgende Regeln:
+Jeder Migrations-PR enthält:
 
-- ein klar abgegrenzter Anwendungsfall oder eine Infrastrukturgrenze,
-- keine neue Funktion,
-- keine Datenbankänderung, sofern sie nicht Gegenstand eines getrennten Migrations-PR ist,
+- einen klar abgegrenzten Anwendungsfall oder eine Infrastrukturgrenze,
+- keine neue Fachfunktion,
 - keine gleichzeitige visuelle Neugestaltung,
 - vollständige Tests des migrierten Verhaltens,
-- unveränderte öffentliche Command- und Serviceverträge, sofern kein eigener Kompatibilitätsplan vorliegt,
-- kein neuer nummerierter Frontend-Teil,
-- kein neuer Backend-Runtime-Patch,
-- Dist-Bundle reproduzierbar,
-- Home-Assistant-Validierung erfolgreich,
-- Android-Build erfolgreich,
-- dokumentierter Revert-Punkt.
+- unveränderte öffentliche Verträge, sofern kein eigener Kompatibilitätsplan vorliegt,
+- kein neues nummeriertes Frontend-Fragment,
+- keinen neuen Backend-Runtime-Patch,
+- ein reproduzierbares Dist-Bundle,
+- erfolgreiche Home-Assistant- und Android-Prüfungen,
+- einen klaren Revert-Punkt.
 
-Ein PR darf alte Dateien erst löschen, nachdem alle enthaltenen Anwendungsfälle nachweislich überführt wurden.
+Alte Dateien werden erst gelöscht, wenn alle darin enthaltenen Anwendungsfälle nachweislich überführt sind.
 
 ## 16. Teststrategie
 
-### 16.1 Charakterisierungstests
+### 16.1 Charakterisierung
 
-Vor jeder Extraktion werden die beobachtbaren Ergebnisse des bestehenden 0.9.41-Pfads beschrieben. Charakterisierungstests sichern Verhalten, nicht interne Methodennamen.
+Vor jeder Extraktion werden beobachtbare Ergebnisse des bestehenden 0.9.41-Pfads festgehalten. Tests sichern Verhalten und Verträge, nicht historische Methodennamen.
 
 ### 16.2 JavaScript-Unit-Tests
 
-Pure Normalisierer, Selektoren, Fälligkeitsgruppierung, Zielbereichslogik, Formularvalidierung und Formatierung werden ohne Browser getestet. Der eingebaute Node-Testläufer genügt; ein zusätzliches Testframework ist nicht erforderlich.
+Pure Normalisierer, Selektoren, Fälligkeitsgruppierung, Zielbereichslogik, Formularvalidierung und Formatierung werden mit dem eingebauten Node-Testläufer geprüft.
 
-### 16.3 API-Vertragstests
+### 16.3 API-Verträge
 
-Fixtures prüfen, dass bestehende Home-Assistant- und Android-Antworten in dasselbe kanonische DTO überführt werden. Aliasfelder dürfen nur im Normalisierer vorkommen.
+Repräsentative Home-Assistant- und Android-Antworten müssen in dieselben kanonischen DTOs überführt werden.
 
 ### 16.4 Browsertests
 
-Ein kleiner Playwright-Smoke-Test lädt das gebaute Bundle in einem Mock-Host und prüft mindestens:
+Ein kleiner Browser-Smoke-Test prüft mindestens Start, Navigation, Dialoge, Tierdetail, konkrete Aufgabeninstanz, Attachment-Vorschau, Deutsch und Englisch sowie schmale und breite Darstellung.
 
-- Start und Laden,
-- Navigation,
-- Öffnen und Schliessen eines Dialogs,
-- Tierdetail,
-- Aufgabe öffnen,
-- konkrete Fälligkeit ausführen,
-- Attachment-Vorschau,
-- Deutsch und Englisch,
-- schmale und breite Darstellung.
+### 16.5 Backend
 
-Primäres Kriterium sind Interaktion und sichtbare Inhalte. Vollständige HTML-Snapshots sind nicht die Hauptabsicherung.
+Anwendungsservices werden mit temporärer SQLite-Datenbank getestet. Aufgaben- und Chronikschreibvorgänge prüfen Transaktionsatomarität. Migrationstests prüfen repräsentative Altstände und wiederholte Ausführung.
 
-### 16.5 Backend-Tests
+## 17. Architektur-Schutzregeln
 
-Anwendungsservices werden mit temporärer SQLite-Datenbank getestet. Aufgaben- und Chronikschreibvorgänge prüfen Transaktionsatomarität. Migrationstests decken repräsentative ältere Datenstände und wiederholte Ausführung ab.
-
-### 16.6 Plattformmatrix
-
-Vor Entfernen eines Legacy-Bereichs werden mindestens geprüft:
-
-- Home Assistant Desktop,
-- Home Assistant schmale Ansicht beziehungsweise Android-WebView,
-- eigenständige Android-App,
-- Deutsch und Englisch,
-- heller und dunkler Home-Assistant-Modus,
-- leerer und gefüllter Datenbestand,
-- Fehler beim Laden und erneutes Laden.
-
-## 17. CI-Schutzregeln
-
-Während der Migration gelten automatisierte Architekturprüfungen:
+Während der Migration schlägt CI bei neuen Verstössen fehl:
 
 ```text
-keine neue animal-health-panel.part*.js
-kein shadowRoot.innerHTML +=
-kein Prototype-Patch ausser compatibility-bridge.js
-keine Zuweisung TaskRecordStore.<methode> = ...
-keine neue apply_vXXXX_patches-Registrierung
-keine Verwendung v09xx-Zustandscontainer in frontend/src
-Dist-Bundle entspricht dem Build
-Deutsch und Englisch besitzen dieselben Schlüssel
-Home-Assistant- und Android-Build verwenden dasselbe Bundle
+neue animal-health-panel.part*.js
+neue Prototype-Patches ausserhalb der Legacy-Brücke
+neues shadowRoot.innerHTML +=
+neue Zuweisung TaskRecordStore.<methode> = ...
+neue apply_vXXXX_patches-Registrierung
+neue versionsbezogene Zustandscontainer unter frontend/src
+abweichendes Dist-Bundle
+unterschiedliche Übersetzungsschlüssel
+unterschiedliche Frontend-Artefakte für Home Assistant und Android
 ```
 
-Bestehende Altdateien können vorübergehend gegen einzelne Regeln ausgenommen werden. Die Ausnahmeliste ist explizit und darf nur kleiner werden.
+Bestehende Verstösse werden über eine explizite Baseline toleriert. Diese Baseline darf nur kleiner werden.
 
-## 18. Versions- und Releasepolitik während der Migration
+## 18. Definition of Done
 
-- 0.9.41 bleibt die fachliche Referenz.
-- Architektur-PRs erhöhen die Produktversion nur, wenn sie tatsächlich veröffentlicht werden.
-- Ein Release enthält nur abgeschlossene und vollständig umgeschaltete Migrationsetappen.
-- Unfertige neue Module bleiben ohne aktive Route und beeinflussen das Bundleverhalten nicht.
-- Release Notes unterscheiden klar zwischen interner Konsolidierung und sichtbaren Funktionsänderungen.
-- Der gemeinsame Frontend-Build trägt die Integrationsversion; die Android-App behält ihre eigene App-Version.
-- Eine Änderung des gemeinsamen Frontends löst den Android-CI-Build aus.
+Die Konsolidierung ist abgeschlossen, wenn:
 
-## 19. Risiken und Gegenmassnahmen
+- das Frontend aus fachlichen ES-Modulen gebaut wird,
+- Home Assistant und Android dasselbe Bundle verwenden,
+- keine nummerierten Fragmente mehr aktiv sind,
+- keine Prototyp-Patchkette mehr existiert,
+- Rendering, Aktionen und Formulare je einen kontrollierten Pfad besitzen,
+- Fachmodule ausschliesslich kanonische DTOs verwenden,
+- keine versionsbezogenen Frontend-Zustände mehr existieren,
+- Backend-APIs kanonische Anwendungsservices aufrufen,
+- `_apply_all_patches` und Runtime-Methodenersetzungen entfernt sind,
+- echte historische Migrationen erhalten und getestet sind,
+- alle fachlichen Invarianten aus 0.9.41 regressionsgetestet sind,
+- README und technische Dokumentation dem tatsächlichen Stand entsprechen.
 
-### Verborgener Funktionsverlust
+## 19. Erste Implementierungsetappe
 
-**Risiko:** Eine ältere Prototypschicht enthält Verhalten, das in der sichtbaren Endmethode nicht auffällt.  
-**Gegenmassnahme:** Methoden- und Aktionsinventar, Charakterisierungstests und vertikale Migration kleiner Bereiche.
+Die erste Etappe umfasst ausschliesslich Phase 0 und Phase 1:
 
-### Visuelle Regression
+1. maschinenlesbares Architektur-Inventar,
+2. Schutztests gegen weiteres Legacy-Wachstum,
+3. explizites Manifest des unveränderten Referenzstands,
+4. deterministisches Buildskript,
+5. eingechecktes Dist-Bundle,
+6. Umstellung von `panel.py`,
+7. Umstellung des Android-Builds,
+8. CI-Prüfung der Reproduzierbarkeit und Artefaktgleichheit.
 
-**Risiko:** CSS-Korrekturen beruhen bisher auf Reihenfolge.  
-**Gegenmassnahme:** semantische Style-Ebenen, Browsermatrix und gezielte visuelle Referenzen kritischer Ansichten.
-
-### Android-Abweichung
-
-**Risiko:** Home Assistant und Android bauen unterschiedliche Artefakte.  
-**Gegenmassnahme:** ein eingechecktes Dist-Bundle als einzige Quelle für beide Hosts.
-
-### Dauerhafte Legacy-Brücke
-
-**Risiko:** Die Übergangsschicht wird zur neuen Patchplattform.  
-**Gegenmassnahme:** nur eine erlaubte Brücke, keine Fachlogik darin, messbar sinkende Delegationsliste und festes Entfernungskriterium.
-
-### Aufgabenregression
-
-**Risiko:** Serien, Fälligkeiten und Chronikerzeugung besitzen die höchste fachliche Kopplung.  
-**Gegenmassnahme:** Aufgaben erst nach API-, Store-, Formular-, Produkt- und Chronikgrundlagen migrieren; 0.9.41-Invarianten als eigenständige Vertragstests.
-
-### Release ohne reproduzierbares Bundle
-
-**Risiko:** eingechecktes Dist-Artefakt ist veraltet.  
-**Gegenmassnahme:** CI baut neu und vergleicht bytegenau vor jedem Merge und Release.
-
-## 20. Definition of Done
-
-Die Konsolidierung ist abgeschlossen, wenn alle folgenden Bedingungen erfüllt sind:
-
-- `frontend/dist/animal-health-panel.js` wird aus fachlichen ES-Modulen gebaut.
-- Home Assistant und Android verwenden dasselbe Bundle.
-- Es existieren keine aktiven nummerierten Frontend-Fragmente.
-- Es existiert keine Frontend-Prototyp-Patchkette.
-- Es gibt genau einen kontrollierten Render-, Aktions- und Formularpfad.
-- Fachmodule verwenden ausschliesslich kanonische DTOs.
-- Es existieren keine versionsbezogenen Frontend-Zustandscontainer.
-- Backend-APIs rufen kanonische Anwendungsservices auf.
-- `_apply_all_patches` und Runtime-Methodenersetzungen sind entfernt.
-- Historische Datenbankmigrationen bleiben erhalten und getestet.
-- Alle fachlichen Invarianten aus 0.9.41 sind durch Regressionstests abgesichert.
-- Home-Assistant- und Android-CI sind erfolgreich.
-- README, Installationsdokumentation und Architekturübersicht entsprechen dem tatsächlichen Stand.
-
-## 21. Erste umzusetzende Etappe nach Freigabe
-
-Die erste Implementierungsetappe umfasst ausschliesslich **Phase 0 und Phase 1**:
-
-1. Architektur-Schutztests,
-2. explizites Legacy-Manifest,
-3. deterministisches Buildskript,
-4. eingechecktes Dist-Bundle,
-5. Umstellung von `panel.py` auf das Dist-Bundle,
-6. Umstellung des Android-Builds auf dasselbe Artefakt,
-7. Erweiterung des Android-Workflow-Pfadfilters um das gemeinsame Frontend,
-8. CI-Prüfung der Reproduzierbarkeit.
-
-Diese Etappe verändert keine fachliche Ansicht, keine API, keine Datenbank und keinen Benutzerablauf. Sie beseitigt zuerst die unmittelbare `part100`-Grenze und schafft die sichere Grundlage für jede weitere Extraktion.
+Diese Etappe ändert keine Ansicht, keine API, keine Datenbank und keinen Benutzerablauf. Sie schafft lediglich eine sichere Auslieferungsgrenze, auf der der objekt- und fachbasierte Neuaufbau beginnen kann.
