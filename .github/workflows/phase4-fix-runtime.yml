@@ -30,14 +30,16 @@ jobs:
         run: npm install --no-package-lock
       - name: Run focused runtime regressions
         run: node --test tests/frontend/read-only-runtime-regressions.test.mjs tests/frontend/legacy-read-only-bridge.test.mjs
+      - name: Build active frontend bundle
+        run: npm run build:frontend
+      - name: Verify generated JavaScript
+        run: |
+          node scripts/build_frontend.mjs --check
+          node --check custom_components/animal_health/frontend/dist/animal-health-panel.js
       - name: Run all modular frontend tests
         run: npm run test:frontend
       - name: Check modular frontend source
         run: npm run check:frontend
-      - name: Build active frontend bundle
-        run: npm run build:frontend
-      - name: Verify generated JavaScript
-        run: node --check custom_components/animal_health/frontend/dist/animal-health-panel.js
       - name: Commit verified fixes and generated bundle
         run: |
           git config user.name "github-actions[bot]"
