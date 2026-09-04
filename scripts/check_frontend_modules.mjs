@@ -25,15 +25,20 @@ const EXPECTED_EXPORTS = Object.freeze([
   "createController",
   "createHomeAssistantTransport",
   "createInitialState",
+  "createReadOnlyAnimalsRuntime",
   "createRoute",
   "createRouter",
   "createStore",
+  "installLegacyReadOnlyAnimalsSlice",
   "normalizeAnimalDetail",
   "normalizeAnimalDirectory",
   "normalizeProductState",
   "normalizeSettingsState",
   "normalizeTaskOccurrence",
   "renderApplicationShell",
+  "renderReadOnlyAnimalsRoute",
+  "selectUrgentOccurrences",
+  "selectVisibleAnimals",
 ]);
 
 async function javascriptFiles(directory) {
