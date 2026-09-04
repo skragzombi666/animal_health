@@ -16,6 +16,7 @@ const EXPECTED_EXPORTS = Object.freeze([
   "AnimalHealthClient",
   "AnimalHealthError",
   "COMMANDS",
+  "DTO_SCHEMA_VERSION",
   "ERROR_CODES",
   "createAndroidTransport",
   "createHomeAssistantTransport",
@@ -97,6 +98,11 @@ async function checkEntrySideEffects() {
   const missing = EXPECTED_EXPORTS.filter((name) => !(name in module));
   if (missing.length) {
     throw new Error(`Phase 2 entry is missing exports: ${missing.join(", ")}`);
+  }
+  if (module.DTO_SCHEMA_VERSION !== 1) {
+    throw new Error(
+      `Unexpected DTO schema version: ${module.DTO_SCHEMA_VERSION}`,
+    );
   }
 }
 

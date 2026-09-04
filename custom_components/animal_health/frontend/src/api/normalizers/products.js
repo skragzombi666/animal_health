@@ -59,18 +59,34 @@ function normalizeIngredientDetails(value, path) {
   );
 }
 
-function normalizeProductInternal(rawValue, { includeOriginal = true } = {}) {
+function normalizeProductInternal(
+  rawValue,
+  {
+    includeOriginal = true,
+    inheritedDatabaseId = null,
+    inheritedKind = null,
+  } = {},
+) {
   const raw = asRecord(rawValue, "product");
+  const databaseId = requiredText(
+    firstDefined(
+      raw,
+      ["database_id", "databaseId", "source_id", "sourceId", "source"],
+      inheritedDatabaseId,
+    ),
+    "product.databaseId",
+  );
+  const kind = requiredText(
+    firstDefined(raw, ["kind", "product_type", "productType"], inheritedKind),
+    "product.kind",
+  );
   const product = {
     id: requiredText(firstDefined(raw, ["id", "item_id", "itemId"]), "product.id"),
     catalogItemId: optionalText(
       firstDefined(raw, ["catalog_item_id", "catalogItemId"]),
     ),
-    databaseId: requiredText(
-      firstDefined(raw, ["database_id", "databaseId", "source_id", "sourceId", "source"]),
-      "product.databaseId",
-    ),
-    kind: requiredText(firstDefined(raw, ["kind", "product_type", "productType"]), "product.kind"),
+    databaseId,
+    kind,
     name: requiredText(raw.name, "product.name"),
     targetSpecies: stringList(
       firstDefined(raw, ["target_species", "targetSpecies"], []),
@@ -121,7 +137,11 @@ function normalizeProductInternal(rawValue, { includeOriginal = true } = {}) {
     const originalRaw = firstDefined(raw, ["original"]);
     product.original =
       originalRaw && typeof originalRaw === "object" && !Array.isArray(originalRaw)
-        ? normalizeProductInternal(originalRaw, { includeOriginal: false })
+        ? normalizeProductInternal(originalRaw, {
+            includeOriginal: false,
+            inheritedDatabaseId: databaseId,
+            inheritedKind: kind,
+          })
         : null;
   }
   return product;

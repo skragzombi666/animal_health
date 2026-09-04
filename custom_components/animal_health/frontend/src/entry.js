@@ -1,5 +1,6 @@
 export { AnimalHealthClient } from "./api/client.js";
 export { COMMANDS } from "./api/commands.js";
+export { DTO_SCHEMA_VERSION } from "./api/contracts.js";
 export {
   AnimalHealthError,
   ERROR_CODES,

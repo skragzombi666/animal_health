@@ -4,7 +4,7 @@ Dieses Verzeichnis enthält den fach- und komponentenbasierten Neuaufbau des Ani
 
 ## Status in Phase 2
 
-Die Module definieren ausschliesslich Plattformadapter, den API-Client, stabile Fehler und kanonische DTO-Normalisierer. Sie sind noch nicht in das ausgelieferte Panel-Bundle eingebunden und verändern keine bestehende Benutzeroberfläche.
+Die Module definieren ausschliesslich Plattformadapter, den API-Client, stabile Fehler, versionierte DTO-Verträge und kanonische Normalisierer. Sie sind noch nicht in das ausgelieferte Panel-Bundle eingebunden und verändern keine bestehende Benutzeroberfläche.
 
 Das produktive Bundle bleibt bis Phase 3 die exakte Reproduktion des eingefrorenen Referenzstands 0.9.41.
 
@@ -15,6 +15,7 @@ Das produktive Bundle bleibt bis Phase 3 die exakte Reproduktion des eingefroren
 - Versionierte WebSocket-Commands nur in `api/commands.js`.
 - Historische Feldnamen und Aliasformen nur in `api/normalizers/`.
 - Fachmodule und spätere Views verwenden ausschliesslich kanonische camelCase-DTOs.
+- Die DTO-Vertragsversion wird in `api/contracts.js` geführt.
 - Keine Änderung von `AnimalHealthPanel.prototype`.
 - Kein `shadowRoot.innerHTML +=`.
 - Keine Registrierung eines Custom Elements vor Phase 3.
@@ -27,6 +28,7 @@ Das produktive Bundle bleibt bis Phase 3 die exakte Reproduktion des eingefroren
 `entry.js` exportiert:
 
 - `AnimalHealthClient`,
+- `DTO_SCHEMA_VERSION`,
 - die zentrale Command-Registry,
 - stabile Fehlercodes,
 - Home-Assistant- und Android-Transportadapter,

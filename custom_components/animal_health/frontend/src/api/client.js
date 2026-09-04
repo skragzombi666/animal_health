@@ -1,5 +1,5 @@
 import { COMMANDS } from "./commands.js";
-import { normalizeError } from "./errors.js";
+import { AnimalHealthError, normalizeError } from "./errors.js";
 import {
   normalizeAnimalDetail,
   normalizeAnimalDirectory,
@@ -20,6 +20,30 @@ import {
 } from "./normalizers/common.js";
 import { assertTransport, requirePayload } from "../platform/transport.js";
 
+function domainError(error, operation) {
+  const normalized = normalizeError(error, { operation });
+  if (normalized.operation === operation) return normalized;
+  return new AnimalHealthError(normalized.message, {
+    code: normalized.code,
+    operation,
+    details: {
+      ...normalized.details,
+      ...(normalized.operation
+        ? { transportOperation: normalized.operation }
+        : {}),
+    },
+    cause: normalized,
+  });
+}
+
+function attachmentRecords(rawValue) {
+  const raw = asRecord(rawValue, "attachmentsResponse");
+  return asArray(
+    firstDefined(raw, ["attachments"], []),
+    "attachmentsResponse.attachments",
+  );
+}
+
 export class AnimalHealthClient {
   constructor(transport) {
     this.transport = assertTransport(transport);
@@ -29,7 +53,7 @@ export class AnimalHealthClient {
     try {
       return await this.transport.request(command, payload);
     } catch (error) {
-      throw normalizeError(error, { operation });
+      throw domainError(error, operation);
     }
   }
 
@@ -70,34 +94,46 @@ export class AnimalHealthClient {
     const id = requiredText(animalId, "animalId");
     const limit = Number(eventLimit);
     if (!Number.isInteger(limit) || limit < 1 || limit > 500) {
-      throw normalizeError(
-        { code: "validation", message: "eventLimit must be an integer from 1 to 500" },
-        { operation: "getAnimalDetail", details: { path: "eventLimit" } },
+      throw domainError(
+        {
+          code: "validation",
+          message: "eventLimit must be an integer from 1 to 500",
+          details: { path: "eventLimit" },
+        },
+        "getAnimalDetail",
       );
     }
-    const raw = await this._request(
-      COMMANDS.animalDetail,
-      { animal_id: id, event_limit: limit },
-      "getAnimalDetail",
+    const [detail, attachmentResponse] = await Promise.all([
+      this._request(
+        COMMANDS.animalDetail,
+        { animal_id: id, event_limit: limit },
+        "getAnimalDetail.detail",
+      ),
+      this._request(
+        COMMANDS.attachmentsList,
+        { animal_id: id },
+        "getAnimalDetail.attachments",
+      ),
+    ]);
+    return normalizeAnimalDetail(
+      {
+        ...asRecord(detail, "animalDetailResponse"),
+        attachments: attachmentRecords(attachmentResponse),
+      },
+      { today },
     );
-    return normalizeAnimalDetail(raw, { today });
   }
 
   async listAttachments({ animalId = null, eventId = null } = {}) {
     const payload = {};
     if (animalId != null) payload.animal_id = requiredText(animalId, "animalId");
     if (eventId != null) payload.event_id = requiredText(eventId, "eventId");
-    const raw = asRecord(
+    return attachmentRecords(
       await this._request(
         COMMANDS.attachmentsList,
         payload,
         "listAttachments",
       ),
-      "attachmentsResponse",
-    );
-    return asArray(
-      firstDefined(raw, ["attachments"], []),
-      "attachmentsResponse.attachments",
     ).map(normalizeAttachment);
   }
 
@@ -152,14 +188,15 @@ export class AnimalHealthClient {
   }
 
   async callService(service, payload = {}, options = {}) {
+    const name = requiredText(service, "service");
     try {
       return await this.transport.callService(
-        requiredText(service, "service"),
+        name,
         requirePayload(payload),
         requirePayload(options, "options"),
       );
     } catch (error) {
-      throw normalizeError(error, { operation: `callService:${service}` });
+      throw domainError(error, `callService:${name}`);
     }
   }
 
@@ -167,7 +204,7 @@ export class AnimalHealthClient {
     try {
       return await this.transport.download(requirePayload(resource, "resource"));
     } catch (error) {
-      throw normalizeError(error, { operation: "download" });
+      throw domainError(error, "download");
     }
   }
 
@@ -178,7 +215,7 @@ export class AnimalHealthClient {
         requirePayload(options, "options"),
       );
     } catch (error) {
-      throw normalizeError(error, { operation: "notify" });
+      throw domainError(error, "notify");
     }
   }
 }
