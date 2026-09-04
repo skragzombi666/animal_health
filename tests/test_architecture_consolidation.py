@@ -90,6 +90,34 @@ def test_phase0_guardrails_reject_backend_runtime_growth_and_reordering() -> Non
     assert any("patch registration order" in error for error in errors)
 
 
+def test_phase0_source_scanner_blocks_direct_and_aliased_prototype_patches() -> None:
+    module = _load_inventory_module()
+    path = "custom_components/animal_health/frontend/src/example.js"
+    source = """
+AnimalHealthPanel.prototype.render = function() {};
+const AHNext = AnimalHealthPanel.prototype;
+AHNext.handleClick = function() {};
+Object.assign(AHNext, { handleSubmit() {} });
+shadowRoot.innerHTML += '<style></style>';
+"""
+    violations = module.find_frontend_source_violations(source, path)
+    patterns = {item["pattern"] for item in violations}
+    assert "direct_prototype_patch" in patterns
+    assert "prototype_alias_patch" in patterns
+    assert "prototype_object_assign" in patterns
+    assert "shadow_root_append" in patterns
+
+    bridge = (
+        "custom_components/animal_health/frontend/src/legacy/"
+        "compatibility-bridge.js"
+    )
+    bridge_patterns = {
+        item["pattern"]
+        for item in module.find_frontend_source_violations(source, bridge)
+    }
+    assert bridge_patterns == {"shadow_root_append"}
+
+
 def test_phase0_guardrails_accept_the_frozen_baseline() -> None:
     result = subprocess.run(
         [sys.executable, str(INVENTORY_SCRIPT), "--check", "--root", str(ROOT)],
