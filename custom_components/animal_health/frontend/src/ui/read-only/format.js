@@ -96,8 +96,8 @@ export function speciesLabel(
   if (!id) return "–";
   const item = speciesRecord(state, id);
   if (item) {
-    const german = item.nameDe ?? item.name_de;
-    const english = item.nameEn ?? item.name_en;
+    const german = item.nameDe;
+    const english = item.nameEn;
     const selected = languageKey(language) === "de"
       ? german || english
       : english || german;
