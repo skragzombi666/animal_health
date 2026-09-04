@@ -29,15 +29,6 @@ function operationError(error, operation) {
   });
 }
 
-function errorRecord(error) {
-  return {
-    code: error.code,
-    message: error.message,
-    operation: error.operation,
-    details: { ...error.details },
-  };
-}
-
 function parseDatasetRecord(value, path) {
   if (value === undefined || value === null || value === "") return {};
   let parsed;
@@ -117,7 +108,6 @@ export function createController({ store, router, client, actions = {} } = {}) {
   }
 
   const registry = new Map();
-  let actionSequence = 0;
 
   function register(name, handler) {
     const actionName = requireName(name, "action.name");
@@ -142,19 +132,8 @@ export function createController({ store, router, client, actions = {} } = {}) {
   function recordActionFailure(name, error) {
     const key = `action:${name}`;
     const normalized = operationError(error, key);
-    actualStore.update((state) => ({
-      ...state,
-      requests: {
-        ...state.requests,
-        [key]: {
-          key,
-          id: ++actionSequence,
-          navigationRevision: state.navigation.revision,
-          status: "error",
-          error: errorRecord(normalized),
-        },
-      },
-    }));
+    const token = actualStore.beginRequest(key);
+    actualStore.failRequest(token, normalized);
     return normalized;
   }
 
@@ -215,7 +194,8 @@ export function createController({ store, router, client, actions = {} } = {}) {
       return { applied, result };
     } catch (error) {
       const normalized = operationError(error, `request:${requestKey}`);
-      actualStore.failRequest(token, normalized);
+      const applied = actualStore.failRequest(token, normalized);
+      if (!applied) return { applied: false, error: normalized };
       throw normalized;
     }
   }
