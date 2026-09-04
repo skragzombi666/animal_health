@@ -5,22 +5,33 @@ plugins {
 }
 
 val animalHealthVersion = "0.9.0-alpha.7"
-val sharedFrontendSource = file("../../custom_components/animal_health/frontend")
+val sharedFrontendRoot = file("../../custom_components/animal_health/frontend")
+val sharedFrontendBundle = sharedFrontendRoot.resolve("dist/animal-health-panel.js")
+val sharedFrontendBrand = sharedFrontendRoot.resolve("animal-health-brand.svg")
 val generatedSharedUiAssets = layout.buildDirectory.dir("generated/animalHealthSharedUi")
-val bundleSharedFrontend by tasks.registering {
-    val parts = fileTree(sharedFrontendSource) {
-        include("animal-health-panel.part*.js")
-    }
-    inputs.files(parts)
-    outputs.file(generatedSharedUiAssets.map { it.file("animal-health-panel.js") })
+val prepareSharedFrontendAssets by tasks.registering {
+    inputs.files(sharedFrontendBundle, sharedFrontendBrand)
+    outputs.files(
+        generatedSharedUiAssets.map { it.file("animal-health-panel.js") },
+        generatedSharedUiAssets.map { it.file("animal-health-brand.svg") },
+    )
     doLast {
-        val ordered = parts.files.sortedBy { it.name }
-        require(ordered.size == 99) {
-            "Expected 99 Animal Health frontend parts, found ${ordered.size}"
+        require(sharedFrontendBundle.isFile) {
+            "Missing shared frontend bundle: $sharedFrontendBundle"
         }
-        val target = generatedSharedUiAssets.get().file("animal-health-panel.js").asFile
-        target.parentFile.mkdirs()
-        target.writeText(ordered.joinToString(separator = "") { it.readText() })
+        require(sharedFrontendBrand.isFile) {
+            "Missing shared frontend brand: $sharedFrontendBrand"
+        }
+        val target = generatedSharedUiAssets.get().asFile
+        target.mkdirs()
+        sharedFrontendBundle.copyTo(
+            target.resolve("animal-health-panel.js"),
+            overwrite = true,
+        )
+        sharedFrontendBrand.copyTo(
+            target.resolve("animal-health-brand.svg"),
+            overwrite = true,
+        )
     }
 }
 
@@ -57,8 +68,7 @@ android {
     sourceSets {
         getByName("main").assets.srcDirs(
             "src/main/assets",
-            "../../custom_components/animal_health/frontend",
-            "../../custom_components/animal_health/catalogs"
+            "../../custom_components/animal_health/catalogs",
         )
         getByName("main").assets.srcDir(generatedSharedUiAssets)
     }
@@ -91,7 +101,7 @@ android {
 }
 
 tasks.named("preBuild").configure {
-    dependsOn(bundleSharedFrontend, prepareAlphaSigning)
+    dependsOn(prepareSharedFrontendAssets, prepareAlphaSigning)
 }
 
 dependencies {

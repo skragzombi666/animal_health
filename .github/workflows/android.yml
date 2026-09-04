@@ -4,12 +4,16 @@ on:
   pull_request:
     paths:
       - "android/**"
+      - "custom_components/animal_health/frontend/**"
+      - "scripts/build_frontend.mjs"
       - ".github/workflows/android.yml"
   push:
     branches:
       - main
     paths:
       - "android/**"
+      - "custom_components/animal_health/frontend/**"
+      - "scripts/build_frontend.mjs"
       - ".github/workflows/android.yml"
   workflow_dispatch:
 
@@ -25,6 +29,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
+      - name: Verify shared frontend bundle
+        run: node scripts/build_frontend.mjs --check
       - name: Build standalone Android alpha APK
         run: gradle -p android :app:assembleDebug --stacktrace
       - name: Upload APK artifact
