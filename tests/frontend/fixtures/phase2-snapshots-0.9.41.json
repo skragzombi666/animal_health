@@ -1,0 +1,599 @@
+{
+  "dashboard": {
+    "version": "0.9.41",
+    "generated_at": "2026-09-04T12:00:00+00:00",
+    "time_zone": "Europe/Zurich",
+    "today": "2026-09-04",
+    "summary": {
+      "active_animals": 1,
+      "archived_animals": 0,
+      "pending_tasks": 2,
+      "overdue_tasks": 1,
+      "today_tasks": 1,
+      "upcoming_tasks": 0
+    },
+    "animals": [
+      {
+        "id": "AH-CHICKEN-1",
+        "name": "Tartar",
+        "species": "chicken",
+        "breed": "Hybrid",
+        "color": "Braun",
+        "sex": "female",
+        "birth_date": "2024-03-18",
+        "arrival_date": "2026-07-24",
+        "status": "active",
+        "status_changed_at": "2026-07-24T08:30:00+00:00",
+        "is_archived": false,
+        "archived_at": null,
+        "created_at": "2026-07-24T08:30:00+00:00",
+        "updated_at": "2026-09-04T10:00:00+00:00",
+        "device_id": "device-tartar",
+        "latest_weight": {
+          "event_id": "EV-WEIGHT-1",
+          "value_kg": 1.25,
+          "original_value": 1250,
+          "original_unit": "g",
+          "occurred_at": "2026-09-03T07:15:00+00:00"
+        }
+      }
+    ],
+    "tasks": [
+      {
+        "id": "TASK-MED-1",
+        "scope": "animal",
+        "animal_id": "AH-CHICKEN-1",
+        "animal_name": "Tartar",
+        "task_kind": "medication",
+        "title": "Meloxidyl geben",
+        "description": "Tägliche Gabe",
+        "recurrence_type": "daily",
+        "recurrence_interval": 1,
+        "start_date": "2026-09-03",
+        "end_date": null,
+        "due_time": "08:00",
+        "is_active": true,
+        "next_pending_at": "2026-09-03T06:00:00+00:00",
+        "next_pending_local": "2026-09-03T08:00:00+02:00",
+        "pending_count": 2,
+        "overdue_count": 1,
+        "planned_medication_name": "Meloxidyl",
+        "planned_dose": 0.2,
+        "planned_dose_unit": "ml",
+        "planned_route": "oral",
+        "entity_id": "switch.animal_health_task_med_1",
+        "created_at": "2026-09-02T18:00:00+00:00",
+        "updated_at": "2026-09-04T06:00:00+00:00"
+      }
+    ],
+    "occurrences": [
+      {
+        "id": "OCC-20260903",
+        "task_id": "TASK-MED-1",
+        "scope": "animal",
+        "animal_id": "AH-CHICKEN-1",
+        "animal_name": "Tartar",
+        "task_title": "Meloxidyl geben",
+        "scheduled_for": "2026-09-03T06:00:00+00:00",
+        "scheduled_local": "2026-09-03T08:00:00+02:00",
+        "scheduled_date": "2026-09-03",
+        "status": "pending",
+        "completed_at": null,
+        "notes": null,
+        "task_is_active": true,
+        "is_overdue": true,
+        "is_today": false,
+        "is_upcoming": false,
+        "planned_medication_name": "Meloxidyl",
+        "planned_dose": 0.2,
+        "planned_dose_unit": "ml",
+        "planned_route": "oral",
+        "created_at": "2026-09-02T18:00:00+00:00",
+        "updated_at": "2026-09-03T06:00:00+00:00"
+      },
+      {
+        "id": "OCC-20260904",
+        "task_id": "TASK-MED-1",
+        "scope": "animal",
+        "animal_id": "AH-CHICKEN-1",
+        "animal_name": "Tartar",
+        "task_title": "Meloxidyl geben",
+        "scheduled_for": "2026-09-04T06:00:00+00:00",
+        "scheduled_local": "2026-09-04T08:00:00+02:00",
+        "scheduled_date": "2026-09-04",
+        "status": "pending",
+        "completed_at": null,
+        "notes": null,
+        "task_is_active": true,
+        "is_overdue": false,
+        "is_today": true,
+        "is_upcoming": false,
+        "planned_medication_name": "Meloxidyl",
+        "planned_dose": 0.2,
+        "planned_dose_unit": "ml",
+        "planned_route": "oral",
+        "created_at": "2026-09-02T18:00:00+00:00",
+        "updated_at": "2026-09-04T06:00:00+00:00"
+      }
+    ],
+    "events": [
+      {
+        "id": "EV-MED-1",
+        "animal_id": "AH-CHICKEN-1",
+        "animal_name": "Tartar",
+        "event_type": "medication",
+        "occurred_at": "2026-09-03T08:05:00+00:00",
+        "title": "Meloxidyl",
+        "notes": "vollständig aufgenommen",
+        "value": 0.2,
+        "unit": "ml",
+        "correction_of_event_id": null,
+        "task_id": "TASK-MED-1",
+        "task_occurrence_id": "OCC-20260903",
+        "created_at": "2026-09-03T08:05:10+00:00",
+        "data": {
+          "source": "task",
+          "medication_name": "Meloxidyl",
+          "dose": 0.2,
+          "dose_unit": "ml",
+          "route": "oral"
+        }
+      }
+    ]
+  },
+  "animalDetail": {
+    "version": "0.9.41",
+    "animal": {
+      "id": "AH-CHICKEN-1",
+      "name": "Tartar",
+      "species": "chicken",
+      "breed": "Hybrid",
+      "color": "Braun",
+      "sex": "female",
+      "birth_date": "2024-03-18",
+      "arrival_date": "2026-07-24",
+      "status": "active",
+      "status_changed_at": "2026-07-24T08:30:00+00:00",
+      "is_archived": false,
+      "archived_at": null,
+      "created_at": "2026-07-24T08:30:00+00:00",
+      "updated_at": "2026-09-04T10:00:00+00:00",
+      "device_id": "device-tartar",
+      "latest_weight": {
+        "event_id": "EV-WEIGHT-1",
+        "value_kg": 1.25,
+        "original_value": 1250,
+        "original_unit": "g",
+        "occurred_at": "2026-09-03T07:15:00+00:00"
+      }
+    },
+    "tasks": [
+      {
+        "id": "TASK-MED-1",
+        "scope": "animal",
+        "animal_id": "AH-CHICKEN-1",
+        "animal_name": "Tartar",
+        "task_kind": "medication",
+        "title": "Meloxidyl geben",
+        "recurrence_type": "daily",
+        "recurrence_interval": 1,
+        "start_date": "2026-09-03",
+        "end_date": null,
+        "due_time": "08:00",
+        "is_active": true,
+        "planned_medication_name": "Meloxidyl",
+        "planned_dose": 0.2,
+        "planned_dose_unit": "ml",
+        "planned_route": "oral",
+        "created_at": "2026-09-02T18:00:00+00:00",
+        "updated_at": "2026-09-04T06:00:00+00:00"
+      }
+    ],
+    "occurrences": [
+      {
+        "id": "OCC-20260903",
+        "task_id": "TASK-MED-1",
+        "scope": "animal",
+        "animal_id": "AH-CHICKEN-1",
+        "animal_name": "Tartar",
+        "task_title": "Meloxidyl geben",
+        "scheduled_for": "2026-09-03T06:00:00+00:00",
+        "scheduled_local": "2026-09-03T08:00:00+02:00",
+        "scheduled_date": "2026-09-03",
+        "status": "pending",
+        "completed_at": null,
+        "notes": null,
+        "task_is_active": true,
+        "is_overdue": true,
+        "created_at": "2026-09-02T18:00:00+00:00",
+        "updated_at": "2026-09-03T06:00:00+00:00"
+      }
+    ],
+    "events": [
+      {
+        "id": "EV-MED-1",
+        "animal_id": "AH-CHICKEN-1",
+        "animal_name": "Tartar",
+        "event_type": "medication",
+        "occurred_at": "2026-09-03T08:05:00+00:00",
+        "title": "Meloxidyl",
+        "notes": "vollständig aufgenommen",
+        "value": 0.2,
+        "unit": "ml",
+        "correction_of_event_id": null,
+        "task_id": "TASK-MED-1",
+        "task_occurrence_id": "OCC-20260903",
+        "created_at": "2026-09-03T08:05:10+00:00",
+        "data": {
+          "source": "task",
+          "medication_name": "Meloxidyl",
+          "dose": 0.2,
+          "dose_unit": "ml",
+          "route": "oral"
+        }
+      }
+    ],
+    "attachments": [
+      {
+        "id": "ATT-EVENT-1",
+        "animal_id": "AH-CHICKEN-1",
+        "event_id": "EV-MED-1",
+        "filename": "gabe.jpg",
+        "media_type": "image/jpeg",
+        "size_bytes": 48231,
+        "title": "Dokumentation",
+        "created_at": "2026-09-03T08:06:00+00:00",
+        "thumbnail_url": "/thumb/ATT-EVENT-1",
+        "preview_url": "/preview/ATT-EVENT-1",
+        "download_url": "/download/ATT-EVENT-1"
+      }
+    ]
+  },
+  "features": {
+    "storage": "local",
+    "max_attachment_size_bytes": 15728640,
+    "groups": [
+      {
+        "id": "GR-FLOCK",
+        "name": "Legehennen",
+        "species": "chicken",
+        "description": "Hauptgruppe",
+        "created_at": "2026-07-24T08:00:00+00:00",
+        "updated_at": "2026-09-01T10:00:00+00:00",
+        "animal_count": 1
+      }
+    ],
+    "memberships": {
+      "AH-CHICKEN-1": "GR-FLOCK"
+    },
+    "exports": {
+      "json": "/api/animal_health/export/data.json",
+      "backup": "/api/animal_health/export/backup.zip",
+      "animal_pdf": "/api/animal_health/export/animals/{animal_id}/health.pdf"
+    }
+  },
+  "tagState": {
+    "primary_group_required": true,
+    "tags": [
+      {
+        "id": "TG-RESCUE",
+        "name": "Ehemalige Legehenne",
+        "description": "Übernommen",
+        "created_at": "2026-07-24T08:10:00+00:00",
+        "updated_at": "2026-07-24T08:10:00+00:00",
+        "animal_count": 1
+      }
+    ],
+    "tag_memberships": {
+      "AH-CHICKEN-1": [
+        "TG-RESCUE"
+      ]
+    },
+    "profiles": {
+      "AH-CHICKEN-1": "ATT-PROFILE"
+    }
+  },
+  "catalog": {
+    "animal_statuses": [
+      "active",
+      "deceased"
+    ],
+    "animal_sexes": [
+      "male",
+      "female",
+      "other"
+    ],
+    "event_types": [
+      "observation",
+      "medication"
+    ],
+    "weight_units": [
+      "g",
+      "kg"
+    ],
+    "dose_units": [
+      "mg",
+      "ml"
+    ],
+    "administration_routes": [
+      "oral",
+      "topical"
+    ],
+    "symptoms": [
+      "diarrhea"
+    ],
+    "symptom_severities": [
+      "mild",
+      "moderate",
+      "severe"
+    ],
+    "vaccination_targets": [
+      "newcastle"
+    ],
+    "task_kinds": [
+      "reminder",
+      "medication"
+    ],
+    "health_check_results": [
+      "normal",
+      "concern"
+    ],
+    "medicine_names": [
+      "Meloxidyl"
+    ],
+    "vaccine_names": [
+      "Nobilis"
+    ],
+    "species": [
+      {
+        "id": "chicken",
+        "name_de": "Huhn",
+        "name_en": "Chicken",
+        "icon": "mdi:egg-outline"
+      }
+    ],
+    "breeds": [
+      {
+        "id": "chicken.hybrid",
+        "species_id": "chicken",
+        "name": "Hybrid",
+        "aliases": [
+          "Legehybrid"
+        ]
+      }
+    ]
+  },
+  "treatmentState": {
+    "off_label_mode": "show_marked",
+    "treatment_plans": [
+      {
+        "id": 12,
+        "name": "Schmerztherapie",
+        "species_id": "chicken",
+        "list_as": "both",
+        "description": "Behandlung nach tierärztlicher Vorgabe",
+        "default_unit": "ml",
+        "default_route": "oral",
+        "components": [
+          {
+            "type": "medication",
+            "name": "Meloxidyl",
+            "dose": 0.2,
+            "unit": "ml",
+            "route": "oral",
+            "instructions": "einmal täglich"
+          },
+          {
+            "type": "action",
+            "name": "Allgemeinzustand kontrollieren",
+            "dose": null,
+            "unit": null,
+            "route": null,
+            "instructions": "vor der Gabe"
+          }
+        ]
+      }
+    ],
+    "status_changes": [
+      {
+        "id": "SC-1",
+        "animal_id": "AH-CHICKEN-1",
+        "animal_name": "Tartar",
+        "target_status": "deceased",
+        "planned_for": "2026-09-10T08:00:00+00:00",
+        "state": "scheduled",
+        "notes": "Beispiel",
+        "created_at": "2026-09-04T08:00:00+00:00",
+        "updated_at": "2026-09-04T08:00:00+00:00",
+        "resolved_at": null
+      }
+    ]
+  },
+  "masterDataState": {
+    "entry_types": [
+      {
+        "kind": "entry_type",
+        "id": "observation",
+        "base_label_de": "Beobachtung",
+        "base_label_en": "Observation",
+        "label": "Beobachtung allgemein",
+        "override_label": "Beobachtung allgemein",
+        "storage_value": "observation",
+        "is_custom": false,
+        "is_hidden": false,
+        "is_modified": true
+      }
+    ],
+    "symptoms": [
+      {
+        "kind": "symptom",
+        "id": "diarrhea",
+        "base_label_de": "Durchfall",
+        "base_label_en": "Diarrhea",
+        "label": "Durchfall",
+        "override_label": "",
+        "storage_value": "diarrhea",
+        "is_custom": false,
+        "is_hidden": false,
+        "is_modified": false
+      }
+    ],
+    "catalog_products": []
+  },
+  "productState": {
+    "databases": [
+      {
+        "id": "swissmedic_ch",
+        "name": "Swissmedic Tierarzneimittel",
+        "description": "Offizielle Quelle",
+        "product_types": [
+          "medication",
+          "vaccination"
+        ],
+        "source_name": "Swissmedic",
+        "source_type": "official",
+        "version": "2026-09",
+        "data_as_of": "2026-09-01",
+        "priority": 100,
+        "update_mode": "bundled",
+        "license_notice": "Quellenhinweis",
+        "source_url": "https://example.invalid/swissmedic",
+        "enabled": true,
+        "is_system": true,
+        "supports_local_overrides": true,
+        "view_of": "",
+        "item_count": 1,
+        "modified_count": 1
+      },
+      {
+        "id": "custom_local",
+        "name": "Eigene Produkte",
+        "description": "Lokale Ergänzungen",
+        "product_types": [
+          "supplement"
+        ],
+        "source_name": "Benutzerdefiniert",
+        "source_type": "user",
+        "version": "1",
+        "data_as_of": "2026-09-04",
+        "priority": 50,
+        "update_mode": "manual",
+        "license_notice": "",
+        "source_url": "",
+        "enabled": true,
+        "is_system": false,
+        "supports_local_overrides": false,
+        "view_of": "",
+        "item_count": 1,
+        "modified_count": 0
+      }
+    ],
+    "products": [
+      {
+        "id": "swissmedic_ch:56764",
+        "catalog_item_id": "56764",
+        "database_id": "swissmedic_ch",
+        "kind": "medication",
+        "name": "Meloxidyl angepasst",
+        "target_species": [
+          "chicken"
+        ],
+        "active_ingredient": "Meloxicam",
+        "active_ingredients": [
+          "Meloxicam"
+        ],
+        "active_ingredient_details": [
+          {
+            "name": "Meloxicam",
+            "amount": 1.5,
+            "unit": "mg",
+            "per": 1,
+            "per_unit": "ml"
+          }
+        ],
+        "concentration": "1.5 mg/ml",
+        "dosage_form": "Suspension",
+        "routes": [
+          "oral"
+        ],
+        "route_descriptions": [
+          "Oral"
+        ],
+        "default_route": "oral",
+        "authorisation_number": "56764",
+        "authorisation_status": "authorised",
+        "application_area": "Schmerz",
+        "aliases": [
+          "Meloxicam"
+        ],
+        "classifications": [
+          "medication"
+        ],
+        "is_hidden": false,
+        "is_custom": false,
+        "is_modified": true,
+        "original": {
+          "id": "56764",
+          "database_id": "swissmedic_ch",
+          "kind": "medication",
+          "name": "Meloxidyl",
+          "target_species": [
+            "chicken"
+          ],
+          "active_ingredient": "Meloxicam"
+        }
+      },
+      {
+        "id": "custom:custom_local:1",
+        "database_id": "custom_local",
+        "kind": "supplement",
+        "name": "Bene-Bac Plus",
+        "target_species": [
+          "chicken"
+        ],
+        "classifications": [
+          "supplement"
+        ],
+        "is_hidden": false,
+        "is_custom": true,
+        "is_modified": false,
+        "original": {
+          "id": "custom:custom_local:1",
+          "database_id": "custom_local",
+          "kind": "supplement",
+          "name": "Bene-Bac Plus"
+        }
+      }
+    ],
+    "merged_products": [
+      {
+        "id": "swissmedic_ch:56764",
+        "database_id": "swissmedic_ch",
+        "kind": "medication",
+        "name": "Meloxidyl angepasst",
+        "target_species": [
+          "chicken"
+        ],
+        "is_hidden": false,
+        "is_custom": false,
+        "is_modified": true
+      },
+      {
+        "id": "custom:custom_local:1",
+        "database_id": "custom_local",
+        "kind": "supplement",
+        "name": "Bene-Bac Plus",
+        "target_species": [
+          "chicken"
+        ],
+        "is_hidden": false,
+        "is_custom": true,
+        "is_modified": false
+      }
+    ],
+    "views": {
+      "deworming_database_id": "swissmedic_dewormers",
+      "swissmedic_database_id": "swissmedic_ch"
+    }
+  }
+}
