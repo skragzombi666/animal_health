@@ -128,6 +128,31 @@ test("invalid action JSON and handler failures are normalized and recorded", asy
   assert.equal(store.getState().requests["action:test.fail"].error.code, "transport");
 });
 
+test("structural navigation rejects a missing route instead of silently returning home", async () => {
+  const { controller } = setup();
+
+  await assert.rejects(
+    () => controller.dispatch("app.navigate", {}),
+    (error) =>
+      error.code === "validation" &&
+      error.operation === "action:app.navigate" &&
+      error.details.path === "route",
+  );
+});
+
+test("action failures cannot preserve an unrelated colliding request token", async () => {
+  const { store, controller } = setup();
+  const previous = store.beginRequest("action:test.fail");
+  controller.register("test.fail", () => {
+    throw Object.assign(new Error("offline"), { code: "transport" });
+  });
+
+  await assert.rejects(() => controller.dispatch("test.fail", {}));
+
+  assert.equal(store.isCurrentRequest(previous), false);
+  assert.equal(store.getState().requests["action:test.fail"].status, "error");
+});
+
 test("runLatest discards an older async result", async () => {
   const { store, controller } = setup();
   const first = deferred();
@@ -155,6 +180,31 @@ test("runLatest discards an older async result", async () => {
   assert.deepEqual(secondResult, { applied: true, result: "new" });
   assert.deepEqual(firstResult, { applied: false, result: "old" });
   assert.equal(store.getState().settings.data, "new");
+});
+
+test("runLatest discards a failure after its route was left", async () => {
+  const { store, router, controller } = setup();
+  const request = deferred();
+  controller.register("test.load-detail", () =>
+    controller.runLatest(
+      "animal-detail",
+      () => request.promise,
+      (state, value) => ({
+        ...state,
+        settings: { status: "ready", data: value, error: null },
+      }),
+    ),
+  );
+
+  const dispatched = controller.dispatch("test.load-detail", {});
+  router.navigate("tasks");
+  request.reject(Object.assign(new Error("late failure"), { code: "transport" }));
+  const result = await dispatched;
+
+  assert.equal(result.applied, false);
+  assert.equal(result.error.code, "transport");
+  assert.deepEqual(store.getState().requests, {});
+  assert.equal(store.getState().settings.data, null);
 });
 
 test("runLatest exposes client context and stores current failures", async () => {
