@@ -171,7 +171,9 @@ def patch_bridge() -> None:
     replace_once(
         BRIDGE,
         '''      await runtimeFor(panel, state).load({ force: true }).catch(() => undefined);''',
-        '''      await runtimeFor(panel, state).refreshCurrentRoute().catch(() => undefined);''',
+        '''      await Promise.resolve(
+        runtimeFor(panel, state).refreshCurrentRoute(),
+      ).catch(() => undefined);''',
     )
 
 
