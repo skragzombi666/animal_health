@@ -16,6 +16,7 @@ EXPECTED_SOURCE_FILES = {
     "platform/transport.js",
     "platform/home-assistant-adapter.js",
     "platform/android-adapter.js",
+    "api/contracts.js",
     "api/commands.js",
     "api/errors.js",
     "api/client.js",

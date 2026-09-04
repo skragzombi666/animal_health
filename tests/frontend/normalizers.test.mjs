@@ -8,6 +8,7 @@ import {
   normalizeAnimalDetail,
   normalizeAnimalDirectory,
   normalizeHealthEvent,
+  normalizeProduct,
   normalizeProductState,
   normalizeSettingsState,
   normalizeTaskDefinition,
@@ -180,6 +181,26 @@ test("product normalization keeps source and a non-recursive original snapshot",
     dewormingDatabaseId: "swissmedic_dewormers",
     swissmedicDatabaseId: "swissmedic_ch",
   });
+});
+
+test("catalog originals inherit source identity omitted by the current backend snapshot", () => {
+  const product = normalizeProduct({
+    id: "swissmedic_ch:56764",
+    database_id: "swissmedic_ch",
+    kind: "medication",
+    name: "Meloxidyl angepasst",
+    original: {
+      id: "56764",
+      source_id: "swissmedic_ch",
+      name: "Meloxidyl",
+      target_species: ["chicken"],
+    },
+  });
+
+  assert.equal(product.original.databaseId, "swissmedic_ch");
+  assert.equal(product.original.kind, "medication");
+  assert.equal(product.original.name, "Meloxidyl");
+  assert.equal(product.original.original, undefined);
 });
 
 test("settings normalization combines treatment and master-data state", () => {

@@ -4,6 +4,7 @@ import test from "node:test";
 
 import { AnimalHealthClient } from "../../custom_components/animal_health/frontend/src/api/client.js";
 import { COMMANDS } from "../../custom_components/animal_health/frontend/src/api/commands.js";
+import { AnimalHealthError } from "../../custom_components/animal_health/frontend/src/api/errors.js";
 
 const fixture = JSON.parse(
   await readFile(
@@ -44,12 +45,14 @@ class RecordingTransport {
 }
 
 function createTransport() {
+  const rawAnimalDetail = structuredClone(fixture.animalDetail);
+  delete rawAnimalDetail.attachments;
   return new RecordingTransport({
     [COMMANDS.dashboard]: fixture.dashboard,
     [COMMANDS.catalog]: fixture.catalog,
     [COMMANDS.features]: fixture.features,
     [COMMANDS.tagState]: fixture.tagState,
-    [COMMANDS.animalDetail]: fixture.animalDetail,
+    [COMMANDS.animalDetail]: rawAnimalDetail,
     [COMMANDS.attachmentsList]: {
       attachments: fixture.animalDetail.attachments,
     },
@@ -81,6 +84,7 @@ test("client maps current commands to normalized read methods", async () => {
 
   assert.equal(dashboard.animals[0].name, "Tartar");
   assert.equal(detail.events[0].attachments[0].id, "ATT-EVENT-1");
+  assert.equal(detail.attachments[0].id, "ATT-EVENT-1");
   assert.equal(attachments[0].filename, "gabe.jpg");
   assert.deepEqual(download, { url: "/download/token" });
   assert.equal(products.databases.length, 2);
@@ -89,6 +93,10 @@ test("client maps current commands to normalized read methods", async () => {
     {
       command: COMMANDS.animalDetail,
       payload: { animal_id: "AH-CHICKEN-1", event_limit: 250 },
+    },
+    {
+      command: COMMANDS.attachmentsList,
+      payload: { animal_id: "AH-CHICKEN-1" },
     },
     {
       command: COMMANDS.attachmentsList,
@@ -162,18 +170,21 @@ test("client service and host operations preserve the transport contract", async
   ]);
 });
 
-test("client errors retain domain operation metadata", async () => {
+test("client errors retain the domain operation and preserve transport context", async () => {
   const transport = createTransport();
-  transport.responses[COMMANDS.dashboard] = undefined;
-  transport.request = async (command, payload = {}) => {
-    transport.requests.push({ command, payload });
-    throw Object.assign(new Error("offline"), { code: "connection_lost" });
+  transport.request = async () => {
+    throw new AnimalHealthError("offline", {
+      code: "transport",
+      operation: "request:animal_health/dashboard",
+    });
   };
   const client = new AnimalHealthClient(transport);
 
   await assert.rejects(
     () => client.getDashboard(),
     (error) =>
-      error.code === "transport" && error.operation === "getDashboard",
+      error.code === "transport" &&
+      error.operation === "getDashboard" &&
+      error.details.transportOperation === "request:animal_health/dashboard",
   );
 });
