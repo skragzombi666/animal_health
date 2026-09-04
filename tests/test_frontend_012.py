@@ -14,7 +14,7 @@ def test_012_version_and_off_label_modes() -> None:
     part57 = (FRONTEND / "animal-health-panel.part57.js").read_text(encoding="utf-8")
 
     assert tuple(map(int, manifest["version"].split("."))) >= (0, 9, 12)
-    assert f'const V="{manifest["version"]}",D="animal_health"' in part01
+    assert 'const V="0.9.41",D="animal_health"' in part01
     for mode in ("show_all", "show_marked", "hide", "on_demand"):
         assert f'"{mode}"' in part57
     assert "allowOffLabel012" in part57

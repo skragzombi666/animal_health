@@ -4,7 +4,9 @@ Animal Health ist eine benutzerdefinierte Home-Assistant-Integration für lokale
 
 ## Aktueller Stand
 
-Die aktuelle Entwicklungsreihe 0.8.x umfasst unter anderem:
+Die aktuelle Version ist **0.9.42**. Sie ist ein Konsolidierungs-Checkpoint: Die Übersicht, die Tierliste und die Tier-Grundansicht verwenden bereits die neue modulare Architektur; alle übrigen Bereiche und sämtliche Schreibvorgänge bleiben während der kontrollierten Migration funktional über den bestehenden Legacy-Pfad erhalten.
+
+Der Funktionsumfang umfasst unter anderem:
 
 - Tiere mit Stammdaten, Bild, Tags und optionaler Tiergruppe
 - Tiergruppen als eigener fachlicher Bezug, auch ohne erfasste Einzeltiere

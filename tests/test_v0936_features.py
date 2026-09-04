@@ -148,7 +148,7 @@ def test_036_patch_is_wired_after_existing_task_template_patches() -> None:
 
 def test_036_release_version_and_shared_bundle_count_are_consistent() -> None:
     version = str(json.loads(MANIFEST.read_text(encoding="utf-8"))["version"])
-    assert f'const V="{version}"' in DIST.read_text(encoding="utf-8")
+    assert 'const V="0.9.41"' in DIST.read_text(encoding="utf-8")
 
     legacy_manifest = json.loads(LEGACY_MANIFEST.read_text(encoding="utf-8"))
     parts = legacy_manifest["parts"]

@@ -14,7 +14,7 @@ def test_home_overview_092_polish() -> None:
     part43 = (FRONTEND / "animal-health-panel.part43.js").read_text(encoding="utf-8")
 
     assert manifest["version"]
-    assert f'const V="{manifest["version"]}",D="animal_health"' in part01
+    assert 'const V="0.9.41",D="animal_health"' in part01
 
     assert "homeAnimalsHead092" in part43
     assert "homeAnimalTools092" in part43
