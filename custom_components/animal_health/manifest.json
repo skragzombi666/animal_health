@@ -1,22 +1,17 @@
 {
   "domain": "animal_health",
   "name": "Animal Health",
-  "codeowners": [],
-  "config_flow": true,
-  "dependencies": [
-    "ai_task",
-    "frontend",
-    "http",
-    "media_source",
-    "persistent_notification",
-    "stt",
-    "websocket_api"
+  "after_dependencies": [],
+  "codeowners": [
+    "@skragzombi666"
   ],
+  "config_flow": true,
+  "dependencies": [],
   "documentation": "https://github.com/skragzombi666/animal_health",
   "integration_type": "hub",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/skragzombi666/animal_health/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "0.9.40"
+  "version": "0.9.41"
 }
