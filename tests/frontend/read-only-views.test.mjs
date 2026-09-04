@@ -19,6 +19,10 @@ const fixture = JSON.parse(
   ),
 );
 
+function compactHtml(value) {
+  return value.replaceAll("&#039;", "").replace(/[’'\s]/g, "");
+}
+
 function state({ language = "de", filters = {}, detailStatus = "ready" } = {}) {
   const directory = normalizeAnimalDirectory({
     dashboard: fixture.dashboard,
@@ -178,7 +182,7 @@ test("animal directory renders searchable canonical animal cards", () => {
   assert.match(html, /data-action="animals-filter"/);
   assert.match(html, /data-action="animals-toggle-archived"/);
   assert.match(html, /Legehennen/);
-  assert.match(html.replace(/[’'\s]/g, ""), /1250g/);
+  assert.match(compactHtml(html), /1250g/);
   assert.doesNotMatch(html, /latest_weight|group_id|tag_ids/);
 });
 
@@ -218,7 +222,7 @@ test("animal detail renders identity group tags weight tasks and event origin", 
   assert.match(html, /Tartar/);
   assert.match(html, /Legehennen/);
   assert.match(html, /#Ehemalige Legehenne/);
-  assert.match(html.replace(/[’'\s]/g, ""), /1250g/);
+  assert.match(compactHtml(html), /1250g/);
   assert.match(html, /Meloxidyl geben/);
   assert.match(html, /Aus Aufgabe/);
   assert.match(html, /data-action="edit-animal" data-id="AH-CHICKEN-1"/);
