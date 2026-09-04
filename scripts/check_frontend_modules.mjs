@@ -19,12 +19,21 @@ const EXPECTED_EXPORTS = Object.freeze([
   "DTO_SCHEMA_VERSION",
   "ERROR_CODES",
   "createAndroidTransport",
+  "createAnimalHealthApplication",
+  "createAnimalHealthPanelClass",
+  "createCompatibilityBridge",
+  "createController",
   "createHomeAssistantTransport",
+  "createInitialState",
+  "createRoute",
+  "createRouter",
+  "createStore",
   "normalizeAnimalDetail",
   "normalizeAnimalDirectory",
   "normalizeProductState",
   "normalizeSettingsState",
   "normalizeTaskOccurrence",
+  "renderApplicationShell",
 ]);
 
 async function javascriptFiles(directory) {
@@ -85,19 +94,21 @@ async function checkEntrySideEffects() {
 
   if (registrations.length) {
     throw new Error(
-      `Phase 2 entry registered custom elements: ${registrations.join(", ")}`,
+      `modular frontend entry registered custom elements: ${registrations.join(", ")}`,
     );
   }
   const after = new Set(Reflect.ownKeys(globalThis));
   const added = [...after].filter((key) => !before.has(key));
   if (added.length) {
     throw new Error(
-      `Phase 2 entry created global properties: ${added.map(String).join(", ")}`,
+      `modular frontend entry created global properties: ${added.map(String).join(", ")}`,
     );
   }
   const missing = EXPECTED_EXPORTS.filter((name) => !(name in module));
   if (missing.length) {
-    throw new Error(`Phase 2 entry is missing exports: ${missing.join(", ")}`);
+    throw new Error(
+      `modular frontend entry is missing exports: ${missing.join(", ")}`,
+    );
   }
   if (module.DTO_SCHEMA_VERSION !== 1) {
     throw new Error(
