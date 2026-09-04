@@ -31,8 +31,8 @@ export function requirePayload(value, path = "payload") {
 }
 
 export function assertTransport(value) {
-  if (!isPlainObject(value)) {
-    throw validationError("transport must be a plain object", "transport");
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw validationError("transport must be an object", "transport");
   }
   const missing = REQUIRED_METHODS.filter(
     (method) => typeof value[method] !== "function",
