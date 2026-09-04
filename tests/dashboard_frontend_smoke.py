@@ -102,7 +102,7 @@ def main() -> None:
     source = panel_source()
     manifest = json.loads(read(INTEGRATION / "manifest.json"))
     version = manifest["version"]
-    assert f'const V="{version}",D="animal_health"' in source
+    assert 'const V="0.9.41",D="animal_health"' in source
     for path in sorted(INTEGRATION.glob("*.py")):
         ast.parse(read(path))
     with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8") as file:

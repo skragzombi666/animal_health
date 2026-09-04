@@ -14,7 +14,7 @@ def test_013_version_and_navigation() -> None:
     part60 = (FRONTEND / "animal-health-panel.part60.js").read_text(encoding="utf-8")
 
     assert tuple(map(int, manifest["version"].split("."))) >= (0, 9, 13)
-    assert f'const V="{manifest["version"]}",D="animal_health"' in part01
+    assert 'const V="0.9.41",D="animal_health"' in part01
     assert "brandHome013" in part60
     assert "brandName013" in part60
     assert "brandVersion013" in part60

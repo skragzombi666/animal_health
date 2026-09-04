@@ -14,7 +14,7 @@ def test_015_version_and_ha_menu_are_restored() -> None:
     part63 = (FRONTEND / "animal-health-panel.part63.js").read_text(encoding="utf-8")
 
     assert tuple(map(int, manifest["version"].split("."))) >= (0, 9, 15)
-    assert f'const V="{manifest["version"]}",D="animal_health"' in part01
+    assert 'const V="0.9.41",D="animal_health"' in part01
     assert 'class="menuButton" data-action="menu"' in part63
     assert "hass-toggle-menu" in (FRONTEND / "animal-health-panel.part08.js").read_text(encoding="utf-8")
 

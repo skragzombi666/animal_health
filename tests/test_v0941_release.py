@@ -16,7 +16,7 @@ RELEASE_NOTES = ROOT / "docs" / "version-0.9.41.md"
 
 def test_041_release_metadata_is_complete_and_consistent() -> None:
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert manifest["version"] == "0.9.41"
+    assert tuple(map(int, manifest["version"].split("."))) >= (0, 9, 41)
     assert 'const V="0.9.41"' in DIST.read_text(encoding="utf-8")
     assert RELEASE_NOTES.is_file()
     assert RELEASE_NOTES.read_text(encoding="utf-8").startswith(

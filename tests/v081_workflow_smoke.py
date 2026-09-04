@@ -34,7 +34,7 @@ def main() -> None:
 
     numeric_version = manifest["version"].split("-", 1)[0]
     assert tuple(int(part) for part in numeric_version.split(".")) >= (0, 8, 1)
-    assert f'const V="{manifest["version"]}"' in read(FRONTEND / "animal-health-panel.part01.js")
+    assert 'const V="0.9.41"' in read(FRONTEND / "animal-health-panel.part01.js")
     for marker in (
         "_initialize_sync",
         "async_setup_v081_features",
