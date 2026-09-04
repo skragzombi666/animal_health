@@ -1,0 +1,46 @@
+name: Phase 0-1 Generated Artifacts
+
+on:
+  push:
+    branches:
+      - "consolidation/phase-0-1"
+    paths:
+      - "scripts/architecture_inventory.py"
+      - "scripts/build_frontend.mjs"
+      - "custom_components/animal_health/frontend/legacy/manifest.json"
+      - ".github/workflows/phase01-generate.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: "consolidation/phase-0-1"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Generate architecture baseline
+        run: python scripts/architecture_inventory.py --root . --write
+      - name: Generate frontend bundle when the builder exists
+        run: |
+          if test -f scripts/build_frontend.mjs; then
+            node scripts/build_frontend.mjs
+          fi
+      - name: Commit generated artifacts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          files=(docs/architecture/inventory/legacy-baseline.json)
+          if test -f custom_components/animal_health/frontend/dist/animal-health-panel.js; then
+            files+=(custom_components/animal_health/frontend/dist/animal-health-panel.js)
+          fi
+          git add "${files[@]}"
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "chore: refresh phase 0-1 generated artifacts"
+          git push origin HEAD:"consolidation/phase-0-1"
