@@ -70,7 +70,7 @@ def test_042_release_requires_successful_main_validation() -> None:
     assert 'TAG="v${VERSION}"' in workflow
 
 
-def test_042_temporary_release_automation_is_explicit_until_connector_cleanup() -> None:
-    assert (ROOT / ".github/workflows/prepare-0942.yml").is_file()
-    assert (ROOT / "scripts/prepare_release_0942.py").is_file()
-    assert (ROOT / "scripts/run_prepare_release_0942.py").is_file()
+def test_042_repository_contains_no_temporary_release_automation() -> None:
+    assert not (ROOT / ".github/workflows/prepare-0942.yml").exists()
+    assert not (ROOT / "scripts/prepare_release_0942.py").exists()
+    assert not (ROOT / "scripts/run_prepare_release_0942.py").exists()
