@@ -32,9 +32,14 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
+      - name: Install frontend build dependency
+        run: npm install --no-package-lock
       - name: Check shared modular frontend source
         run: npm run check:frontend
       - name: Test shared modular frontend contracts
