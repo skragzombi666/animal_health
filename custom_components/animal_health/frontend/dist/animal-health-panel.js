@@ -9197,18 +9197,22 @@ AH039.render=function(){
         }
       }
     });
+    function modernActionAllowed(action) {
+      if (action === "animal-detail") return true;
+      return migrated(panel.view) && MODERN_ACTIONS.has(action);
+    }
     function handlesEvent(event) {
       const target = targetFromEvent(event);
       if (!target) return false;
       if (target.dataset.view) return true;
-      return MODERN_ACTIONS.has(String(target.dataset.action || ""));
+      return modernActionAllowed(String(target.dataset.action || ""));
     }
     async function handleEvent(event) {
       const target = targetFromEvent(event);
       if (!target) return false;
       if (target.dataset.view) return navigate(target.dataset.view);
       const action = String(target.dataset.action || "");
-      if (!MODERN_ACTIONS.has(action)) return false;
+      if (!modernActionAllowed(action)) return false;
       return controller.dispatch(action, {
         event,
         target,
