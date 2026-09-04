@@ -19,6 +19,8 @@ FRONTEND_VERSION = (
     / "animal-health-panel.part01.js"
 )
 FRONTEND = FRONTEND_VERSION.parent
+LEGACY_MANIFEST = FRONTEND / "legacy" / "manifest.json"
+DIST = FRONTEND / "dist" / "animal-health-panel.js"
 ANDROID = ROOT / "android" / "app" / "build.gradle.kts"
 
 
@@ -146,10 +148,19 @@ def test_036_patch_is_wired_after_existing_task_template_patches() -> None:
 
 def test_036_release_version_and_shared_bundle_count_are_consistent() -> None:
     version = str(json.loads(MANIFEST.read_text(encoding="utf-8"))["version"])
-    assert f'const V="{version}"' in FRONTEND_VERSION.read_text(encoding="utf-8")
-    part_count = len(list(FRONTEND.glob("animal-health-panel.part*.js")))
+    assert f'const V="{version}"' in DIST.read_text(encoding="utf-8")
+
+    legacy_manifest = json.loads(LEGACY_MANIFEST.read_text(encoding="utf-8"))
+    parts = legacy_manifest["parts"]
+    assert legacy_manifest["reference_version"] == "0.9.41"
+    assert len(parts) == 99
+    assert parts[0].endswith("animal-health-panel.part01.js")
+    assert parts[-1].endswith("animal-health-panel.part99.js")
+
     android = ANDROID.read_text(encoding="utf-8")
     assert 'val animalHealthVersion = "0.9.0-alpha.7"' in android
     assert "versionCode = 900007" in android
-    assert f"ordered.size == {part_count}" in android
-    assert f"Expected {part_count} Animal Health frontend parts" in android
+    assert 'resolve("dist/animal-health-panel.js")' in android
+    assert "prepareSharedFrontendAssets" in android
+    assert "animal-health-panel.part*.js" not in android
+    assert "ordered.size ==" not in android
