@@ -41,6 +41,14 @@ def _existing_sources() -> dict[str, str]:
     } if SOURCE.exists() else {}
 
 
+def _legacy_prelude() -> str:
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    return "".join(
+        (MANIFEST.parent / relative).resolve().read_text(encoding="utf-8")
+        for relative in manifest["parts"]
+    )
+
+
 def test_phase2_source_boundary_files_exist() -> None:
     sources = _existing_sources()
     assert EXPECTED_SOURCE_FILES.issubset(sources), (
@@ -73,7 +81,7 @@ def test_phase2_versioned_commands_are_confined_to_the_registry() -> None:
     assert offenders == []
 
 
-def test_phase2_source_has_no_legacy_or_runtime_side_effects() -> None:
+def test_phase2_source_has_no_unapproved_runtime_side_effects() -> None:
     forbidden = (
         "AnimalHealthPanel.prototype",
         "shadowRoot.innerHTML +=",
@@ -88,22 +96,23 @@ def test_phase2_source_has_no_legacy_or_runtime_side_effects() -> None:
         assert "new Date(" not in path.read_text(encoding="utf-8"), path
 
 
-def test_phase2_dist_bundle_remains_the_exact_legacy_reference() -> None:
-    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    expected = "".join(
-        (MANIFEST.parent / relative).resolve().read_text(encoding="utf-8")
-        for relative in manifest["parts"]
+def test_phase2_dist_bundle_preserves_the_exact_legacy_prefix() -> None:
+    legacy = _legacy_prelude()
+    bundle = DIST.read_text(encoding="utf-8")
+    assert bundle.startswith(legacy)
+    assert bundle[len(legacy) :].startswith(
+        "\n/* ANIMAL_HEALTH_MODERN_RUNTIME */\n"
     )
-    assert DIST.read_text(encoding="utf-8") == expected
 
 
-def test_phase2_package_scripts_use_permanent_dependency_free_checks() -> None:
+def test_phase2_package_keeps_dependency_scope_explicit() -> None:
     package = json.loads(PACKAGE.read_text(encoding="utf-8"))
     assert package["private"] is True
     assert package["type"] == "module"
     assert package["scripts"] == {
+        "build:frontend": "node scripts/build_frontend.mjs",
         "check:frontend": "node scripts/check_frontend_modules.mjs",
         "test:frontend": "node --test tests/frontend/*.test.mjs",
     }
     assert "dependencies" not in package
-    assert "devDependencies" not in package
+    assert package["devDependencies"] == {"esbuild": "0.25.9"}
