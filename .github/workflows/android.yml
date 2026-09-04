@@ -5,6 +5,8 @@ on:
     paths:
       - "android/**"
       - "custom_components/animal_health/frontend/**"
+      - "custom_components/animal_health/manifest.json"
+      - "docs/version-*.md"
       - "scripts/build_frontend.mjs"
       - "scripts/check_frontend_modules.mjs"
       - "tests/frontend/**"
@@ -16,6 +18,8 @@ on:
     paths:
       - "android/**"
       - "custom_components/animal_health/frontend/**"
+      - "custom_components/animal_health/manifest.json"
+      - "docs/version-*.md"
       - "scripts/build_frontend.mjs"
       - "scripts/check_frontend_modules.mjs"
       - "tests/frontend/**"
