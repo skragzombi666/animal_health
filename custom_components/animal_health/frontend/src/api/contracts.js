@@ -137,6 +137,7 @@ export const DTO_SCHEMA_VERSION = 1;
  * @property {string|null} unit
  * @property {string|null} correctionOfEventId
  * @property {string|null} createdAt
+ * @property {TargetDto} target
  * @property {EventSourceDto|null} source
  * @property {Object<string, unknown>} payload
  * @property {AttachmentDto[]} attachments
