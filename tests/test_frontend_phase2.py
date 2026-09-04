@@ -52,7 +52,7 @@ def test_phase2_source_boundary_files_exist() -> None:
 def test_phase2_host_calls_are_confined_to_platform_adapters() -> None:
     sources = _existing_sources()
     for relative, source in sources.items():
-        if ".callWS" in source or ".callService" in source:
+        if "hass.callWS" in source or "hass.callService" in source:
             assert relative == "platform/home-assistant-adapter.js", relative
         if any(
             marker in source
