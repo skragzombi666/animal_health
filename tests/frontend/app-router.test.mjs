@@ -98,3 +98,28 @@ test("dialog operations copy their data and close idempotently", () => {
     error.code === "validation" && error.details.path === "dialog.type"
   );
 });
+
+test("route changes retire request records from the previous revision", () => {
+  const store = createStore();
+  const router = createRouter(store);
+  const token = store.beginRequest("animal-detail");
+
+  router.navigate("tasks");
+
+  assert.deepEqual(store.getState().requests, {});
+  assert.equal(store.isCurrentRequest(token), false);
+});
+
+test("navigate and replace require an explicit route", () => {
+  const store = createStore();
+  const router = createRouter(store);
+
+  assert.throws(
+    () => router.navigate(),
+    (error) => error.code === "validation" && error.details.path === "route",
+  );
+  assert.throws(
+    () => router.replace(null),
+    (error) => error.code === "validation" && error.details.path === "route",
+  );
+});
