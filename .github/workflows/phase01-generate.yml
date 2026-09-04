@@ -7,6 +7,7 @@ on:
     paths:
       - "scripts/architecture_inventory.py"
       - "scripts/build_frontend.mjs"
+      - "scripts/phase01_migrate_release_tests.py"
       - "custom_components/animal_health/frontend/legacy/manifest.json"
       - ".github/workflows/phase01-generate.yml"
 
@@ -23,6 +24,11 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+      - name: Apply one-time release-test contract migration
+        run: |
+          if test -f scripts/phase01_migrate_release_tests.py; then
+            python scripts/phase01_migrate_release_tests.py
+          fi
       - name: Generate architecture baseline
         run: python scripts/architecture_inventory.py --root . --write
       - name: Generate frontend bundle when the builder exists
@@ -34,7 +40,14 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          files=(docs/architecture/inventory/legacy-baseline.json)
+          files=(
+            docs/architecture/inventory/legacy-baseline.json
+            tests/test_v0934_features.py
+            tests/test_v0936_features.py
+            tests/test_v0937_features.py
+            tests/test_v0938_features.py
+            tests/test_v0939_features.py
+          )
           if test -f custom_components/animal_health/frontend/dist/animal-health-panel.js; then
             files+=(custom_components/animal_health/frontend/dist/animal-health-panel.js)
           fi
@@ -42,5 +55,10 @@ jobs:
           if git diff --cached --quiet; then
             exit 0
           fi
-          git commit -m "chore: refresh phase 0-1 generated artifacts"
+          if git diff --cached --name-only | grep -q '^tests/'; then
+            message="test: update release contracts for shared frontend bundle"
+          else
+            message="chore: refresh phase 0-1 generated artifacts"
+          fi
+          git commit -m "$message"
           git push origin HEAD:"consolidation/phase-0-1"
