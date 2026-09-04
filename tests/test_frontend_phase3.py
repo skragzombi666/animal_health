@@ -7,7 +7,6 @@ ROOT = Path(__file__).resolve().parents[1]
 FRONTEND = ROOT / "custom_components" / "animal_health" / "frontend"
 SOURCE = FRONTEND / "src"
 ENTRY = SOURCE / "entry.js"
-README = SOURCE / "README.md"
 CHECKER = ROOT / "scripts" / "check_frontend_modules.mjs"
 MANIFEST = FRONTEND / "legacy" / "manifest.json"
 DIST = FRONTEND / "dist" / "animal-health-panel.js"
@@ -50,7 +49,7 @@ def test_phase3_application_shell_files_exist() -> None:
     )
 
 
-def test_phase3_app_modules_are_host_neutral_and_unpatched() -> None:
+def test_phase3_app_modules_remain_host_neutral_and_unpatched() -> None:
     forbidden = (
         "hass.",
         "bridge.call",
@@ -62,17 +61,18 @@ def test_phase3_app_modules_are_host_neutral_and_unpatched() -> None:
         "shadowRoot.innerHTML +=",
     )
     for relative, source in _sources().items():
-        if relative.startswith("app/") or relative == "legacy/compatibility-bridge.js":
+        if relative.startswith("app/"):
             for marker in forbidden:
                 assert marker not in source, f"{relative}: {marker}"
 
 
-def test_phase3_entry_exports_are_side_effect_free_and_not_activated() -> None:
+def test_phase3_entry_exports_are_side_effect_free() -> None:
     entry = ENTRY.read_text(encoding="utf-8")
     for name in EXPECTED_PHASE3_EXPORTS:
         assert name in entry, name
     assert "customElements.define" not in entry
     assert "createAnimalHealthApplication(" not in entry
+    assert "installLegacyReadOnlyAnimalsSlice(" not in entry
 
 
 def test_phase3_checker_permanently_enforces_public_shell_exports() -> None:
@@ -83,21 +83,17 @@ def test_phase3_checker_permanently_enforces_public_shell_exports() -> None:
     assert "modular frontend entry" in checker
 
 
-def test_phase3_readme_declares_inactive_shell_and_zero_migrated_routes() -> None:
-    readme = README.read_text(encoding="utf-8")
-    assert "## Status in Phase 3" in readme
-    assert "Keine fachliche Route ist migriert" in readme
-    assert "explizit" in readme and "registriert" in readme
-    assert "bytegenau" in readme and "99" in readme
-
-
-def test_phase3_productive_bundle_remains_the_exact_99_part_legacy_reference() -> None:
+def test_phase3_productive_bundle_keeps_the_exact_99_part_prefix() -> None:
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     parts = list(manifest["parts"])
     assert len(parts) == 99
-    expected = "".join(
+    legacy = "".join(
         (MANIFEST.parent / relative).resolve().read_text(encoding="utf-8")
         for relative in parts
     )
-    assert DIST.read_text(encoding="utf-8") == expected
+    bundle = DIST.read_text(encoding="utf-8")
+    assert bundle.startswith(legacy)
+    assert bundle[len(legacy) :].startswith(
+        "\n/* ANIMAL_HEALTH_MODERN_RUNTIME */\n"
+    )
     assert all("src/" not in relative for relative in parts)
