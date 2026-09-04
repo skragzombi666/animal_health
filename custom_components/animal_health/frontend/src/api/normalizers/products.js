@@ -61,8 +61,7 @@ function normalizeIngredientDetails(value, path) {
 
 function normalizeProductInternal(rawValue, { includeOriginal = true } = {}) {
   const raw = asRecord(rawValue, "product");
-  const originalRaw = includeOriginal ? firstDefined(raw, ["original"]) : null;
-  return {
+  const product = {
     id: requiredText(firstDefined(raw, ["id", "item_id", "itemId"]), "product.id"),
     catalogItemId: optionalText(
       firstDefined(raw, ["catalog_item_id", "catalogItemId"]),
@@ -116,11 +115,16 @@ function normalizeProductInternal(rawValue, { includeOriginal = true } = {}) {
       firstDefined(raw, ["is_modified", "isModified"]),
       false,
     ),
-    original:
+  };
+
+  if (includeOriginal) {
+    const originalRaw = firstDefined(raw, ["original"]);
+    product.original =
       originalRaw && typeof originalRaw === "object" && !Array.isArray(originalRaw)
         ? normalizeProductInternal(originalRaw, { includeOriginal: false })
-        : null,
-  };
+        : null;
+  }
+  return product;
 }
 
 export function normalizeProduct(rawValue) {
