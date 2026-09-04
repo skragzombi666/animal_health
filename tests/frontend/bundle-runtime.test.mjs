@@ -7,6 +7,7 @@ import {
   buildBundle,
   buildLegacyPrelude,
   buildModernRuntime,
+  loadManifest,
 } from "../../scripts/build_frontend.mjs";
 
 const DIST = new URL(
@@ -33,10 +34,13 @@ test("checked-in dist equals the deterministic active bundle", async () => {
   assert.equal(await readFile(DIST, "utf8"), await buildBundle());
 });
 
-test("modern runtime is appended after the final frozen fragment", async () => {
+test("modern runtime starts exactly after the final frozen manifest entry", async () => {
+  const manifest = await loadManifest();
   const legacy = await buildLegacyPrelude();
   const bundle = await buildBundle();
-  assert.match(legacy.slice(-2500), /part99|AH099|customElements|AnimalHealthPanel/);
+
+  assert.equal(manifest.parts.at(-1), "../animal-health-panel.part99.js");
+  assert.equal(bundle.slice(0, legacy.length), legacy);
   assert.equal(bundle.indexOf(MODERN_SEPARATOR), legacy.length);
   assert.match(bundle.slice(legacy.length), /ANIMAL_HEALTH_MODERN_RUNTIME/);
 });
