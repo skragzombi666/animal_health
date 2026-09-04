@@ -181,7 +181,7 @@ test("modern navigation and filters are intercepted from any non-modal route", a
   assert.equal(await panel.handleClick(event({ view: "overview" })), "modern-event");
   assert.equal(panel.view, "overview");
   assert.equal(await panel.handleClick(event({ action: "refresh" })), "modern-event");
-  assert.equal(panel.handleInput(event({ action: "home-search" })), "modern-event");
+  assert.equal(await panel.handleInput(event({ action: "home-search" })), "modern-event");
   assert.deepEqual(runtimes[0].calls, [
     ["handleEvent", "overview"],
     ["handleEvent", "refresh"],
