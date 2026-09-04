@@ -22,6 +22,10 @@ jobs:
         run: node scripts/build_frontend.mjs --check
       - name: Validate bundled frontend syntax
         run: node --check custom_components/animal_health/frontend/dist/animal-health-panel.js
+      - name: Check modular frontend source
+        run: npm run check:frontend
+      - name: Test modular frontend contracts
+        run: npm run test:frontend
       - name: Run pytest suite
         run: python -m pytest -q
       - name: Validate dashboard integration

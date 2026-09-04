@@ -1,0 +1,9 @@
+{
+  "name": "animal-health-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check:frontend": "node scripts/check_frontend_modules.mjs",
+    "test:frontend": "node --test tests/frontend/*.test.mjs"
+  }
+}

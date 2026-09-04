@@ -6,6 +6,9 @@ on:
       - "android/**"
       - "custom_components/animal_health/frontend/**"
       - "scripts/build_frontend.mjs"
+      - "scripts/check_frontend_modules.mjs"
+      - "tests/frontend/**"
+      - "package.json"
       - ".github/workflows/android.yml"
   push:
     branches:
@@ -14,6 +17,9 @@ on:
       - "android/**"
       - "custom_components/animal_health/frontend/**"
       - "scripts/build_frontend.mjs"
+      - "scripts/check_frontend_modules.mjs"
+      - "tests/frontend/**"
+      - "package.json"
       - ".github/workflows/android.yml"
   workflow_dispatch:
 
@@ -29,6 +35,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
+      - name: Check shared modular frontend source
+        run: npm run check:frontend
+      - name: Test shared modular frontend contracts
+        run: npm run test:frontend
       - name: Verify shared frontend bundle
         run: node scripts/build_frontend.mjs --check
       - name: Build standalone Android alpha APK
